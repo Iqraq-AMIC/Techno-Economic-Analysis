@@ -42,7 +42,6 @@
 // };
 
 // export default DefaultLayout;
-
 import React from "react";
 import PropTypes from "prop-types";
 import { Container, Row, Col } from "shards-react";
@@ -50,7 +49,7 @@ import { Container, Row, Col } from "shards-react";
 import MainNavbar from "../components/layout/MainNavbar/MainNavbar";
 import MainFooter from "../components/layout/MainFooter";
 
-const DefaultLayout = ({ children, noNavbar, noFooter }) => (
+const DefaultLayout = ({ children }) => (
   <Container fluid>
     <Row>
       <Col
@@ -60,9 +59,7 @@ const DefaultLayout = ({ children, noNavbar, noFooter }) => (
         sm="12"
         tag="main"
       >
-        {!noNavbar && <MainNavbar />}
         {children}
-        {!noFooter && <MainFooter />}
       </Col>
     </Row>
   </Container>
@@ -80,8 +77,8 @@ DefaultLayout.propTypes = {
 };
 
 DefaultLayout.defaultProps = {
-  noNavbar: false,
-  noFooter: false
+  noNavbar: true,
+  noFooter: true
 };
 
 export default DefaultLayout;
