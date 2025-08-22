@@ -48,8 +48,9 @@ import { Container, Row, Col } from "shards-react";
 
 import MainNavbar from "../components/layout/MainNavbar/MainNavbar";
 import MainFooter from "../components/layout/MainFooter";
+import UserInputsForm from "../forms/UserInputsForm";
 
-const DefaultLayout = ({ children }) => (
+const DefaultLayout = ({ children, noNavbar, noFooter }) => (
   <Container fluid>
     <Row>
       <Col
@@ -59,26 +60,34 @@ const DefaultLayout = ({ children }) => (
         sm="12"
         tag="main"
       >
-        {children}
+        {!noNavbar && <MainNavbar />}
+
+        <Row>
+          {/* This column contains the new User Inputs form on the left */}
+          <Col lg="3" md="12">
+            <UserInputsForm />
+          </Col>
+          
+          {/* This column contains your main dashboard content on the right */}
+          <Col lg="9" md="12" className="pb-4">
+            {children}
+          </Col>
+        </Row>
+        
+        {!noFooter && <MainFooter />}
       </Col>
     </Row>
   </Container>
 );
 
 DefaultLayout.propTypes = {
-  /**
-   * Whether to display the navbar, or not.
-   */
   noNavbar: PropTypes.bool,
-  /**
-   * Whether to display the footer, or not.
-   */
   noFooter: PropTypes.bool
 };
 
 DefaultLayout.defaultProps = {
   noNavbar: true,
-  noFooter: true
+  noFooter: false
 };
 
 export default DefaultLayout;

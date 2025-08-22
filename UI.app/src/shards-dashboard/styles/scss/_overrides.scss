@@ -81,3 +81,8 @@ $navbar-brand-font-size: 0.9rem;
 
 // Dropdowns
 $dropdown-padding-y: 10px;
+
+.horizontal-scroll {
+  overflow-x: auto;
+  min-width: 1000px; /* Adjust this value as needed */
+}
