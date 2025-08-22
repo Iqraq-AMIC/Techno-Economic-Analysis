@@ -2,6 +2,9 @@
 
 .main-footer {
   height: $main-footer-height;
+  right: 0;
+  bottom: 0;
+  
 
   .copyright {
     color: $main-footer-copyright-color;

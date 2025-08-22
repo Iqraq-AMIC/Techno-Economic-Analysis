@@ -80,7 +80,7 @@ BlogOverview.defaultProps = {
       percentage: "4.7%",
       increase: true,
       chartLabels: [null, null, null, null, null, null, null],
-      attrs: { md: "6", sm: "6" },
+      attrs: { md: "12", sm: "12" },
       datasets: [
         {
           label: "Today",
@@ -98,7 +98,7 @@ BlogOverview.defaultProps = {
       percentage: "12.4",
       increase: true,
       chartLabels: [null, null, null, null, null, null, null],
-      attrs: { md: "6", sm: "6" },
+      attrs: { md: "12", sm: "12" },
       datasets: [
         {
           label: "Today",
@@ -117,7 +117,7 @@ BlogOverview.defaultProps = {
       increase: false,
       decrease: true,
       chartLabels: [null, null, null, null, null, null, null],
-      attrs: { md: "4", sm: "6" },
+      attrs: { md: "12", sm: "12" },
       datasets: [
         {
           label: "Today",
@@ -136,7 +136,7 @@ BlogOverview.defaultProps = {
       increase: false,
       decrease: true,
       chartLabels: [null, null, null, null, null, null, null],
-      attrs: { md: "4", sm: "6" },
+      attrs: { md: "12", sm: "12" },
       datasets: [
         {
           label: "Today",
@@ -155,7 +155,7 @@ BlogOverview.defaultProps = {
       increase: false,
       decrease: true,
       chartLabels: [null, null, null, null, null, null, null],
-      attrs: { md: "4", sm: "6" },
+      attrs: { md: "12", sm: "12" },
       datasets: [
         {
           label: "Today",
