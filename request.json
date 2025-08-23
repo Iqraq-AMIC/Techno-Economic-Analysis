@@ -1,0 +1,17 @@
+{
+  "inputs": {
+    "production_capacity": 5000,
+    "CEPCI": 750,
+    "biomass_price": 275,
+    "hydrogen_price": 5.5,
+    "electricity_rate": 0.275,
+    "yearly_wage_operator": 100000,
+    "product_price": 2750,
+    "land_cost": 2500000,
+    "plant_lifetime": 20,
+    "discount_factor": 0.10
+  },
+  "feedstock": "Sugarcane",
+  "process_technology": "ATJ",
+  "TCI_2023": 10000000
+}

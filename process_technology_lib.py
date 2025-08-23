@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 import pandas as pd
-from process_technology_lib import BiofuelDatabase
+
 
 
 class BiofuelDatabase:

@@ -18,6 +18,7 @@ app.add_middleware(
 
 class CalculationRequest(BaseModel):
     inputs: dict
+    process_technology: str   # NEW
     feedstock: str
     TCI_2023: float
 
@@ -29,7 +30,11 @@ def calculate(request: CalculationRequest):
 
         # Techno-economic analysis
         econ = BiofuelEconomics(inputs)
-        results = econ.run(request.feedstock, request.TCI_2023)
+        results = econ.run(
+            process_technology=request.process_technology, 
+            feedstock=request.feedstock, 
+            TCI_2023=request.TCI_2023
+        )
 
         # Financial analysis
         fa = FinancialAnalysis(discount_rate=inputs.discount_factor)
@@ -47,6 +52,9 @@ def calculate(request: CalculationRequest):
             "cashFlowTable": cashflow_df.to_dict(orient="records")
         }
 
-        return {"technoEconomics": results, "financials": financials}
+        return {
+            "technoEconomics": results, 
+            "financials": financials
+        }
     except Exception as e:
         return {"error": str(e)}

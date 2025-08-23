@@ -31,12 +31,31 @@ const initialInputs = {
 
 const UserInputsForm = ({ title }) => {
   const [inputs, setInputs] = useState(initialInputs);
+  const [feedstock, setFeedstock] = useState("");
+  const [TCI_2023, setTCI_2023] = useState(0);
 
   const handleSliderChange = (name) => (value) => {
     setInputs({
       ...inputs,
       [name]: value[0]
     });
+  };
+
+  const handleCalculate = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/calculate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ inputs, feedstock, TCI_2023 }),
+      });
+
+      const data = await response.json();
+      console.log(data); // Handle the response data here
+    } catch (error) {
+      console.error("Error:", error);
+    }
   };
 
   return (
@@ -205,6 +224,34 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("discount_factor")}
             />
           </FormGroup>
+
+          {/* New form fields added for back-end requirements */}
+          <FormGroup className="mb-3">
+            <label htmlFor="feedstock">Feedstock</label>
+            <FormSelect
+              id="feedstock"
+              value={feedstock}
+              onChange={(e) => setFeedstock(e.target.value)}
+            >
+              <option value="">Select Feedstock</option>
+              <option value="wood">Wood</option>
+              <option value="corn_stover">Corn Stover</option>
+            </FormSelect>
+          </FormGroup>
+
+          <FormGroup className="mb-3">
+            <label htmlFor="tci">TCI 2023</label>
+            <FormInput
+              id="tci"
+              type="number"
+              value={TCI_2023}
+              onChange={(e) => setTCI_2023(parseFloat(e.target.value))}
+            />
+          </FormGroup>
+
+          <Button onClick={handleCalculate} theme="primary" className="mt-3">
+            Calculate
+          </Button>
 
         </Form>
       </CardBody>
