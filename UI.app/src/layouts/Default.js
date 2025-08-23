@@ -49,6 +49,7 @@ import { Container, Row, Col } from "shards-react";
 import MainNavbar from "../components/layout/MainNavbar/MainNavbar";
 import MainFooter from "../components/layout/MainFooter";
 import UserInputsForm from "../forms/UserInputsForm";
+import BiofuelSelector from "../forms/BiofuelSelector"; // New import
 
 const DefaultLayout = ({ children, noNavbar, noFooter }) => (
   <Container fluid>
@@ -63,13 +64,13 @@ const DefaultLayout = ({ children, noNavbar, noFooter }) => (
         {!noNavbar && <MainNavbar />}
 
         <Row>
-          {/* This column contains the new User Inputs form on the left */}
           <Col lg="3" md="12">
             <UserInputsForm />
           </Col>
           
-          {/* This column contains your main dashboard content on the right */}
           <Col lg="9" md="12" className="pb-4">
+            {/* New component placed above the dashboard content */}
+            <BiofuelSelector /> 
             {children}
           </Col>
         </Row>
@@ -86,7 +87,7 @@ DefaultLayout.propTypes = {
 };
 
 DefaultLayout.defaultProps = {
-  noNavbar: true,
+  noNavbar: false,
   noFooter: false
 };
 
