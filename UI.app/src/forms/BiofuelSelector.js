@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from "react";
+import PropTypes from "prop-types";
 import axios from "axios";
-import { Card, CardHeader, CardBody } from "shards-react";
+import { Card, CardHeader, CardBody, FormGroup, FormSelect } from "shards-react";
 
-export default function BiofuelSelector() {
+export default function BiofuelSelector({ onProcessChange, onFeedstockChange }) {
   const [processes, setProcesses] = useState([]);
   const [feedstocks, setFeedstocks] = useState([]);
   const [selectedProcess, setSelectedProcess] = useState("");
   const [selectedFeedstock, setSelectedFeedstock] = useState("");
   const [feedstockDetails, setFeedstockDetails] = useState(null);
 
-  // Load process technologies on mount
   useEffect(() => {
     axios.get("http://127.0.0.1:8000/processes").then((res) => {
       setProcesses(res.data);
     });
   }, []);
 
-  // When process changes, load feedstocks
   useEffect(() => {
     if (selectedProcess) {
       axios.get(`http://127.0.0.1:8000/feedstocks/${selectedProcess}`).then((res) => {
@@ -25,7 +24,6 @@ export default function BiofuelSelector() {
     }
   }, [selectedProcess]);
 
-  // When feedstock changes, load details
   useEffect(() => {
     if (selectedFeedstock) {
       axios.get(`http://127.0.0.1:8000/feedstock/${selectedFeedstock}`).then((res) => {
@@ -34,22 +32,32 @@ export default function BiofuelSelector() {
     }
   }, [selectedFeedstock]);
 
+  const handleProcessSelect = (e) => {
+    const process = e.target.value;
+    setSelectedProcess(process);
+    setSelectedFeedstock(""); // Reset feedstock when process changes
+    onProcessChange(process);
+    onFeedstockChange("");
+  };
+
+  const handleFeedstockSelect = (e) => {
+    const feedstock = e.target.value;
+    setSelectedFeedstock(feedstock);
+    onFeedstockChange(feedstock);
+  };
+
   return (
     <Card small className="mb-4">
       <CardHeader>
         <h2>Biofuel Selector</h2>
       </CardHeader>
       <CardBody>
-        {/* Process Technology Dropdown */}
-        <label>
-          Process Technology:
-          <select
+        <FormGroup className="mb-3">
+          <label htmlFor="process_technology">Process Technology</label>
+          <FormSelect
+            id="process_technology"
             value={selectedProcess}
-            onChange={(e) => {
-              setSelectedProcess(e.target.value);
-              setSelectedFeedstock(""); // reset feedstock
-              setFeedstockDetails(null);
-            }}
+            onChange={handleProcessSelect}
           >
             <option value="">-- Select Process --</option>
             {processes.map((p) => (
@@ -57,30 +65,16 @@ export default function BiofuelSelector() {
                 {p}
               </option>
             ))}
-            <option value="Others">Others</option>
-          </select>
-        </label>
+          </FormSelect>
+        </FormGroup>
 
-        {/* If "Others", custom input */}
-        {selectedProcess === "Others" && (
-          <div>
-            <input
-              type="text"
-              placeholder="Enter custom process"
-              onChange={(e) => setSelectedProcess(e.target.value)}
-            />
-          </div>
-        )}
-
-        <br />
-
-        {/* Feedstock Dropdown */}
         {selectedProcess && (
-          <label>
-            Feedstock:
-            <select
+          <FormGroup className="mb-3">
+            <label htmlFor="feedstock">Feedstock</label>
+            <FormSelect
+              id="feedstock"
               value={selectedFeedstock}
-              onChange={(e) => setSelectedFeedstock(e.target.value)}
+              onChange={handleFeedstockSelect}
             >
               <option value="">-- Select Feedstock --</option>
               {feedstocks.map((f) => (
@@ -88,30 +82,15 @@ export default function BiofuelSelector() {
                   {f}
                 </option>
               ))}
-              <option value="Others">Others</option>
-            </select>
-          </label>
-        )}
-
-        {/* If "Others", custom input */}
-        {selectedFeedstock === "Others" && (
-          <div>
-            <input
-              type="text"
-              placeholder="Enter custom feedstock"
-              onChange={(e) => setSelectedFeedstock(e.target.value)}
-            />
-          </div>
-        )}
-
-        {/* Show Feedstock Details */}
-        {feedstockDetails && (
-          <div style={{ marginTop: "20px" }}>
-            <h3>{feedstockDetails.Feedstock} Details</h3>
-            <pre>{JSON.stringify(feedstockDetails, null, 2)}</pre>
-          </div>
+            </FormSelect>
+          </FormGroup>
         )}
       </CardBody>
     </Card>
   );
 }
+
+BiofuelSelector.propTypes = {
+  onProcessChange: PropTypes.func.isRequired,
+  onFeedstockChange: PropTypes.func.isRequired,
+};

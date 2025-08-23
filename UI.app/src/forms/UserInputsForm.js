@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import PropTypes from "prop-types";
 import {
   Card,
@@ -7,57 +7,18 @@ import {
   Form,
   FormGroup,
   FormInput,
-  FormSelect,
-  FormTextarea,
   Button,
-  ListGroup,
-  ListGroupItem,
   Slider
 } from "shards-react";
 
-// Initial state for the form inputs using the suggested ranges
-const initialInputs = {
-  production_capacity: 5000,
-  CEPCI: 750,
-  biomass_price: 275,
-  hydrogen_price: 5.5,
-  electricity_rate: 0.275,
-  yearly_wage_operator: 100000,
-  product_price: 2750,
-  land_cost: 2500000,
-  plant_lifetime: 20,
-  discount_factor: 0.10,
-};
-
-const UserInputsForm = ({ title }) => {
-  const [inputs, setInputs] = useState(initialInputs);
-  const [feedstock, setFeedstock] = useState("");
-  const [TCI_2023, setTCI_2023] = useState(0);
-
-  const handleSliderChange = (name) => (value) => {
-    setInputs({
-      ...inputs,
-      [name]: value[0]
-    });
-  };
-
-  const handleCalculate = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/calculate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ inputs, feedstock, TCI_2023 }),
-      });
-
-      const data = await response.json();
-      console.log(data); // Handle the response data here
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  };
-
+const UserInputsForm = ({
+  title,
+  inputs,
+  TCI_2023,
+  handleSliderChange,
+  setTCI_2023,
+  handleCalculate
+}) => {
   return (
     <Card small className="mb-4">
       <CardHeader className="border-bottom">
@@ -80,7 +41,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("production_capacity")}
             />
           </FormGroup>
-
+    
           <FormGroup className="mb-3">
             <label htmlFor="cepci">CEPCI Index</label>
             <FormInput
@@ -96,7 +57,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("CEPCI")}
             />
           </FormGroup>
-
+    
           <FormGroup className="mb-3">
             <label htmlFor="biomass_price">Biomass Price ($/ton)</label>
             <FormInput
@@ -128,7 +89,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("hydrogen_price")}
             />
           </FormGroup>
-
+    
           <FormGroup className="mb-3">
             <label htmlFor="electricity_rate">Electricity Rate ($/kWh)</label>
             <FormInput
@@ -144,7 +105,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("electricity_rate")}
             />
           </FormGroup>
-
+    
           <FormGroup className="mb-3">
             <label htmlFor="yearly_wage_operator">Yearly Wage Operator ($/year)</label>
             <FormInput
@@ -160,7 +121,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("yearly_wage_operator")}
             />
           </FormGroup>
-
+    
           <FormGroup className="mb-3">
             <label htmlFor="product_price">Product Price ($/ton)</label>
             <FormInput
@@ -176,7 +137,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("product_price")}
             />
           </FormGroup>
-
+    
           <FormGroup className="mb-3">
             <label htmlFor="land_cost">Land Cost ($)</label>
             <FormInput
@@ -192,7 +153,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("land_cost")}
             />
           </FormGroup>
-
+    
           <FormGroup className="mb-3">
             <label htmlFor="plant_lifetime">Plant Lifetime (years)</label>
             <FormInput
@@ -208,7 +169,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("plant_lifetime")}
             />
           </FormGroup>
-
+    
           <FormGroup className="mb-3">
             <label htmlFor="discount_factor">Discount Factor</label>
             <FormInput
@@ -224,21 +185,7 @@ const UserInputsForm = ({ title }) => {
               onSlide={handleSliderChange("discount_factor")}
             />
           </FormGroup>
-
-          {/* New form fields added for back-end requirements */}
-          <FormGroup className="mb-3">
-            <label htmlFor="feedstock">Feedstock</label>
-            <FormSelect
-              id="feedstock"
-              value={feedstock}
-              onChange={(e) => setFeedstock(e.target.value)}
-            >
-              <option value="">Select Feedstock</option>
-              <option value="wood">Wood</option>
-              <option value="corn_stover">Corn Stover</option>
-            </FormSelect>
-          </FormGroup>
-
+          
           <FormGroup className="mb-3">
             <label htmlFor="tci">TCI 2023</label>
             <FormInput
@@ -252,7 +199,6 @@ const UserInputsForm = ({ title }) => {
           <Button onClick={handleCalculate} theme="primary" className="mt-3">
             Calculate
           </Button>
-
         </Form>
       </CardBody>
     </Card>
@@ -261,6 +207,11 @@ const UserInputsForm = ({ title }) => {
 
 UserInputsForm.propTypes = {
   title: PropTypes.string,
+  inputs: PropTypes.object.isRequired,
+  TCI_2023: PropTypes.number.isRequired,
+  handleSliderChange: PropTypes.func.isRequired,
+  setTCI_2023: PropTypes.func.isRequired,
+  handleCalculate: PropTypes.func.isRequired,
 };
 
 UserInputsForm.defaultProps = {

@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from  biofuel_economics import BiofuelEconomics
+from biofuel_economics import BiofuelEconomics
 from cashflow_table import FinancialAnalysis
 from user_inputs import UserInputs
+from process_technology_lib import BiofuelDatabase
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Dict
 
 app = FastAPI()
 
@@ -16,9 +18,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Instantiate the database class
+db = BiofuelDatabase()
+
+# New Endpoints to support the BiofuelSelector.js component
+@app.get("/processes", response_model=List[str])
+def get_processes():
+    # The process technology is a unique value in the `Process Technology` column
+    return list(db.data["Process Technology"].unique())
+
+@app.get("/feedstocks/{process}", response_model=List[str])
+def get_feedstocks_by_process(process: str):
+    df = db.filter_by_process(process)
+    return df["Feedstock"].tolist()
+
+@app.get("/feedstock/{feedstock_name}", response_model=Dict)
+def get_feedstock_details(feedstock_name: str):
+    return db.get_yield_by_feedstock(feedstock_name)
+
 class CalculationRequest(BaseModel):
     inputs: dict
-    process_technology: str   # NEW
+    process_technology: str
     feedstock: str
     TCI_2023: float
 
@@ -31,8 +51,8 @@ def calculate(request: CalculationRequest):
         # Techno-economic analysis
         econ = BiofuelEconomics(inputs)
         results = econ.run(
-            process_technology=request.process_technology, 
-            feedstock=request.feedstock, 
+            process_technology=request.process_technology,
+            feedstock=request.feedstock,
             TCI_2023=request.TCI_2023
         )
 
@@ -53,7 +73,7 @@ def calculate(request: CalculationRequest):
         }
 
         return {
-            "technoEconomics": results, 
+            "technoEconomics": results,
             "financials": financials
         }
     except Exception as e:
