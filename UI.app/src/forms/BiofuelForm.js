@@ -143,58 +143,29 @@ const BiofuelForm = ({
             </Col>
           </Row>
 
-          {/* Sliders */}
-          <Row form>
-            <Col md="6">
-              {renderSlider("production_capacity", "Production Capacity (tons/year)", inputs.production_capacity, { min: 100, max: 10000 }, 100, handleSliderChange("production_capacity"))}
-              {renderSlider("cepci", "CEPCI Index", inputs.CEPCI, { min: 500, max: 1000 }, 1, handleSliderChange("CEPCI"))}
-              {renderSlider("biomass_price", "Biomass Price ($/ton)", inputs.biomass_price, { min: 50, max: 500 }, 5, handleSliderChange("biomass_price"))}
-              {renderSlider("hydrogen_price", "Hydrogen Price ($/kg)", inputs.hydrogen_price, { min: 1, max: 10 }, 0.1, handleSliderChange("hydrogen_price"))}
-              {renderSlider("electricity_rate", "Electricity Rate ($/kWh)", inputs.electricity_rate, { min: 0.05, max: 0.5 }, 0.01, handleSliderChange("electricity_rate"))}
+          {/* Example slider */}
+          {renderSlider("production_capacity", "Production Capacity (tons/year)", inputs.production_capacity, { min: 100, max: 10000 }, 100, handleSliderChange("production_capacity"))}
+
+          {/* TCI + Button */}
+          <Row form className="align-items-end mt-2">
+            <Col xs="8">
+              <label htmlFor="tci" className="mb-0" style={{ fontSize: "0.95rem", fontWeight: 600 }}>
+                TCI 2023 ($)
+              </label>
+              <FormInput
+                id="tci"
+                type="number"
+                value={TCI_2023}
+                readOnly
+                size="sm"
+                className="text-right font-weight-bold mb-1"
+                style={{ fontSize: "0.95rem", backgroundColor: "#f8f9fa" }}
+              />
             </Col>
-
-            <Col md="6">
-              {renderSlider("yearly_wage_operator", "Yearly Wage Operator ($/year)", inputs.yearly_wage_operator, { min: 50000, max: 150000 }, 1000, handleSliderChange("yearly_wage_operator"))}
-              {renderSlider("product_price", "Product Price ($/ton)", inputs.product_price, { min: 500, max: 5000 }, 10, handleSliderChange("product_price"))}
-              {renderSlider("land_cost", "Land Cost ($)", inputs.land_cost, { min: 100000, max: 5000000 }, 50000, handleSliderChange("land_cost"))}
-              {renderSlider("plant_lifetime", "Plant Lifetime (years)", inputs.plant_lifetime, { min: 10, max: 40 }, 1, (vals) => handleSliderChange("plant_lifetime")(Number(vals[0])))} 
-              {renderSlider("discount_factor", "Discount Factor (%)", inputs.discount_factor, { min: 0.01, max: 0.2 }, 0.01, handleSliderChange("discount_factor"))}
-
-              {/* TCI + Button */}
-              <Row form className="align-items-end mt-2">
-                <Col xs="8">
-                  <label htmlFor="tci" className="mb-0" style={{ fontSize: "0.95rem", fontWeight: 600 }}>
-                    TCI 2023 ($)
-                  </label>
-                  <FormInput
-                    id="tci"
-                    type="number"
-                    value={TCI_2023}
-                    readOnly
-                    size="sm"
-                    className="text-right font-weight-bold mb-1"
-                    style={{ fontSize: "0.95rem", backgroundColor: "#f8f9fa" }}
-                  />
-                  <Slider
-                    connect={[true, false]}
-                    start={[TCI_2023]}
-                    range={{ min: 100000, max: 50000000 }}
-                    step={100000}
-                    onSlide={(vals) => setTCI_2023(Number(vals[0]))}
-                    className="mt-1"
-                  />
-                </Col>
-                <Col xs="4">
-                  <Button
-                    onClick={handleCalculate}
-                    theme="primary"
-                    block
-                    style={{ height: "60px", fontWeight: "600" }}
-                  >
-                    Calculate
-                  </Button>
-                </Col>
-              </Row>
+            <Col xs="4" className="d-flex align-items-end">
+              <Button onClick={handleCalculate} block>
+                Calculate
+              </Button>
             </Col>
           </Row>
         </Form>
@@ -210,7 +181,7 @@ BiofuelForm.propTypes = {
   setTCI_2023: PropTypes.func.isRequired,
   handleCalculate: PropTypes.func.isRequired,
   onProcessChange: PropTypes.func.isRequired,
-  onFeedstockChange: PropTypes.func.isRequired
+  onFeedstockChange: PropTypes.func.isRequired,
 };
 
 export default BiofuelForm;

@@ -85,7 +85,7 @@ class CalculationRequest(BaseModel):
     TCI_2023: float
 
 
-@app.post("/calculate")
+
 @app.post("/calculate")
 def calculate(request: CalculationRequest):
     try:

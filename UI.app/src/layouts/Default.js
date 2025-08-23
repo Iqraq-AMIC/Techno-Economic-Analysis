@@ -1,108 +1,84 @@
-import React, { useState } from "react";
+// import React from "react";
+// import PropTypes from "prop-types";
+// import { Container, Row, Col } from "shards-react";
+
+// import MainNavbar from "../components/layout/MainNavbar/MainNavbar";
+// import MainSidebar from "../components/layout/MainSidebar/MainSidebar";
+// import MainFooter from "../components/layout/MainFooter";
+
+// const DefaultLayout = ({ children, noNavbar, noFooter }) => (
+//   <Container fluid>
+//     <Row>
+//       <MainSidebar />
+//       <Col
+//         className="main-content p-0"
+//         lg={{ size: 10, offset: 2 }}
+//         md={{ size: 9, offset: 3 }}
+//         sm="12"
+//         tag="main"
+//       >
+//         {!noNavbar && <MainNavbar />}
+//         {children}
+//         {!noFooter && <MainFooter />}
+//       </Col>
+//     </Row>
+//   </Container>
+// );
+
+// DefaultLayout.propTypes = {
+//   /**
+//    * Whether to display the navbar, or not.
+//    */
+//   noNavbar: PropTypes.bool,
+//   /**
+//    * Whether to display the footer, or not.
+//    */
+//   noFooter: PropTypes.bool
+// };
+
+// DefaultLayout.defaultProps = {
+//   noNavbar: false,
+//   noFooter: false
+// };
+
+// export default DefaultLayout;
+import React from "react";
 import PropTypes from "prop-types";
 import { Container, Row, Col } from "shards-react";
-import axios from "axios"; // Ensure you have this import
 
 import MainNavbar from "../components/layout/MainNavbar/MainNavbar";
 import MainFooter from "../components/layout/MainFooter";
 import UserInputsForm from "../forms/UserInputsForm";
-import BiofuelSelector from "../forms/BiofuelSelector"; 
 
-const DefaultLayout = ({ children, noNavbar, noFooter }) => {
-  // User input states
-  const [inputs, setInputs] = useState({
-    production_capacity: 1000,
-    CEPCI: 650,
-    biomass_price: 150,
-    hydrogen_price: 3,
-    electricity_rate: 0.1,
-    yearly_wage_operator: 80000,
-    product_price: 1500,
-    land_cost: 200000,
-    plant_lifetime: 40,
-    discount_factor: 0.1
-  });
-  const [TCI_2023, setTCI_2023] = useState(1000000);
+const DefaultLayout = ({ children, noNavbar, noFooter }) => (
+  <Container fluid>
+    <Row>
+      <Col
+        className="main-content p-0"
+        lg="12"
+        md="12"
+        sm="12"
+        tag="main"
+      >
+        {!noNavbar && <MainNavbar />}
 
-  // Biofuel selector states
-  const [selectedProcess, setSelectedProcess] = useState("");
-  const [selectedFeedstock, setSelectedFeedstock] = useState("");
- 
-
-  // UserInputsForm handlers
-const handleSliderChange = (name) => (value) => {
-  // value comes in as an array from shards-react Slider, e.g. [30]
-  setInputs({ ...inputs, [name]: Number(value[0]) });
-  };
-
-  // BiofuelSelector handlers
-  const handleProcessChange = (process) => {
-    setSelectedProcess(process);
-    setSelectedFeedstock(""); // Reset feedstock when process changes
-  };
-
-  const handleFeedstockChange = (feedstock) => {
-    setSelectedFeedstock(feedstock);
-
-  };
-
-  // Main handler for the Calculate button
-  const handleCalculate = () => {
-    // Combine all data into a single object
-    const finalData = {
-      inputs: inputs, 
-      TCI_2023: TCI_2023,
-      process_technology: selectedProcess,
-      feedstock: selectedFeedstock,
-
-    };
-
-    console.log("Combined JSON object to be sent to backend:", finalData);
-    
-    // This is the code that sends the data to the backend.
-    axios.post("http://127.0.0.1:8000/calculate", finalData)
-      .then(response => console.log(response.data))
-      .catch(error => console.error(error));
-  };
-
-  return (
-    <Container fluid>
-      <Row>
-        <Col
-          className="main-content p-0"
-          lg="12"
-          md="12"
-          sm="12"
-          tag="main"
-        >
-          {!noNavbar && <MainNavbar />}
-
-          <Row>
-            <Col lg="3" md="12">
-              <UserInputsForm
-                inputs={inputs}
-                TCI_2023={TCI_2023}
-                handleSliderChange={handleSliderChange}
-                setTCI_2023={setTCI_2023}
-                handleCalculate={handleCalculate} // Pass the new combined handler
-              />
-            </Col>
-            
-            <Col lg="9" md="12" className="pb-4">
-              <BiofuelSelector
-                onProcessChange={handleProcessChange}
-                onFeedstockChange={handleFeedstockChange}
-              /> 
-              {children}
-            </Col>
-          </Row>
+        <Row>
+          {/* This column contains the new User Inputs form on the left */}
+          <Col lg="3" md="12">
+            <UserInputsForm />
+          </Col>
           
-          {!noFooter && <MainFooter />}
-        </Col>
-      </Row>
-    </Container>
-  );
-};
+          {/* This column contains your main dashboard content on the right */}
+          <Col lg="9" md="12" className="pb-4">
+            {children}
+          </Col>
+        </Row>
+        
+        {!noFooter && <MainFooter />}
+      </Col>
+    </Row>
+  </Container>
+);
 
 DefaultLayout.propTypes = {
   noNavbar: PropTypes.bool,
@@ -110,7 +86,7 @@ DefaultLayout.propTypes = {
 };
 
 DefaultLayout.defaultProps = {
-  noNavbar: false,
+  noNavbar: true,
   noFooter: false
 };
 
