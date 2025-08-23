@@ -1,169 +1,206 @@
 import React, { useState, useEffect } from "react";
-import PropTypes from "prop-types";
-import { Container, Row, Col, Button, Collapse } from "shards-react";
-
+import {
+  Container,
+  Row,
+  Col,
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  Badge,
+  FormSelect,
+} from "shards-react";
 import PageTitle from "../components/common/PageTitle";
-import SmallStats from "../components/common/SmallStats";
-import UsersOverview from "../components/blog/UsersOverview";
-import CashFlowTable from "../forms/CashFlowTable"; // Import the CashFlowTable component
+import axios from "axios";
 
-const BlogOverview = () => {
-  const [cashFlowData, setCashFlowData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false); // for collapsible
-
-  // Mock API data (replace with real backend call later)
-  const apiData = {
-    financials: {
-      cashFlowTable: [
-        {
-          Year: 0,
-          Revenue: 0.0,
-          OPEX: 0.0,
-          "Net Cash Flow": -9366010.24,
-          "Discount Factor": 1.0,
-          "Present Value": -9366010.24,
-        },
-        {
-          Year: 1,
-          Revenue: 395114500.0,
-          OPEX: 80187404.0,
-          "Net Cash Flow": 305561085.75,
-          "Discount Factor": 0.91,
-          "Present Value": 277782805.23,
-        },
-        {
-          Year: 2,
-          Revenue: 395114500.0,
-          OPEX: 80187404.0,
-          "Net Cash Flow": 305561085.75,
-          "Discount Factor": 0.83,
-          "Present Value": 252530192.53,
-        },
-        // add more rows from backend later...
-      ],
-    },
-  };
-
-  // Convert cashflow table → chart data
-  const cashflowToChart = (cashFlowTable) => {
-    if (!cashFlowTable.length)
-      return { labels: [], datasets: [], breakevenYear: null, finalValue: 0 };
-
-    const labels = cashFlowTable.map((row) => row.Year);
-    const presentValues = cashFlowTable.map((row) => row["Present Value"]);
-
-    // cumulative PV
-    let cumulative = 0;
-    const cumulativePV = presentValues.map((pv) => {
-      cumulative += pv;
-      return cumulative;
-    });
-
-    // breakeven index
-    const breakevenIndex = cumulativePV.findIndex((val) => val >= 0);
-
-    return {
-      labels,
-      datasets: [
-        {
-          label: "Cumulative PV",
-          data: cumulativePV,
-          fill: false,
-          borderColor: "#007bff",
-          borderWidth: 2,
-          pointRadius: labels.map((_, i) => (i === breakevenIndex ? 6 : 0)),
-          pointBackgroundColor: labels.map((_, i) =>
-            i === breakevenIndex ? "red" : "transparent"
-          ),
-        },
-      ],
-      breakevenYear: breakevenIndex >= 0 ? labels[breakevenIndex] : null,
-      finalValue: cumulativePV[cumulativePV.length - 1],
-    };
-  };
+const BlogPosts = ({ inputs, TCI_2023, selectedProcess, selectedFeedstock }) => {
+  const [apiData, setApiData] = useState(null);
+  const [table, setTable] = useState([]);
 
   useEffect(() => {
-    // Simulate backend call
-    setTimeout(() => {
-      setCashFlowData(apiData.financials.cashFlowTable);
-      setLoading(false);
-    }, 1000);
-  }, []);
+    const controller = new AbortController();
+    const signal = controller.signal;
 
-  const chart = cashflowToChart(cashFlowData);
+    const fetchData = async () => {
+      try {
+        const payload = {
+          inputs: inputs,
+          process_technology: selectedProcess,
+          feedstock: selectedFeedstock,
+          TCI_2023: TCI_2023
+        };
+
+        const res = await axios.post("http://127.0.0.1:8000/calculate", payload, { signal });
+        setApiData(res.data);
+      } catch (error) {
+        if (axios.isCancel(error)) {
+          console.log('Request canceled:', error.message);
+        } else {
+          console.error("Error fetching data:", error);
+        }
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      // Cleanup function to abort the request
+      controller.abort();
+    };
+  }, [inputs, TCI_2023, selectedProcess, selectedFeedstock]);
+
+  useEffect(() => {
+    if (apiData && apiData.financials && apiData.financials.cashFlowTable) {
+      setTable(apiData.financials.cashFlowTable);
+    }
+  }, [apiData]);
+
+  // Data for SmallStats
+  const smallStats = [
+    {
+      label: "Total Capital Investment (TCI) ($)",
+      // The original line was: value: apiData ? apiData.technoEconomics.TCI : "Loading...",
+      // The updated line checks if apiData and technoEconomics are defined before accessing TCI
+      value: apiData && apiData.technoEconomics ? apiData.technoEconomics.TCI : "Loading...",
+      attrs: { md: "6", sm: "6" },
+      chart: {
+        labels: ["Label"],
+        data: [0],
+      },
+    },
+    {
+      label: "Net Present Value (NPV) ($)",
+      // The original line was: value: apiData ? apiData.financials.npv : "Loading...",
+      // The updated line checks if apiData and financials are defined before accessing npv
+      value: apiData && apiData.financials ? apiData.financials.npv : "Loading...",
+      attrs: { md: "6", sm: "6" },
+      chart: {
+        labels: ["Label"],
+        data: [0],
+      },
+    },
+    {
+      label: "Internal Rate of Return (IRR) (%)",
+      // The original line was: value: apiData ? apiData.financials.irr : "Loading...",
+      // The updated line checks if apiData and financials are defined before accessing irr
+      value: apiData && apiData.financials ? apiData.financials.irr : "Loading...",
+      attrs: { md: "6", sm: "6" },
+      chart: {
+        labels: ["Label"],
+        data: [0],
+      },
+    },
+    {
+      label: "Payback Period (years)",
+      // The original line was: value: apiData ? apiData.financials.paybackPeriod : "Loading...",
+      // The updated line checks if apiData and financials are defined before accessing paybackPeriod
+      value: apiData && apiData.financials ? apiData.financials.paybackPeriod : "Loading...",
+      attrs: { md: "6", sm: "6" },
+      chart: {
+        labels: ["Label"],
+        data: [0],
+      },
+    },
+  ];
 
   return (
     <Container fluid className="main-content-container px-4">
-      {/* Page Header */}
       <Row noGutters className="page-header py-4">
         <PageTitle
-          title="Plant Lifetime"
+          sm="4"
+          title="Techno-Economic Analysis"
           subtitle="Dashboard"
-          className="text-sm-left mb-3"
+          className="text-sm-left"
         />
       </Row>
 
-      {/* Small Stats Block with Cashflow Chart */}
       <Row>
-        {cashFlowData.length > 0 && (
-          <Col lg="12" md="12" sm="12" className="mb-4">
-            <SmallStats
-              id="cashflow-stats"
-              variation="1"
-              chartData={chart.datasets}
-              chartLabels={chart.labels}
-              label="Cumulative PV"
-              value={`$${(chart.finalValue / 1e6).toFixed(2)}M`}
-              percentage={
-                chart.breakevenYear
-                  ? `Breakeven: Year ${chart.breakevenYear}`
-                  : "No Breakeven"
-              }
-              increase={chart.breakevenYear !== null}
-            />
+        {smallStats.map((stats, idx) => (
+          <Col className="col-lg mb-4" {...stats.attrs} key={idx}>
+            <Card small className="card-post card-post--1">
+              <div
+                className="card-post__image"
+                style={{
+                  backgroundImage:
+                    "url('https://c4.wallpaperflare.com/wallpaper/47/1000/989/digital-art-artwork-futuristic-city-city-wallpaper-preview.jpg')",
+                }}
+              >
+                <Badge
+                  pill
+                  className={`card-post__category bg-${
+                    stats.label === "Total Capital Investment (TCI) ($)" ||
+                    stats.label === "Net Present Value (NPV) ($)"
+                      ? "info"
+                      : "danger"
+                  }`}
+                >
+                  {stats.label}
+                </Badge>
+              </div>
+              <CardBody>
+                <h5 className="card-title text-center text-light">
+                  <a href="#npv" className="text-light">
+                    {stats.value}
+                  </a>
+                </h5>
+              </CardBody>
+            </Card>
           </Col>
-        )}
+        ))}
       </Row>
 
-      {/* Users Overview (still here if needed) */}
+
+
       <Row>
-        <Col lg="12" md="12" sm="12" className="mb-4">
-          <UsersOverview />
+        <Col lg="9" md="12">
+          <Card small className="mb-4">
+            <CardHeader className="border-bottom">
+              <h6 className="m-0">Cash Flow Table</h6>
+            </CardHeader>
+            <CardBody className="p-0 pb-3">
+              <table className="table mb-0">
+                <thead className="bg-light">
+                  <tr>
+                    <th scope="col" className="border-0">
+                      Year
+                    </th>
+                    <th scope="col" className="border-0">
+                      Cash Inflow ($)
+                    </th>
+                    <th scope="col" className="border-0">
+                      Cash Outflow ($)
+                    </th>
+                    <th scope="col" className="border-0">
+                      Net Cash Flow ($)
+                    </th>
+                    <th scope="col" className="border-0">
+                      Cumulative Net Cash Flow ($)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {table.map((row, index) => (
+                    <tr key={index}>
+                      <td>{row.year}</td>
+                      <td>{row.cashInflow}</td>
+                      <td>{row.cashOutflow}</td>
+                      <td>{row.netCashFlow}</td>
+                      <td>{row.cumulativeNetCashFlow}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardBody>
+            <CardFooter className="border-top text-right">
+              {/* Links here if needed */}
+            </CardFooter>
+          </Card>
         </Col>
       </Row>
 
-      {/* Toggle Button for Cash Flow Table */}
-      <Row>
-        <Col lg="12" md="12" sm="12" className="mb-2 text-right">
-          <Button theme="primary" onClick={() => setOpen(!open)}>
-            {open ? "Hide Cash Flow Table" : "Show Cash Flow Table"}
-          </Button>
-        </Col>
-      </Row>
-
-      {/* Collapsible Cash Flow Table */}
-      <Collapse open={open}>
-        <Row>
-          <Col lg="12" md="12" sm="12" className="mb-4">
-            {loading ? (
-              <p>Loading cash flow data...</p>
-            ) : (
-              <CashFlowTable tableData={cashFlowData} />
-            )}
-          </Col>
-        </Row>
-      </Collapse>
+     
     </Container>
   );
 };
 
-BlogOverview.propTypes = {
-  smallStats: PropTypes.array,
-};
-
-BlogOverview.defaultProps = {
-  smallStats: [],
-};
-
-export default BlogOverview;
+export default BlogPosts;
