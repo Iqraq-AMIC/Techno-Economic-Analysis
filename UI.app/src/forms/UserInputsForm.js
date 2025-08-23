@@ -165,8 +165,8 @@ const UserInputsForm = ({
             <Slider
               connect={[true, false]}
               start={[inputs.plant_lifetime]}
-              range={{ min: 10, max: 30 }}
-              onSlide={handleSliderChange("plant_lifetime")}
+              range={{ min: 10, max: 40 }}
+              onSlide={(vals) => handleSliderChange("plant_lifetime")(Number(vals[0]))}
             />
           </FormGroup>
     

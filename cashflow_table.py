@@ -15,23 +15,28 @@ class FinancialAnalysis:
     def cash_flow_table(self, capex: float, revenue: float, opex: float,
                         plant_lifetime: int) -> pd.DataFrame:
         """
-        Builds a cash flow table for NPV/IRR/Payback analysis.
+        Builds a cash flow table for NPV/IRR/Payback analysis (steady-state).
         """
         data = []
+        cumulative_cash = -capex  # start with construction cost
+
         for year in range(0, plant_lifetime + 1):
             if year == 0:
                 net_cash_flow = -capex
+                rev, opx = 0, 0
             else:
-                net_cash_flow = revenue - opex
+                rev, opx = revenue, opex
+                net_cash_flow = rev - opx
+                cumulative_cash += net_cash_flow
 
             df = self.discount_factor(year)
             present_value = net_cash_flow * df
 
             data.append({
                 "Year": year,
-                "Revenue": 0 if year == 0 else revenue,
-                "OPEX": 0 if year == 0 else opex,
-                "Net Cash Flow": net_cash_flow,
+                "Revenue": rev,
+                "OPEX": opx,
+                "Net Cash Flow": cumulative_cash,
                 "Discount Factor": df,
                 "Present Value": present_value
             })
