@@ -13,6 +13,9 @@ import {
   Slider,
   Row,
   Col,
+  Nav,
+  NavItem,
+  NavLink,
 } from "shards-react";
 
 const BiofuelForm = ({
@@ -28,13 +31,7 @@ const BiofuelForm = ({
   const [feedstocks, setFeedstocks] = useState([]);
   const [selectedProcess, setSelectedProcess] = useState("");
   const [selectedFeedstock, setSelectedFeedstock] = useState("");
-
-  // Accordion state
-  const [openSection, setOpenSection] = useState(null);
-
-  const toggleSection = (section) => {
-    setOpenSection(openSection === section ? null : section);
-  };
+  const [activeTab, setActiveTab] = useState("plant");
 
   // Fetch processes
   useEffect(() => {
@@ -43,14 +40,12 @@ const BiofuelForm = ({
     });
   }, []);
 
-  // Fetch feedstocks
+  // Fetch feedstocks when process selected
   useEffect(() => {
     if (selectedProcess) {
       axios
         .get(`http://127.0.0.1:8000/feedstocks/${selectedProcess}`)
-        .then((res) => {
-          setFeedstocks(res.data);
-        });
+        .then((res) => setFeedstocks(res.data));
     }
   }, [selectedProcess]);
 
@@ -68,7 +63,7 @@ const BiofuelForm = ({
     onFeedstockChange(feedstock);
   };
 
-  // Helper for sliders
+  // Slider helper
   const renderSlider = (id, label, value, range, step, handler) => (
     <FormGroup className="mb-3">
       <Row form className="align-items-center">
@@ -104,37 +99,15 @@ const BiofuelForm = ({
     </FormGroup>
   );
 
-  // Section header
-  const SectionHeader = ({ title, sectionKey, color }) => (
-    <div
-      onClick={() => toggleSection(sectionKey)}
-      style={{
-        cursor: "pointer",
-        backgroundColor: "#f1f3f5",
-        padding: "8px 12px",
-        marginBottom: "6px",
-        borderRadius: "4px",
-        fontWeight: 600,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        borderLeft: `4px solid ${color}`,
-      }}
-    >
-      <span>{title}</span>
-      <span style={{ fontSize: "0.8rem" }}>
-        {openSection === sectionKey ? "▲" : "▼"}
-      </span>
-    </div>
-  );
-
   return (
-    <Card small className="mb-3">
+    <Card small className="mb-3 flex-fill d-flex flex-column h-100">
       <CardHeader className="border-bottom py-2">
         <h6 className="m-0">Biofuel Selector & User Inputs</h6>
       </CardHeader>
-      <CardBody className="p-3">
-        <Form>
+
+      {/* CardBody fills height, form takes full height */}
+      <CardBody className="p-3 d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
+        <Form className="d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
           {/* Process & Feedstock */}
           <Row form>
             <Col md="6">
@@ -175,158 +148,92 @@ const BiofuelForm = ({
             </Col>
           </Row>
 
-          {/* Accordion Sections */}
-          <SectionHeader title="Plant Parameters" sectionKey="plant" color="#007bff" />
-          {openSection === "plant" && (
-            <div
-              style={{
-                padding: "8px 12px",
-                borderLeft: "3px solid #007bff",
-                marginBottom: "12px",
-              }}
-            >
-              {renderSlider(
-                "production_capacity",
-                "Production Capacity (tons/year)",
-                inputs.production_capacity,
-                { min: 100, max: 10000 },
-                100,
-                handleSliderChange("production_capacity")
-              )}
-              {renderSlider(
-                "CEPCI",
-                "CEPCI Index",
-                inputs.CEPCI,
-                { min: 500, max: 1000 },
-                1,
-                handleSliderChange("CEPCI")
-              )}
-              {renderSlider(
-                "plant_lifetime",
-                "Plant Lifetime (years)",
-                inputs.plant_lifetime,
-                { min: 5, max: 50 },
-                1,
-                (vals) =>
-                  handleSliderChange("plant_lifetime")(Number(vals[0]))
-              )}
-            </div>
-          )}
+          {/* Tabs */}
+          <Nav tabs>
+            <NavItem>
+              <NavLink active={activeTab === "plant"} onClick={() => setActiveTab("plant")}>
+                Plant Parameters
+              </NavLink>
+            </NavItem>
+            <NavItem>
+              <NavLink active={activeTab === "costs"} onClick={() => setActiveTab("costs")}>
+                Costs
+              </NavLink>
+            </NavItem>
+            <NavItem>
+              <NavLink active={activeTab === "finance"} onClick={() => setActiveTab("finance")}>
+                Finance
+              </NavLink>
+            </NavItem>
+          </Nav>
 
-          <SectionHeader title="Costs" sectionKey="costs" color="#28a745" />
-          {openSection === "costs" && (
-            <div
-              style={{
-                padding: "8px 12px",
-                borderLeft: "3px solid #28a745",
-                marginBottom: "12px",
-              }}
-            >
-              {renderSlider(
-                "biomass_price",
-                "Biomass Price ($/ton)",
-                inputs.biomass_price,
-                { min: 50, max: 500 },
-                5,
-                handleSliderChange("biomass_price")
-              )}
-              {renderSlider(
-                "hydrogen_price",
-                "Hydrogen Price ($/kg)",
-                inputs.hydrogen_price,
-                { min: 1, max: 10 },
-                0.1,
-                handleSliderChange("hydrogen_price")
-              )}
-              {renderSlider(
-                "electricity_rate",
-                "Electricity Rate ($/kWh)",
-                inputs.electricity_rate,
-                { min: 0.05, max: 0.5 },
-                0.01,
-                handleSliderChange("electricity_rate")
-              )}
-              {renderSlider(
-                "yearly_wage_operator",
-                "Yearly Wage Operator ($/year)",
-                inputs.yearly_wage_operator,
-                { min: 50000, max: 150000 },
-                1000,
-                handleSliderChange("yearly_wage_operator")
-              )}
-              {renderSlider(
-                "product_price",
-                "Product Price ($/ton)",
-                inputs.product_price,
-                { min: 500, max: 5000 },
-                10,
-                handleSliderChange("product_price")
-              )}
-              {renderSlider(
-                "land_cost",
-                "Land Cost ($)",
-                inputs.land_cost,
-                { min: 100000, max: 5000000 },
-                50000,
-                handleSliderChange("land_cost")
-              )}
-            </div>
-          )}
+          {/* Tab Panels (independent scrollbars) */}
+          <div className="flex-grow-1 mt-3 d-flex flex-column" style={{ minHeight: 0 }}>
+            {activeTab === "plant" && (
+              <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
+                {renderSlider("production_capacity", "Production Capacity (tons/year)", inputs.production_capacity,
+                  { min: 100, max: 10000 }, 100, handleSliderChange("production_capacity"))}
+                {renderSlider("CEPCI", "CEPCI Index", inputs.CEPCI,
+                  { min: 500, max: 1000 }, 1, handleSliderChange("CEPCI"))}
+                {renderSlider("plant_lifetime", "Plant Lifetime (years)", inputs.plant_lifetime,
+                  { min: 5, max: 50 }, 1, (vals) => handleSliderChange("plant_lifetime")(Number(vals[0])))}
+              </div>
+            )}
 
-          <SectionHeader title="Finance" sectionKey="finance" color="#ffc107" />
-          {openSection === "finance" && (
-            <div
-              style={{
-                padding: "8px 12px",
-                borderLeft: "3px solid #ffc107",
-                marginBottom: "12px",
-              }}
-            >
-              {renderSlider(
-                "discount_factor",
-                "Discount Factor (%)",
-                inputs.discount_factor,
-                { min: 0.01, max: 0.2 },
-                0.01,
-                handleSliderChange("discount_factor")
-              )}
+            {activeTab === "costs" && (
+              <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
+                {renderSlider("biomass_price", "Biomass Price ($/ton)", inputs.biomass_price,
+                  { min: 50, max: 500 }, 5, handleSliderChange("biomass_price"))}
+                {renderSlider("hydrogen_price", "Hydrogen Price ($/kg)", inputs.hydrogen_price,
+                  { min: 1, max: 10 }, 0.1, handleSliderChange("hydrogen_price"))}
+                {renderSlider("electricity_rate", "Electricity Rate ($/kWh)", inputs.electricity_rate,
+                  { min: 0.05, max: 0.5 }, 0.01, handleSliderChange("electricity_rate"))}
+                {renderSlider("yearly_wage_operator", "Yearly Wage Operator ($/year)", inputs.yearly_wage_operator,
+                  { min: 50000, max: 150000 }, 1000, handleSliderChange("yearly_wage_operator"))}
+                {renderSlider("product_price", "Product Price ($/ton)", inputs.product_price,
+                  { min: 500, max: 5000 }, 10, handleSliderChange("product_price"))}
+                {renderSlider("land_cost", "Land Cost ($)", inputs.land_cost,
+                  { min: 100000, max: 5000000 }, 50000, handleSliderChange("land_cost"))}
+              </div>
+            )}
 
-              {/* ✅ Moved TCI + Button inside Finance */}
-              <Row form className="align-items-end mt-3">
-                <Col xs="8">
-                  <label
-                    htmlFor="tci"
-                    className="mb-0"
-                    style={{ fontSize: "0.95rem", fontWeight: 600 }}
-                  >
-                    TCI 2023 ($)
-                  </label>
-                  <FormInput
-                    id="tci"
-                    type="number"
-                    value={TCI_2023}
-                    readOnly
-                    size="sm"
-                    className="text-right font-weight-bold mb-1"
-                    style={{ fontSize: "0.95rem", backgroundColor: "#f8f9fa" }}
-                  />
-                  <Slider
-                    connect={[true, false]}
-                    start={[TCI_2023]}
-                    range={{ min: 100000, max: 50000000 }}
-                    step={100000}
-                    onSlide={(vals) => setTCI_2023(Number(vals[0]))}
-                    className="mt-1"
-                  />
-                </Col>
-                <Col xs="4" className="d-flex align-items-end">
-                  <Button onClick={handleCalculate} block>
-                    Calculate
-                  </Button>
-                </Col>
-              </Row>
-            </div>
-          )}
+            {activeTab === "finance" && (
+              <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
+                {renderSlider("discount_factor", "Discount Factor (%)", inputs.discount_factor,
+                  { min: 0.01, max: 0.2 }, 0.01, handleSliderChange("discount_factor"))}
+
+                <Row form className="align-items-end mt-3">
+                  <Col xs="8">
+                    <label htmlFor="tci" className="mb-0" style={{ fontSize: "0.95rem", fontWeight: 600 }}>
+                      TCI 2023 ($)
+                    </label>
+                    <FormInput
+                      id="tci"
+                      type="number"
+                      value={TCI_2023}
+                      readOnly
+                      size="sm"
+                      className="text-right font-weight-bold mb-1"
+                      style={{ fontSize: "0.95rem", backgroundColor: "#f8f9fa" }}
+                    />
+                    <Slider
+                      connect={[true, false]}
+                      start={[TCI_2023]}
+                      range={{ min: 100000, max: 50000000 }}
+                      step={100000}
+                      onSlide={(vals) => setTCI_2023(Number(vals[0]))}
+                      className="mt-1"
+                    />
+                  </Col>
+                  <Col xs="4" className="d-flex align-items-end">
+                    <Button onClick={handleCalculate} block>
+                      Calculate
+                    </Button>
+                  </Col>
+                </Row>
+              </div>
+            )}
+          </div>
         </Form>
       </CardBody>
     </Card>

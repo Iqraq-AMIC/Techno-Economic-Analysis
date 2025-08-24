@@ -5,7 +5,6 @@ import { Redirect } from "react-router-dom";
 import { DefaultLayout } from "./layouts";
 
 // Route Views
-
 import Tables from "./views/Tables";
 import BlogPosts from "./views/BlogPosts";
 
@@ -14,16 +13,15 @@ export default [
     path: "/",
     exact: true,
     layout: DefaultLayout,
-    component: () => <Redirect to="/blog-overview" />
+    component: () => <Redirect to="TEA" />
   },
-
   {
     path: "/tables",
     layout: DefaultLayout,
     component: Tables
   },
   {
-    path: "/blog-posts",
+    path: "/TEA",   
     layout: DefaultLayout,
     component: BlogPosts
   }

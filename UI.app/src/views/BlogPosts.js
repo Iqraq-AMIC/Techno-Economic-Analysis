@@ -15,6 +15,7 @@ import {
 import PageTitle from "../components/common/PageTitle";
 import axios from "axios";
 import BreakevenBarChart from "../components/charts/BreakevenBarChart";
+import BiofuelForm from "../forms/BiofuelForm"; // ✅ modular with internal tab scroll
 
 // ✅ Mock data for fallback
 const mockCashFlowTable = [
@@ -31,10 +32,51 @@ const mockCashFlowTable = [
   { year: 10, cashInflow: 550000, cashOutflow: 150000, netCashFlow: 400000, presentValue: 1880000 },
 ];
 
-const BlogPosts = ({ inputs, TCI_2023, selectedProcess, selectedFeedstock }) => {
+const BlogPosts = () => {
+  const [inputs, setInputs] = useState({
+    production_capacity: 5000,
+    CEPCI: 750,
+    biomass_price: 250,
+    hydrogen_price: 5.5,
+    electricity_rate: 0.275,
+    yearly_wage_operator: 100000,
+    product_price: 2750,
+    land_cost: 2550000,
+    plant_lifetime: 25,
+    discount_factor: 0.105,
+  });
+
+  const [TCI_2023, setTCI_2023] = useState(2500000);
+  const [selectedProcess, setSelectedProcess] = useState("Fischer-Tropsch");
+  const [selectedFeedstock, setSelectedFeedstock] = useState("Palm Kernel Shell");
+
   const [apiData, setApiData] = useState(null);
   const [table, setTable] = useState(mockCashFlowTable);
-  const [openTable, setOpenTable] = useState(false); // ✅ modal state
+  const [openTable, setOpenTable] = useState(false);
+
+  const handleSliderChange = (key) => (vals) => {
+    setInputs((prev) => ({
+      ...prev,
+      [key]: Number(vals[0]),
+    }));
+  };
+
+  const handleCalculate = () => {
+    const finalData = {
+      inputs,
+      TCI_2023,
+      process_technology: selectedProcess,
+      feedstock: selectedFeedstock,
+    };
+
+    axios
+      .post("http://127.0.0.1:8000/calculate", finalData)
+      .then((res) => setApiData(res.data))
+      .catch(() => {
+        console.warn("Backend failed, using mock data");
+        setTable(mockCashFlowTable);
+      });
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -48,15 +90,12 @@ const BlogPosts = ({ inputs, TCI_2023, selectedProcess, selectedFeedstock }) => 
           feedstock: selectedFeedstock,
           TCI_2023,
         };
-
         const res = await axios.post("http://127.0.0.1:8000/calculate", payload, { signal });
         setApiData(res.data);
-
         if (res.data?.financials?.cashFlowTable?.length) {
           setTable(res.data.financials.cashFlowTable);
         }
-      } catch (error) {
-        console.warn("Backend failed, using mock data");
+      } catch {
         setTable(mockCashFlowTable);
       }
     };
@@ -65,7 +104,6 @@ const BlogPosts = ({ inputs, TCI_2023, selectedProcess, selectedFeedstock }) => 
     return () => controller.abort();
   }, [inputs, TCI_2023, selectedProcess, selectedFeedstock]);
 
-  // ✅ Chart data
   const chartData = table.map((row) => ({
     "Plant Lifetime": row.year,
     "Present Value": row.presentValue ?? row.netCashFlow,
@@ -91,7 +129,7 @@ const BlogPosts = ({ inputs, TCI_2023, selectedProcess, selectedFeedstock }) => 
   ];
 
   return (
-    <Container fluid className="main-content-container px-4">
+    <Container fluid className="main-content-container px-4 d-flex flex-column">
       {/* Header */}
       <Row noGutters className="page-header py-4">
         <PageTitle
@@ -102,35 +140,55 @@ const BlogPosts = ({ inputs, TCI_2023, selectedProcess, selectedFeedstock }) => 
         />
       </Row>
 
-      {/* Main Content Row */}
-      <Row>
-        {/* Chart in the center */}
-        <Col lg="9" md="12">
-          <Card small className="mb-4 h-100">
-            <CardHeader className="border-bottom d-flex justify-content-between align-items-center">
-              <h6 className="m-0">Breakeven Analysis</h6>
-              <Button size="sm" theme="primary" onClick={() => setOpenTable(true)}>
-                View Cash Flow Table
-              </Button>
-            </CardHeader>
-            <CardBody>
-              <BreakevenBarChart data={chartData} />
-            </CardBody>
-          </Card>
+      {/* Main Layout */}
+      <Row className="flex-grow-1 d-flex align-items-stretch">
+        {/* 🔹 Left: BiofuelForm */}
+        <Col lg="3" md="12" className="d-flex" style={{ height: "500px", minHeight: 0 }}>
+          <BiofuelForm
+            inputs={inputs}
+            TCI_2023={TCI_2023}
+            handleSliderChange={handleSliderChange}
+            setTCI_2023={setTCI_2023}
+            handleCalculate={handleCalculate}
+            onProcessChange={setSelectedProcess}
+            onFeedstockChange={setSelectedFeedstock}
+            selectedProcess={selectedProcess}
+            selectedFeedstock={selectedFeedstock}
+          />
         </Col>
 
-        {/* KPI cards stacked on the right */}
-        <Col lg="3" md="12" className="d-flex flex-column">
-          {smallStats.map((stats, idx) => (
-            <Card small className="flex-fill mb-3" key={idx}>
-              <CardHeader className="border-bottom text-center p-2">
-                <h6 className="m-0">{stats.label}</h6>
-              </CardHeader>
-              <CardBody className="d-flex align-items-center justify-content-center">
-                <h5>{stats.value}</h5>
-              </CardBody>
-            </Card>
-          ))}
+        {/* 🔹 Right: Chart + KPIs */}
+        <Col lg="9" md="12" className="d-flex flex-column" style={{ height: "500px", minHeight: 0 }}>
+          <Row className="flex-grow-1 align-items-stretch">
+            {/* Chart */}
+            <Col lg="9" md="12" className="d-flex">
+              <Card small className="mb-4 flex-fill">
+                <CardHeader className="border-bottom d-flex justify-content-between align-items-center">
+                  <h6 className="m-0">Breakeven Analysis</h6>
+                  <Button size="sm" theme="primary" onClick={() => setOpenTable(true)}>
+                    View Cash Flow Table
+                  </Button>
+                </CardHeader>
+                <CardBody style={{ height: "100%" }}>
+                  <BreakevenBarChart data={chartData} />
+                </CardBody>
+              </Card>
+            </Col>
+
+            {/* KPI Cards */}
+            <Col lg="3" md="12" className="d-flex flex-column">
+              {smallStats.map((stats, idx) => (
+                <Card small className="flex-fill mb-3" key={idx}>
+                  <CardHeader className="border-bottom text-center p-2">
+                    <h6 className="m-0">{stats.label}</h6>
+                  </CardHeader>
+                  <CardBody className="d-flex align-items-center justify-content-center">
+                    <h5>{stats.value}</h5>
+                  </CardBody>
+                </Card>
+              ))}
+            </Col>
+          </Row>
         </Col>
       </Row>
 
