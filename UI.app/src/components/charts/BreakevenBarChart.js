@@ -1,6 +1,12 @@
 import React, { useRef, useEffect } from "react";
 import Chart from "chart.js";
 
+
+const formatNumber = (num) => {
+  if (num === null || num === undefined || isNaN(num)) return "-";
+  return Number(num).toFixed(2);
+};
+
 const BreakevenBarChart = ({ data }) => {
   const canvasRef = useRef(null);
 
@@ -11,7 +17,7 @@ const BreakevenBarChart = ({ data }) => {
 
     const ctx = canvasRef.current.getContext("2d");
 
-    // Clean up previous chart before re-render
+
     if (canvasRef.current.chartInstance) {
       canvasRef.current.chartInstance.destroy();
     }
@@ -19,21 +25,27 @@ const BreakevenBarChart = ({ data }) => {
     canvasRef.current.chartInstance = new Chart(ctx, {
       type: "bar",
       data: {
-        labels: labels,
+        labels,
         datasets: [
           {
             label: "Cumulative Present Value ($)",
-            data: pv,
-            backgroundColor: labels.map((_, i) =>
-              i === breakevenIndex
-                ? "rgba(255,99,132,0.8)"   // highlight breakeven bar
-                : "rgba(54,162,235,0.6)"
-            ),
-            borderColor: labels.map((_, i) =>
-              i === breakevenIndex
+            data: pv.map((v) => Number(formatNumber(v))), // ✅ format data itself
+            backgroundColor: labels.map((_, i) => {
+              if (breakevenIndex === -1) {
+                return "rgba(255,99,132,0.7)"; // all red if never breakeven
+              }
+              return i < breakevenIndex
+                ? "rgba(255,99,132,0.7)" // before breakeven
+                : "rgba(75,192,75,0.7)"; // after breakeven
+            }),
+            borderColor: labels.map((_, i) => {
+              if (breakevenIndex === -1) {
+                return "rgba(255,99,132,1)";
+              }
+              return i < breakevenIndex
                 ? "rgba(255,99,132,1)"
-                : "rgba(54,162,235,1)"
-            ),
+                : "rgba(75,192,75,1)";
+            }),
             borderWidth: 1,
           },
         ],
@@ -41,7 +53,12 @@ const BreakevenBarChart = ({ data }) => {
       options: {
         responsive: true,
         plugins: {
-          tooltip: { enabled: true },
+          tooltip: {
+            callbacks: {
+              label: (context) =>
+                `Cumulative PV: ${formatNumber(context.raw)}`, // ✅ tooltip 2 decimals
+            },
+          },
           legend: { display: false },
         },
         scales: {
@@ -49,6 +66,9 @@ const BreakevenBarChart = ({ data }) => {
           y: {
             title: { display: true, text: "Cumulative Present Value ($)" },
             beginAtZero: false,
+            ticks: {
+              callback: (val) => formatNumber(val), // ✅ axis 2 decimals
+            },
           },
         },
       },
@@ -58,10 +78,10 @@ const BreakevenBarChart = ({ data }) => {
   return <canvas ref={canvasRef} />;
 };
 
-// Helper to compute cumulative PV + breakeven index
+// Helper: cumulative PV + breakeven index
 const preprocessData = (rows) => {
   let cumulative = 0;
-  const labels = rows.map((r) => r["Plant Lifetime"] ?? r["Year"]); // support both keys
+  const labels = rows.map((r) => r["Plant Lifetime"] ?? r["Year"]);
   const pv = rows.map((r) => {
     cumulative += r["Present Value"];
     return cumulative;

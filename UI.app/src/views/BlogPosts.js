@@ -9,13 +9,11 @@ import {
   Button,
   Modal,
   ModalBody,
-  ModalHeader,
-  ModalFooter,
 } from "shards-react";
-import PageTitle from "../components/common/PageTitle";
 import axios from "axios";
 import BreakevenBarChart from "../components/charts/BreakevenBarChart";
-import BiofuelForm from "../forms/BiofuelForm"; // ✅ modular with internal tab scroll
+import BiofuelForm from "../forms/BiofuelForm";
+import CashFlowTable from "../forms/CashFlowTable";
 
 // ✅ Mock data for fallback
 const mockCashFlowTable = [
@@ -104,45 +102,51 @@ const BlogPosts = () => {
     return () => controller.abort();
   }, [inputs, TCI_2023, selectedProcess, selectedFeedstock]);
 
-  const chartData = table.map((row) => ({
-    "Plant Lifetime": row.year,
-    "Present Value": row.presentValue ?? row.netCashFlow,
+  const chartData = table.map((row, i) => ({
+    "Plant Lifetime": row.year ?? row.Year ?? i,
+    "Present Value": Number.isFinite(row.presentValue ?? row["Present Value"])
+      ? (row.presentValue ?? row["Present Value"])
+      : Number.isFinite(row.netCashFlow ?? row["Net Cash Flow"])
+      ? (row.netCashFlow ?? row["Net Cash Flow"])
+      : 0,
   }));
 
+  // ✅ number formatter
+  const formatValue = (val, decimals = 2) => {
+    if (val === null || val === undefined || isNaN(val)) return "N/A";
+    return Number(val).toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  };
+
+  // ✅ KPI cards config
   const smallStats = [
     {
-      label: "Total Capital Investment (TCI) ($)",
-      value: apiData?.technoEconomics?.TCI ?? "Loading...",
+      label: "Net Present Value ($)",
+      value: formatValue(apiData?.financials?.npv, 2),
     },
     {
-      label: "Net Present Value (NPV) ($)",
-      value: apiData?.financials?.npv ?? "Loading...",
-    },
-    {
-      label: "Internal Rate of Return (IRR) (%)",
-      value: apiData?.financials?.irr ?? "Loading...",
+      label: "Internal Rate of Return (%)",
+      value: formatValue(apiData?.financials?.irr * 100, 2),
     },
     {
       label: "Payback Period (years)",
-      value: apiData?.financials?.paybackPeriod ?? "Loading...",
+      value: apiData?.financials?.paybackPeriod
+        ? formatValue(apiData.financials.paybackPeriod, 0) // no decimals
+        : "N/A",
+    },
+    {
+      label: "Levelized Cost of Production ($/ton)",
+      value: formatValue(apiData?.technoEconomics?.LCOP, 2),
     },
   ];
 
   return (
     <Container fluid className="main-content-container px-4 d-flex flex-column">
-      {/* Header */}
-      <Row noGutters className="page-header py-4">
-        <PageTitle
-          sm="4"
-          title="Techno-Economic Analysis"
-          subtitle="Dashboard"
-          className="text-sm-left"
-        />
-      </Row>
-
       {/* Main Layout */}
       <Row className="flex-grow-1 d-flex align-items-stretch">
-        {/* 🔹 Left: BiofuelForm */}
+        {/* Left Form */}
         <Col lg="3" md="12" className="d-flex" style={{ height: "500px", minHeight: 0 }}>
           <BiofuelForm
             inputs={inputs}
@@ -157,7 +161,7 @@ const BlogPosts = () => {
           />
         </Col>
 
-        {/* 🔹 Right: Chart + KPIs */}
+        {/* Right: Chart + KPIs */}
         <Col lg="9" md="12" className="d-flex flex-column" style={{ height: "500px", minHeight: 0 }}>
           <Row className="flex-grow-1 align-items-stretch">
             {/* Chart */}
@@ -165,8 +169,12 @@ const BlogPosts = () => {
               <Card small className="mb-4 flex-fill">
                 <CardHeader className="border-bottom d-flex justify-content-between align-items-center">
                   <h6 className="m-0">Breakeven Analysis</h6>
-                  <Button size="sm" theme="primary" onClick={() => setOpenTable(true)}>
-                    View Cash Flow Table
+                  <Button
+                    size="md"
+                    style={{ backgroundColor: "#07193D", borderColor: "#07193D", color: "#fff" }}
+                    onClick={() => setOpenTable(true)}
+                  >
+                    Cash Flow Table
                   </Button>
                 </CardHeader>
                 <CardBody style={{ height: "100%" }}>
@@ -180,10 +188,12 @@ const BlogPosts = () => {
               {smallStats.map((stats, idx) => (
                 <Card small className="flex-fill mb-3" key={idx}>
                   <CardHeader className="border-bottom text-center p-2">
-                    <h6 className="m-0">{stats.label}</h6>
+                    <h6 className="m-0 font-weight-bold">{stats.label}</h6>
                   </CardHeader>
                   <CardBody className="d-flex align-items-center justify-content-center">
-                    <h5>{stats.value}</h5>
+                    <div style={{ fontSize: "2rem", fontWeight: "400", color: "#1f2937" }}>
+                      {stats.value}
+                    </div>
                   </CardBody>
                 </Card>
               ))}
@@ -192,38 +202,11 @@ const BlogPosts = () => {
         </Col>
       </Row>
 
-      {/* ✅ Modal for Cash Flow Table */}
+      {/* Cash Flow Modal */}
       <Modal open={openTable} toggle={() => setOpenTable(!openTable)} size="lg">
-        <ModalHeader>Cash Flow Table</ModalHeader>
         <ModalBody>
-          <table className="table mb-0">
-            <thead className="bg-light">
-              <tr>
-                <th>Year</th>
-                <th>Cash Inflow ($)</th>
-                <th>Cash Outflow ($)</th>
-                <th>Net Cash Flow ($)</th>
-                <th>Present Value ($)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {table.map((row, index) => (
-                <tr key={index}>
-                  <td>{row.year}</td>
-                  <td>{row.cashInflow}</td>
-                  <td>{row.cashOutflow}</td>
-                  <td>{row.netCashFlow}</td>
-                  <td>{row.presentValue}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <CashFlowTable tableData={table} />
         </ModalBody>
-        <ModalFooter>
-          <Button theme="secondary" onClick={() => setOpenTable(false)}>
-            Close
-          </Button>
-        </ModalFooter>
       </Modal>
     </Container>
   );

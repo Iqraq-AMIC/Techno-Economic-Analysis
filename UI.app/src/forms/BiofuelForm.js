@@ -9,7 +9,6 @@ import {
   FormGroup,
   FormInput,
   FormSelect,
-  Button,
   Slider,
   Row,
   Col,
@@ -18,12 +17,20 @@ import {
   NavLink,
 } from "shards-react";
 
+// ✅ Number formatter with commas + decimals
+const formatNumber = (num, decimals = 0) => {
+  if (num === null || num === undefined || isNaN(num)) return "-";
+  return Number(num).toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+};
+
 const BiofuelForm = ({
   inputs,
   TCI_2023,
   handleSliderChange,
   setTCI_2023,
-  handleCalculate,
   onProcessChange,
   onFeedstockChange,
 }) => {
@@ -33,14 +40,14 @@ const BiofuelForm = ({
   const [selectedFeedstock, setSelectedFeedstock] = useState("");
   const [activeTab, setActiveTab] = useState("plant");
 
-  // Fetch processes
+  // 🔹 Fetch processes
   useEffect(() => {
     axios.get("http://127.0.0.1:8000/processes").then((res) => {
       setProcesses(res.data);
     });
   }, []);
 
-  // Fetch feedstocks when process selected
+  // 🔹 Fetch feedstocks when process selected
   useEffect(() => {
     if (selectedProcess) {
       axios
@@ -63,8 +70,18 @@ const BiofuelForm = ({
     onFeedstockChange(feedstock);
   };
 
-  // Slider helper
-  const renderSlider = (id, label, value, range, step, handler) => (
+  // 🔹 Slider helper
+const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
+  // helper
+  const formatNumber = (num, decimals = 2) => {
+    if (num === null || num === undefined || isNaN(num)) return "";
+    return Number(num).toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  };
+
+  return (
     <FormGroup className="mb-3">
       <Row form className="align-items-center">
         <Col xs="7">
@@ -79,12 +96,28 @@ const BiofuelForm = ({
         <Col xs="5">
           <FormInput
             id={id}
-            type="number"
+            type="text"
             value={value}
-            readOnly
             size="sm"
-            className="text-right font-weight-bold"
+            className="text-right"
             style={{ fontSize: "0.9rem", backgroundColor: "#f8f9fa" }}
+            onChange={(e) => {
+              // strip commas when typing
+              const raw = e.target.value.replace(/,/g, "");
+              const num = Number(raw);
+              if (!isNaN(num)) {
+                handler([num]);
+              }
+            }}
+            onBlur={(e) => {
+              // format only when leaving the input
+              const raw = e.target.value.replace(/,/g, "");
+              const num = Number(raw);
+              if (!isNaN(num)) {
+                handler([num]);
+                e.target.value = formatNumber(num, decimals);
+              }
+            }}
           />
         </Col>
       </Row>
@@ -98,17 +131,17 @@ const BiofuelForm = ({
       />
     </FormGroup>
   );
+};
 
   return (
     <Card small className="mb-3 flex-fill d-flex flex-column h-100">
       <CardHeader className="border-bottom py-2">
-        <h6 className="m-0">Biofuel Selector & User Inputs</h6>
+        <h6 className="m-0">Scenario Inputs</h6>
       </CardHeader>
 
-      {/* CardBody fills height, form takes full height */}
       <CardBody className="p-3 d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
         <Form className="d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
-          {/* Process & Feedstock */}
+          {/* 🔹 Process & Feedstock */}
           <Row form>
             <Col md="6">
               <FormGroup>
@@ -148,7 +181,7 @@ const BiofuelForm = ({
             </Col>
           </Row>
 
-          {/* Tabs */}
+          {/* 🔹 Tabs */}
           <Nav tabs>
             <NavItem>
               <NavLink active={activeTab === "plant"} onClick={() => setActiveTab("plant")}>
@@ -167,7 +200,7 @@ const BiofuelForm = ({
             </NavItem>
           </Nav>
 
-          {/* Tab Panels (independent scrollbars) */}
+          {/* 🔹 Tab Panels */}
           <div className="flex-grow-1 mt-3 d-flex flex-column" style={{ minHeight: 0 }}>
             {activeTab === "plant" && (
               <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
@@ -176,7 +209,10 @@ const BiofuelForm = ({
                 {renderSlider("CEPCI", "CEPCI Index", inputs.CEPCI,
                   { min: 500, max: 1000 }, 1, handleSliderChange("CEPCI"))}
                 {renderSlider("plant_lifetime", "Plant Lifetime (years)", inputs.plant_lifetime,
-                  { min: 5, max: 50 }, 1, (vals) => handleSliderChange("plant_lifetime")(Number(vals[0])))}
+                  { min: 5, max: 50 }, 1, (vals) => {
+                    const value = Number(vals[0]);
+                    if (!isNaN(value)) handleSliderChange("plant_lifetime")([value]);
+                  })}
               </div>
             )}
 
@@ -185,9 +221,9 @@ const BiofuelForm = ({
                 {renderSlider("biomass_price", "Biomass Price ($/ton)", inputs.biomass_price,
                   { min: 50, max: 500 }, 5, handleSliderChange("biomass_price"))}
                 {renderSlider("hydrogen_price", "Hydrogen Price ($/kg)", inputs.hydrogen_price,
-                  { min: 1, max: 10 }, 0.1, handleSliderChange("hydrogen_price"))}
+                  { min: 1, max: 10 }, 0.1, handleSliderChange("hydrogen_price"), 2)}
                 {renderSlider("electricity_rate", "Electricity Rate ($/kWh)", inputs.electricity_rate,
-                  { min: 0.05, max: 0.5 }, 0.01, handleSliderChange("electricity_rate"))}
+                  { min: 0.05, max: 0.5 }, 0.01, handleSliderChange("electricity_rate"), 3)}
                 {renderSlider("yearly_wage_operator", "Yearly Wage Operator ($/year)", inputs.yearly_wage_operator,
                   { min: 50000, max: 150000 }, 1000, handleSliderChange("yearly_wage_operator"))}
                 {renderSlider("product_price", "Product Price ($/ton)", inputs.product_price,
@@ -200,37 +236,10 @@ const BiofuelForm = ({
             {activeTab === "finance" && (
               <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
                 {renderSlider("discount_factor", "Discount Factor (%)", inputs.discount_factor,
-                  { min: 0.01, max: 0.2 }, 0.01, handleSliderChange("discount_factor"))}
+                  { min: 0.01, max: 0.2 }, 0.01, handleSliderChange("discount_factor"), 2)}
 
-                <Row form className="align-items-end mt-3">
-                  <Col xs="8">
-                    <label htmlFor="tci" className="mb-0" style={{ fontSize: "0.95rem", fontWeight: 600 }}>
-                      TCI 2023 ($)
-                    </label>
-                    <FormInput
-                      id="tci"
-                      type="number"
-                      value={TCI_2023}
-                      readOnly
-                      size="sm"
-                      className="text-right font-weight-bold mb-1"
-                      style={{ fontSize: "0.95rem", backgroundColor: "#f8f9fa" }}
-                    />
-                    <Slider
-                      connect={[true, false]}
-                      start={[TCI_2023]}
-                      range={{ min: 100000, max: 50000000 }}
-                      step={100000}
-                      onSlide={(vals) => setTCI_2023(Number(vals[0]))}
-                      className="mt-1"
-                    />
-                  </Col>
-                  <Col xs="4" className="d-flex align-items-end">
-                    <Button onClick={handleCalculate} block>
-                      Calculate
-                    </Button>
-                  </Col>
-                </Row>
+                {renderSlider("TCI_2023", "TCI 2023 ($)", TCI_2023,
+                  { min: 100000, max: 50000000 }, 100000, (vals) => setTCI_2023(Number(vals[0])))}
               </div>
             )}
           </div>
@@ -245,7 +254,6 @@ BiofuelForm.propTypes = {
   TCI_2023: PropTypes.number.isRequired,
   handleSliderChange: PropTypes.func.isRequired,
   setTCI_2023: PropTypes.func.isRequired,
-  handleCalculate: PropTypes.func.isRequired,
   onProcessChange: PropTypes.func.isRequired,
   onFeedstockChange: PropTypes.func.isRequired,
 };
