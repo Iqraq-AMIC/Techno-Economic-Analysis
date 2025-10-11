@@ -9,6 +9,7 @@ import {
   Button,
   Modal,
   ModalBody,
+  FormSelect,
 } from "shards-react";
 import axios from "axios";
 import BreakevenBarChart from "../components/charts/BreakevenBarChart";
@@ -51,6 +52,8 @@ const BlogPosts = () => {
   const [apiData, setApiData] = useState(null);
   const [table, setTable] = useState(mockCashFlowTable);
   const [openTable, setOpenTable] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState("USD");
+  const API_URL = process.env.REACT_APP_API_URL;
 
   const handleSliderChange = (key) => (vals) => {
     setInputs((prev) => ({
@@ -68,7 +71,7 @@ const BlogPosts = () => {
     };
 
     axios
-      .post("http://127.0.0.1:8000/calculate", finalData)
+      .post(`${API_URL}/calculate`, finalData)
       .then((res) => setApiData(res.data))
       .catch(() => {
         console.warn("Backend failed, using mock data");
@@ -88,7 +91,7 @@ const BlogPosts = () => {
           feedstock: selectedFeedstock,
           TCI_2023,
         };
-        const res = await axios.post("http://127.0.0.1:8000/calculate", payload, { signal });
+        const res = await axios.post(`${API_URL}/calculate`, payload, { signal });
         setApiData(res.data);
         if (res.data?.financials?.cashFlowTable?.length) {
           setTable(res.data.financials.cashFlowTable);
@@ -103,7 +106,7 @@ const BlogPosts = () => {
   }, [inputs, TCI_2023, selectedProcess, selectedFeedstock]);
 
   const chartData = table.map((row, i) => ({
-    "Plant Lifetime": row.year ?? row.Year ?? i,
+    "Project Lifetime": row.year ?? row.Year ?? i,
     "Present Value": Number.isFinite(row.presentValue ?? row["Present Value"])
       ? (row.presentValue ?? row["Present Value"])
       : Number.isFinite(row.netCashFlow ?? row["Net Cash Flow"])
@@ -111,34 +114,54 @@ const BlogPosts = () => {
       : 0,
   }));
 
-  // ✅ number formatter
-  const formatValue = (val, decimals = 2) => {
+  // ✅ Currency conversion rates (approximate rates as of 2024)
+  const currencyRates = {
+    USD: { rate: 1, symbol: "$", name: "USD" },
+    MYR: { rate: 4.7, symbol: "RM", name: "MYR" }, // Malaysian Ringgit
+    GBP: { rate: 0.79, symbol: "£", name: "GBP" }, // UK Pound
+    EUR: { rate: 0.85, symbol: "€", name: "EUR" }, // Euro (France)
+  };
+
+  // ✅ Currency converter
+  const convertCurrency = (usdValue, targetCurrency) => {
+    if (usdValue === null || usdValue === undefined || isNaN(usdValue)) return usdValue;
+    return usdValue * currencyRates[targetCurrency].rate;
+  };
+
+  // ✅ number formatter with currency
+  const formatValue = (val, decimals = 2, currency = "USD") => {
     if (val === null || val === undefined || isNaN(val)) return "N/A";
-    return Number(val).toLocaleString(undefined, {
+    const convertedValue = convertCurrency(val, currency);
+    const formatted = Number(convertedValue).toLocaleString(undefined, {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     });
+    return `${currencyRates[currency].symbol}${formatted}`;
   };
 
   // ✅ KPI cards config
   const smallStats = [
     {
-      label: "Net Present Value ($)",
-      value: formatValue(apiData?.financials?.npv, 2),
+      label: `Net Present Value (${currencyRates[selectedCurrency].name})`,
+      value: formatValue(apiData?.financials?.npv, 2, selectedCurrency),
+      hasCurrencyToggle: true,
     },
     {
       label: "Internal Rate of Return (%)",
-      value: formatValue(apiData?.financials?.irr * 100, 2),
+      value: apiData?.financials?.irr
+        ? `${(apiData.financials.irr * 100).toFixed(2)}%`
+        : "N/A",
     },
     {
       label: "Payback Period (years)",
       value: apiData?.financials?.paybackPeriod
-        ? formatValue(apiData.financials.paybackPeriod, 0) // no decimals
+        ? `${apiData.financials.paybackPeriod.toFixed(0)} years`
         : "N/A",
     },
     {
-      label: "Levelized Cost of Production ($/ton)",
-      value: formatValue(apiData?.technoEconomics?.LCOP, 2),
+      label: `Levelized Cost of Production (${currencyRates[selectedCurrency].name}/ton)`,
+      value: formatValue(apiData?.technoEconomics?.LCOP, 2, selectedCurrency),
+      hasCurrencyToggle: false,
     },
   ];
 
@@ -188,10 +211,26 @@ const BlogPosts = () => {
               {smallStats.map((stats, idx) => (
                 <Card small className="flex-fill mb-3" key={idx}>
                   <CardHeader className="border-bottom text-center p-2">
-                    <h6 className="m-0 font-weight-bold">{stats.label}</h6>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <h6 className="m-0 font-weight-bold flex-grow-1">{stats.label}</h6>
+                      {stats.hasCurrencyToggle && (
+                        <FormSelect
+                          size="sm"
+                          value={selectedCurrency}
+                          onChange={(e) => setSelectedCurrency(e.target.value)}
+                          style={{ width: "70px", fontSize: "0.75rem" }}
+                        >
+                          {Object.keys(currencyRates).map((currency) => (
+                            <option key={currency} value={currency}>
+                              {currency}
+                            </option>
+                          ))}
+                        </FormSelect>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardBody className="d-flex align-items-center justify-content-center">
-                    <div style={{ fontSize: "2rem", fontWeight: "400", color: "#1f2937" }}>
+                    <div style={{ fontSize: "1.2rem", fontWeight: "400", color: "#1f2937" }}>
                       {stats.value}
                     </div>
                   </CardBody>

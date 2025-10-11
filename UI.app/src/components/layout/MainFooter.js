@@ -9,10 +9,13 @@ const MainFooter = ({ copyright }) => (
       borderTop: "1px solid #dee2e6",
       fontSize: "0.7rem",
       padding: "2px 8px",    // super slim
-      textAlign: "right",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
     }}
   >
-    {copyright}
+    <span style={{ color: "white" }}>ver 1.0.0-alpha</span>
+    <span style={{ color: "white" }}>{copyright}</span>
   </footer>
 );
 

@@ -13,7 +13,7 @@ export default [
     path: "/",
     exact: true,
     layout: DefaultLayout,
-    component: () => <Redirect to="TEA" />
+    component: () => <Redirect to="/TEA" />
   },
   {
     path: "/tables",

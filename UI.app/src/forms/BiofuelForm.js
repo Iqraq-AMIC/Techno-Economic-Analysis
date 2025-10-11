@@ -15,6 +15,11 @@ import {
   Nav,
   NavItem,
   NavLink,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
 } from "shards-react";
 
 // ✅ Number formatter with commas + decimals
@@ -36,25 +41,45 @@ const BiofuelForm = ({
 }) => {
   const [processes, setProcesses] = useState([]);
   const [feedstocks, setFeedstocks] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [selectedProcess, setSelectedProcess] = useState("");
   const [selectedFeedstock, setSelectedFeedstock] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState("Malaysia");
   const [activeTab, setActiveTab] = useState("plant");
+  const [showDataNotAvailableModal, setShowDataNotAvailableModal] = useState(false);
 
+  const API_URL = process.env.REACT_APP_API_URL;
   // 🔹 Fetch processes
+useEffect(() => {
+  axios.get(`${API_URL}/processes`)
+    .then(res => setProcesses(res.data))
+    .catch(err => console.error("Failed to fetch processes:", err));
+}, [API_URL]);
+
+  // 🔹 Fetch countries
   useEffect(() => {
-    axios.get("http://127.0.0.1:8000/processes").then((res) => {
-      setProcesses(res.data);
-    });
+    const countriesList = [
+      "Malaysia", "United States", "Canada", "United Kingdom", "Germany", "France",
+      "Italy", "Spain", "Netherlands", "Sweden", "Norway", "Denmark",
+      "Finland", "Australia", "New Zealand", "Japan", "South Korea",
+      "China", "India", "Brazil", "Mexico", "Argentina", "Chile",
+      "South Africa", "Nigeria", "Kenya", "Egypt", "Thailand",
+      "Indonesia", "Singapore", "Philippines"
+    ];
+    setCountries(countriesList);
   }, []);
 
   // 🔹 Fetch feedstocks when process selected
   useEffect(() => {
     if (selectedProcess) {
       axios
-        .get(`http://127.0.0.1:8000/feedstocks/${selectedProcess}`)
-        .then((res) => setFeedstocks(res.data));
+        .get(`${API_URL}/feedstocks/${selectedProcess}`)
+        .then((res) => setFeedstocks(res.data))
+        .catch(err => {
+          console.error("Failed to fetch feedstocks:", err);
+        });
     }
-  }, [selectedProcess]);
+  }, [selectedProcess, API_URL]);
 
   const handleProcessSelect = (e) => {
     const process = e.target.value;
@@ -68,6 +93,16 @@ const BiofuelForm = ({
     const feedstock = e.target.value;
     setSelectedFeedstock(feedstock);
     onFeedstockChange(feedstock);
+  };
+
+  const handleCountrySelect = (e) => {
+    const country = e.target.value;
+    if (country !== "Malaysia" && country !== "") {
+      setShowDataNotAvailableModal(true);
+      // Keep Malaysia selected
+      return;
+    }
+    setSelectedCountry(country);
   };
 
   // 🔹 Slider helper
@@ -97,7 +132,7 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
           <FormInput
             id={id}
             type="text"
-            value={value}
+            value={formatNumber(value, decimals)}
             size="sm"
             className="text-right"
             style={{ fontSize: "0.9rem", backgroundColor: "#f8f9fa" }}
@@ -141,9 +176,9 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
 
       <CardBody className="p-3 d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
         <Form className="d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
-          {/* 🔹 Process & Feedstock */}
-          <Row form>
-            <Col md="6">
+          {/* 🔹 Process & Feedstock & Country */}
+          <Row form className="align-items-end">
+            <Col md="4">
               <FormGroup>
                 <label htmlFor="process_technology">Process Technology</label>
                 <FormSelect
@@ -160,7 +195,7 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
                 </FormSelect>
               </FormGroup>
             </Col>
-            <Col md="6">
+            <Col md="4">
               {selectedProcess && (
                 <FormGroup>
                   <label htmlFor="feedstock">Feedstock</label>
@@ -173,6 +208,25 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
                     {feedstocks.map((f) => (
                       <option key={f} value={f}>
                         {f}
+                      </option>
+                    ))}
+                  </FormSelect>
+                </FormGroup>
+              )}
+            </Col>
+            <Col md="4">
+              {selectedProcess && (
+                <FormGroup>
+                  <label htmlFor="country">Country</label>
+                  <FormSelect
+                    id="country"
+                    value={selectedCountry}
+                    onChange={handleCountrySelect}
+                  >
+                    <option value="">-- Select Country --</option>
+                    {countries.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
                       </option>
                     ))}
                   </FormSelect>
@@ -204,11 +258,11 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
           <div className="flex-grow-1 mt-3 d-flex flex-column" style={{ minHeight: 0 }}>
             {activeTab === "plant" && (
               <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
-                {renderSlider("production_capacity", "Production Capacity (tons/year)", inputs.production_capacity,
+                {renderSlider("production_capacity", "Plant Total Liquid Fuel Production Capacity  (tons/year)", inputs.production_capacity,
                   { min: 100, max: 10000 }, 100, handleSliderChange("production_capacity"))}
                 {renderSlider("CEPCI", "CEPCI Index", inputs.CEPCI,
                   { min: 500, max: 1000 }, 1, handleSliderChange("CEPCI"))}
-                {renderSlider("plant_lifetime", "Plant Lifetime (years)", inputs.plant_lifetime,
+                {renderSlider("plant_lifetime", "Project Lifetime (years)", inputs.plant_lifetime,
                   { min: 5, max: 50 }, 1, (vals) => {
                     const value = Number(vals[0]);
                     if (!isNaN(value)) handleSliderChange("plant_lifetime")([value]);
@@ -238,13 +292,30 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
                 {renderSlider("discount_factor", "Discount Factor (%)", inputs.discount_factor,
                   { min: 0.01, max: 0.2 }, 0.01, handleSliderChange("discount_factor"), 2)}
 
-                {renderSlider("TCI_2023", "TCI 2023 ($)", TCI_2023,
+                {renderSlider("Total Capital Investment", "Total Capital Investment ($)", TCI_2023,
                   { min: 100000, max: 50000000 }, 100000, (vals) => setTCI_2023(Number(vals[0])))}
               </div>
             )}
           </div>
         </Form>
       </CardBody>
+
+      {/* 🔹 Data Not Available Modal */}
+      <Modal
+        open={showDataNotAvailableModal}
+        toggle={() => setShowDataNotAvailableModal(false)}
+        centered
+      >
+        <ModalHeader>Data Not Available</ModalHeader>
+        <ModalBody>
+          Sorry, data for this country is not available just yet. Currently, only Malaysia data is supported.
+        </ModalBody>
+        <ModalFooter>
+          <Button theme="secondary" onClick={() => setShowDataNotAvailableModal(false)}>
+            OK
+          </Button>
+        </ModalFooter>
+      </Modal>
     </Card>
   );
 };
