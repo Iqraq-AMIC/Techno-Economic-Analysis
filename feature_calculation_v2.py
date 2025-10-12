@@ -1,0 +1,313 @@
+class Layer1:
+    """
+    Layer 1 — Modular Formulation
+    -----------------------------
+    All equations directly correspond to your provided formulations.
+
+    Equations:
+        (1) Total Capital Investment = TCI_ref × (PlantCapacity / Capacity_ref)^0.6
+        (2) Production = PlantCapacity × ProductYield
+        (3) Feedstock Consumption = PlantCapacity × FeedstockYield
+        (4) Fuel Energy Content = ProductEnergyContent × MassFraction
+        (5) Carbon Intensity (Feedstock) = (FeedstockCarbonIntensity × FeedstockYield) / FuelEnergyContent
+        (6) Carbon Conversion Efficiency = (ProductCarbonContent / FeedstockCarbonContent) × 100
+        (7) Amount of Product = PlantCapacity × MassFraction
+    """
+
+    # --- (1) Total Capital Investment ---
+    def total_capital_investment(self, tci_ref, plant_capacity, capacity_ref):
+        """Economy-of-scale capital scaling."""
+        return tci_ref * (plant_capacity / capacity_ref) ** 0.6
+
+    # --- (2) Production ---
+    def production(self, plant_capacity, product_yield):
+        return plant_capacity * product_yield
+
+    # --- (3) Feedstock Consumption ---
+    def feedstock_consumption(self, plant_capacity, feedstock_yield):
+        return plant_capacity * feedstock_yield
+
+    # --- (4) Fuel Energy Content ---
+    def fuel_energy_content(self, product_energy_content, mass_fraction):
+        return product_energy_content * mass_fraction
+
+    # --- (5) Carbon Intensity of Feedstock ---
+    def carbon_intensity_feedstock(self, feedstock_ci, feedstock_yield, fuel_energy_content):
+        return (feedstock_ci * feedstock_yield) / (fuel_energy_content + 1e-12)
+
+    # --- (6) Carbon Conversion Efficiency ---
+    def carbon_conversion_efficiency(self, product_carbon_content, feedstock_carbon_content):
+        return (product_carbon_content / (feedstock_carbon_content + 1e-12)) * 100
+
+    # --- (7) Amount of Product ---
+    def amount_of_product(self, plant_capacity, mass_fraction):
+        return plant_capacity * mass_fraction
+
+    # --- (8) Hydrogen Consumption ---
+    def hydrogen_consumption(self, plant_capacity, yield_h2):
+        """Calculate hydrogen consumption: PlantCapacity × Yield_H2"""
+        return plant_capacity * yield_h2
+
+    # --- (9) Electricity Consumption ---
+    def electricity_consumption(self, plant_capacity, yield_kwh):
+        """Calculate electricity consumption: PlantCapacity × Yield_kWh"""
+        return plant_capacity * yield_kwh
+
+    # --- Orchestrator (runs full layer) ---
+    def compute(self, ref: dict, inputs: dict) -> dict:
+        # from database
+        tci_ref = ref["tci_ref"]
+        capacity_ref = ref["capacity_ref"]
+        feedstock_yield = ref["yield_biomass"]
+        yield_h2 = ref["yield_h2"]
+        yield_kwh = ref["yield_kwh"]
+        product_carbon_content = ref.get("product_carbon_content", 0.75)
+        product_key = (inputs.get("product_key") or "jet").lower()
+
+        # Handle case-insensitive product key lookup
+        mass_fractions_lower = {k.lower(): v for k, v in ref["mass_fractions"].items()}
+        mass_fraction = mass_fractions_lower[product_key] / 100.0
+
+        # from inputs
+        plant_capacity = inputs["plant_total_liquid_fuel_capacity"]
+        feedstock_ci = inputs["feedstock_carbon_intensity"]
+        product_energy_content = inputs["product_energy_content"]
+        feedstock_carbon_content = inputs["feedstock_carbon_content"]
+
+        # derived
+        product_yield = feedstock_yield * mass_fraction
+
+        # compute formulas step-by-step
+        tci = self.total_capital_investment(tci_ref, plant_capacity, capacity_ref)
+        prod = self.production(plant_capacity, product_yield)
+        feedstock_cons = self.feedstock_consumption(plant_capacity, feedstock_yield)
+        fuel_energy = self.fuel_energy_content(product_energy_content, mass_fraction)
+        carbon_intensity = self.carbon_intensity_feedstock(feedstock_ci, feedstock_yield, fuel_energy)
+        carbon_eff = self.carbon_conversion_efficiency(product_carbon_content, feedstock_carbon_content)
+        amt_product = self.amount_of_product(plant_capacity, mass_fraction)
+        h2_cons = self.hydrogen_consumption(plant_capacity, yield_h2)
+        elec_cons = self.electricity_consumption(plant_capacity, yield_kwh)
+
+        # return all intermediate + final values
+        return {
+            "total_capital_investment": tci,
+            "production": prod,
+            "feedstock_consumption": feedstock_cons,
+            "fuel_energy_content": fuel_energy,
+            "product_energy_content": product_energy_content,  # Pass through user input
+            "carbon_intensity_feedstock": carbon_intensity,
+            "carbon_conversion_efficiency_percent": carbon_eff,
+            "amount_of_product": amt_product,
+            "hydrogen_consumption": h2_cons,
+            "electricity_consumption": elec_cons,
+            "feedstock_yield": feedstock_yield,
+            "product_yield": product_yield,
+            "mass_fraction": mass_fraction,
+            "product_carbon_content": product_carbon_content,
+            "plant_capacity": plant_capacity,
+            "yield_h2": yield_h2,
+            "yield_kwh": yield_kwh,
+        }
+
+
+class Layer2:
+    """
+    Layer 2 — Operating Expenditure, Carbon, and Revenue Formulation
+    ---------------------------------------------------------------
+    Equations:
+
+        (1) Total Indirect OPEX  = Ratio × Total Capital Investment
+        (2) Feedstock Cost       = Feedstock Consumption × Feedstock Price
+        (3) Total Carbon Intensity = (Feedstock CI + Conversion Process CI) / 1000
+        (4) Revenue              = Amount of Product × Product Price
+    """
+
+    # --- (1) Total Indirect OPEX ---
+    def total_indirect_opex(self, process_ratio, total_capital_investment):
+        """Compute total indirect operating expenditure."""
+        return process_ratio * total_capital_investment
+
+    # --- (2) Feedstock Cost ---
+    def feedstock_cost(self, feedstock_consumption, feedstock_price):
+        return feedstock_consumption * feedstock_price
+
+    # --- (3) Hydrogen Cost ---
+    def hydrogen_cost(self, hydrogen_consumption, hydrogen_price):
+        """Calculate hydrogen cost: Hydrogen Consumption × Hydrogen Price"""
+        return hydrogen_consumption * hydrogen_price
+
+    # --- (4) Electricity Cost ---
+    def electricity_cost(self, electricity_consumption, electricity_rate):
+        """Calculate electricity cost: Electricity Consumption × Electricity Rate"""
+        return electricity_consumption * electricity_rate
+
+    # --- (5) Total Carbon Intensity ---
+    def total_carbon_intensity(self, feedstock_ci, conversion_process_ci):
+        # Divide by 1000 to convert gCO2/MJ → kgCO2/MJ or similar scaling
+        return (feedstock_ci + conversion_process_ci) / 1000.0
+
+    # --- (6) Revenue ---
+    def revenue(self, amount_of_product, product_price):
+        return amount_of_product * product_price
+
+    # --- Orchestrator ---
+    def compute(self, layer1_results: dict, ref: dict, inputs: dict):
+        """
+        Combine Layer1 results with reference & input data to calculate Layer2 metrics.
+        """
+
+        # Inputs
+        process_type = inputs["process_type"].upper()
+        feedstock_price = inputs["feedstock_price"]
+        product_price = inputs["product_price"]
+        hydrogen_price = inputs.get("hydrogen_price", 0.0)
+        electricity_rate = inputs.get("electricity_rate", 0.0)
+        conversion_process_ci = ref["conversion_process_ci"][process_type]
+        process_ratio = ref["process_ratio"][process_type] / 100.0
+
+        # From Layer 1
+        total_capital_investment = layer1_results["total_capital_investment"]
+        feedstock_consumption = layer1_results["feedstock_consumption"]
+        hydrogen_consumption = layer1_results["hydrogen_consumption"]
+        electricity_consumption = layer1_results["electricity_consumption"]
+        feedstock_ci = layer1_results["carbon_intensity_feedstock"]
+        amount_of_product = layer1_results["amount_of_product"]
+
+        # Compute
+        total_indirect_opex = self.total_indirect_opex(process_ratio, total_capital_investment)
+        feedstock_cost = self.feedstock_cost(feedstock_consumption, feedstock_price)
+        hydrogen_cost = self.hydrogen_cost(hydrogen_consumption, hydrogen_price)
+        electricity_cost = self.electricity_cost(electricity_consumption, electricity_rate)
+        total_carbon_intensity = self.total_carbon_intensity(feedstock_ci, conversion_process_ci)
+        revenue = self.revenue(amount_of_product, product_price)
+
+        # Output dictionary
+        return {
+            "process_type": process_type,
+            "total_indirect_opex": total_indirect_opex,
+            "feedstock_cost": feedstock_cost,
+            "hydrogen_cost": hydrogen_cost,
+            "electricity_cost": electricity_cost,
+            "total_carbon_intensity": total_carbon_intensity,
+            "revenue": revenue,
+            "conversion_process_ci": conversion_process_ci,
+            "process_ratio": process_ratio,
+        }
+    
+class Layer3:
+    """
+    Layer 3 — Direct OPEX and Weighted Carbon Intensity
+    ---------------------------------------------------
+    Equations:
+        (1) Total Direct OPEX = Sum of All Direct Costs (Feedstock + H2 + Electricity)
+        (2) Carbon Intensity  = Total Carbon Intensity × Product Yield
+    """
+
+    # --- (1) Total Direct OPEX ---
+    def total_direct_opex(self, feedstock_costs: list[float], hydrogen_costs: list[float], electricity_costs: list[float]) -> float:
+        """Sum all direct operating costs (feedstock + hydrogen + electricity)."""
+        return sum(feedstock_costs) + sum(hydrogen_costs) + sum(electricity_costs)
+
+    # --- (2) Carbon Intensity (weighted by product yield) ---
+    def carbon_intensity(self, total_carbon_intensity: float, product_yield: float) -> float:
+        return total_carbon_intensity * product_yield
+
+    # --- Orchestrator ---
+    def compute(self, layer2_results: list[dict]) -> dict:
+        """
+        Aggregate multiple Layer2 feedstock results (if multiple feedstocks exist)
+        and compute the combined metrics for the process.
+        """
+
+        # Extract lists for aggregation
+        feedstock_costs = [r["feedstock_cost"] for r in layer2_results]
+        hydrogen_costs = [r["hydrogen_cost"] for r in layer2_results]
+        electricity_costs = [r["electricity_cost"] for r in layer2_results]
+        total_carbon_intensity_values = [r["total_carbon_intensity"] for r in layer2_results]
+        product_yields = [r.get("product_yield", 1.0) for r in layer2_results]
+
+        # Compute layer outputs
+        total_direct_opex = self.total_direct_opex(feedstock_costs, hydrogen_costs, electricity_costs)
+        # If multiple feedstocks, compute weighted carbon intensity
+        total_weighted_ci = sum(
+            ci * y for ci, y in zip(total_carbon_intensity_values, product_yields)
+        )
+
+        return {
+            "total_direct_opex": total_direct_opex,
+            "weighted_carbon_intensity": total_weighted_ci,
+        }
+
+
+class Layer4:
+    """
+    Layer 4 — OPEX, Emission, and LCOP Computation
+    ----------------------------------------------
+    Equations:
+        (1) Total OPEX = Total Direct OPEX + Total Indirect OPEX
+        (2) Total CO2 Emissions = Carbon Intensity × Product Energy Content × Production × 1000
+        (3) LCOP = (C_feedstock + C_H2 + C_electricity + C_indirect_OPEX + C_capital) / Q_liquid_fuel
+    """
+
+    # --- (1) Total OPEX ---
+    def total_opex(self, total_direct_opex: float, total_indirect_opex: float) -> float:
+        return total_direct_opex + total_indirect_opex
+
+    # --- (2) Total CO2 Emissions ---
+    def total_co2_emissions(self, carbon_intensity: float, product_energy_content: float, production: float) -> float:
+        """
+        Computes total CO2 emissions (e.g. kg CO2) given:
+        - carbon_intensity: weighted carbon intensity (kg CO2/MJ)
+        - product_energy_content: product energy content (MJ/unit)
+        - production: total production amount (units)
+        Multiply by 1000 to convert to gCO2 if needed.
+        """
+        return carbon_intensity * product_energy_content * production * 1000
+
+    # --- (3) Levelized Cost of Production (LCOP) ---
+    def levelized_cost_of_production(self, feedstock_cost: float, hydrogen_cost: float,
+                                     electricity_cost: float, indirect_opex: float,
+                                     capital_investment: float, liquid_fuel_capacity: float) -> float:
+        """
+        LCOP = (C_feedstock + C_H2 + C_electricity + C_indirect_OPEX + C_capital) / Q_liquid_fuel
+
+        All costs in USD/year except C_capital which is total USD
+        Q_liquid_fuel is plant capacity in tons/year
+        Result is in USD/ton
+        """
+        numerator = feedstock_cost + hydrogen_cost + electricity_cost + indirect_opex + capital_investment
+        return numerator / (liquid_fuel_capacity + 1e-12)
+
+    # --- Orchestrator ---
+    def compute(self, layer2_results: dict, layer3_results: dict, layer1_results: dict) -> dict:
+        """
+        Combine all layers to compute final process outputs.
+        """
+        total_direct_opex = layer3_results["total_direct_opex"]
+        total_indirect_opex = layer2_results["total_indirect_opex"]
+        carbon_intensity = layer3_results["weighted_carbon_intensity"]
+        product_energy_content = layer1_results["product_energy_content"]
+        production = layer1_results["production"]
+
+        # For LCOP calculation
+        feedstock_cost = layer2_results["feedstock_cost"]
+        hydrogen_cost = layer2_results["hydrogen_cost"]
+        electricity_cost = layer2_results["electricity_cost"]
+        capital_investment = layer1_results["total_capital_investment"]
+        liquid_fuel_capacity = layer1_results["plant_capacity"]
+
+        total_opex = self.total_opex(total_direct_opex, total_indirect_opex)
+        total_co2 = self.total_co2_emissions(carbon_intensity, product_energy_content, production)
+        lcop = self.levelized_cost_of_production(
+            feedstock_cost, hydrogen_cost, electricity_cost,
+            total_indirect_opex, capital_investment, liquid_fuel_capacity
+        )
+
+        return {
+            "total_opex": total_opex,
+            "total_co2_emissions": total_co2,
+            "carbon_intensity": carbon_intensity,
+            "product_energy_content": product_energy_content,
+            "production": production,
+            "lcop": lcop,
+        }

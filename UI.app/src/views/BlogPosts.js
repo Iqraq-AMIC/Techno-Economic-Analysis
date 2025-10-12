@@ -9,7 +9,6 @@ import {
   Button,
   Modal,
   ModalBody,
-  FormSelect,
 } from "shards-react";
 import axios from "axios";
 import BreakevenBarChart from "../components/charts/BreakevenBarChart";
@@ -31,52 +30,64 @@ const mockCashFlowTable = [
   { year: 10, cashInflow: 550000, cashOutflow: 150000, netCashFlow: 400000, presentValue: 1880000 },
 ];
 
-const BlogPosts = () => {
+const BlogPosts = ({ selectedCurrency = "USD" }) => {
   const [inputs, setInputs] = useState({
     production_capacity: 5000,
-    CEPCI: 750,
-    biomass_price: 250,
-    hydrogen_price: 5.5,
-    electricity_rate: 0.275,
-    yearly_wage_operator: 100000,
+    feedstock_price: 250,
+    hydrogen_price: 2.5,
+    electricity_rate: 0.12,
+    feedstock_carbon_intensity: 50,
+    product_energy_content: 43,
+    feedstock_carbon_content: 0.5,
     product_price: 2750,
-    land_cost: 2550000,
     plant_lifetime: 25,
     discount_factor: 0.105,
+    land_cost: 1026898.876,
   });
 
-  const [TCI_2023, setTCI_2023] = useState(2500000);
-  const [selectedProcess, setSelectedProcess] = useState("Fischer-Tropsch");
-  const [selectedFeedstock, setSelectedFeedstock] = useState("Palm Kernel Shell");
+  // Start with empty strings - will be populated by BiofuelForm when it loads from API
+  const [selectedProcess, setSelectedProcess] = useState("FT-BtL");
+  const [selectedFeedstock, setSelectedFeedstock] = useState("MSW");
 
   const [apiData, setApiData] = useState(null);
   const [table, setTable] = useState(mockCashFlowTable);
   const [openTable, setOpenTable] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState("USD");
+  const [expandedGroups, setExpandedGroups] = useState({
+    financial: false,
+    production: false,
+    cost: false,
+    environmental: false,
+  });
   const API_URL = process.env.REACT_APP_API_URL;
+
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups((prev) => {
+      const isCurrentlyExpanded = prev[groupKey];
+
+      // If clicking on an already expanded group, collapse it
+      if (isCurrentlyExpanded) {
+        return {
+          ...prev,
+          [groupKey]: false,
+        };
+      }
+
+      // If clicking on a collapsed group, collapse all others and expand this one
+      return {
+        financial: false,
+        production: false,
+        cost: false,
+        environmental: false,
+        [groupKey]: true,
+      };
+    });
+  };
 
   const handleSliderChange = (key) => (vals) => {
     setInputs((prev) => ({
       ...prev,
       [key]: Number(vals[0]),
     }));
-  };
-
-  const handleCalculate = () => {
-    const finalData = {
-      inputs,
-      TCI_2023,
-      process_technology: selectedProcess,
-      feedstock: selectedFeedstock,
-    };
-
-    axios
-      .post(`${API_URL}/calculate`, finalData)
-      .then((res) => setApiData(res.data))
-      .catch(() => {
-        console.warn("Backend failed, using mock data");
-        setTable(mockCashFlowTable);
-      });
   };
 
   useEffect(() => {
@@ -89,25 +100,51 @@ const BlogPosts = () => {
           inputs,
           process_technology: selectedProcess,
           feedstock: selectedFeedstock,
-          TCI_2023,
         };
+        console.log("=== API Request ===");
+        console.log("API_URL:", API_URL);
+        console.log("Payload:", payload);
+
         const res = await axios.post(`${API_URL}/calculate`, payload, { signal });
+
+        console.log("=== API Response ===");
+        console.log("Status:", res.status);
+        console.log("Full response data:", res.data);
+        console.log("Has financials?", res.data?.financials);
+        console.log("Has error?", res.data?.error);
+        console.log("Cash Flow Table length:", res.data?.financials?.cashFlowTable?.length);
+        console.log("First 3 rows:", res.data?.financials?.cashFlowTable?.slice(0, 3));
+
         setApiData(res.data);
-        if (res.data?.financials?.cashFlowTable?.length) {
+
+        if (res.data?.error) {
+          console.error("❌ Backend returned error:", res.data.error);
+          setTable(mockCashFlowTable);
+        } else if (res.data?.financials?.cashFlowTable?.length) {
           setTable(res.data.financials.cashFlowTable);
+          console.log("✓ Table updated with", res.data.financials.cashFlowTable.length, "rows of API data");
+        } else {
+          console.warn("⚠ No cash flow table in response, using mock data");
+          console.warn("Response structure:", Object.keys(res.data));
+          setTable(mockCashFlowTable);
         }
-      } catch {
+      } catch (error) {
+        console.error("=== API Error ===");
+        console.error("Error:", error.message);
+        console.warn("⚠ Using mock cash flow table");
         setTable(mockCashFlowTable);
       }
     };
 
     fetchData();
     return () => controller.abort();
-  }, [inputs, TCI_2023, selectedProcess, selectedFeedstock]);
+  }, [inputs, selectedProcess, selectedFeedstock, API_URL]);
 
   const chartData = table.map((row, i) => ({
-    "Project Lifetime": row.year ?? row.Year ?? i,
-    "Present Value": Number.isFinite(row.presentValue ?? row["Present Value"])
+    "Year": row.Year ?? row.year ?? i,
+    "Cumulative DCF (USD)": Number.isFinite(row["Cumulative DCF (USD)"])
+      ? row["Cumulative DCF (USD)"]
+      : Number.isFinite(row.presentValue ?? row["Present Value"])
       ? (row.presentValue ?? row["Present Value"])
       : Number.isFinite(row.netCashFlow ?? row["Net Cash Flow"])
       ? (row.netCashFlow ?? row["Net Cash Flow"])
@@ -128,7 +165,7 @@ const BlogPosts = () => {
     return usdValue * currencyRates[targetCurrency].rate;
   };
 
-  // ✅ number formatter with currency
+  // ✅ Number formatter with currency (no symbol - symbol goes in header)
   const formatValue = (val, decimals = 2, currency = "USD") => {
     if (val === null || val === undefined || isNaN(val)) return "N/A";
     const convertedValue = convertCurrency(val, currency);
@@ -136,106 +173,205 @@ const BlogPosts = () => {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     });
-    return `${currencyRates[currency].symbol}${formatted}`;
+    return formatted;
   };
 
-  // ✅ KPI cards config
-  const smallStats = [
-    {
-      label: `Net Present Value (${currencyRates[selectedCurrency].name})`,
-      value: formatValue(apiData?.financials?.npv, 2, selectedCurrency),
-      hasCurrencyToggle: true,
+  // ✅ Number formatter without currency
+  const formatNumber = (val, decimals = 2) => {
+    if (val === null || val === undefined || isNaN(val)) return "N/A";
+    return Number(val).toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  };
+
+  // ✅ Percentage formatter
+  const formatPercent = (val, decimals = 2) => {
+    if (val === null || val === undefined || isNaN(val)) return "N/A";
+    return (val * 100).toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  };
+
+  // Get currency symbol for display
+  const currSymbol = currencyRates[selectedCurrency]?.symbol || "$";
+
+  // ✅ KPI cards grouped by context
+  const kpiGroups = {
+    financial: {
+      title: "Financial Metrics",
+      color: "#07193D",
+      stats: [
+        {
+          label: `Net Present Value (${currSymbol})`,
+          value: formatValue(apiData?.financials?.npv, 2, selectedCurrency),
+        },
+        {
+          label: "Internal Rate of Return (%)",
+          value: formatPercent(apiData?.financials?.irr, 2),
+        },
+        {
+          label: "Payback Period (years)",
+          value: apiData?.financials?.paybackPeriod ? apiData.financials.paybackPeriod.toFixed(0) : "N/A",
+        },
+      ],
     },
-    {
-      label: "Internal Rate of Return (%)",
-      value: apiData?.financials?.irr
-        ? `${(apiData.financials.irr * 100).toFixed(2)}%`
-        : "N/A",
+    production: {
+      title: "Production Metrics",
+      color: "#17c671",
+      stats: [
+        {
+          label: "Feedstock Consumption (tons/year)",
+          value: formatNumber(apiData?.technoEconomics?.feedstock_consumption, 2),
+        },
+        {
+          label: "Product Output (tons/year)",
+          value: formatNumber(apiData?.technoEconomics?.production, 2),
+        },
+      ],
     },
-    {
-      label: "Payback Period (years)",
-      value: apiData?.financials?.paybackPeriod
-        ? `${apiData.financials.paybackPeriod.toFixed(0)} years`
-        : "N/A",
+    cost: {
+      title: "Cost Metrics",
+      color: "#c4183c",
+      stats: [
+        {
+          label: `Total Capital Investment (${currSymbol})`,
+          value: formatValue(apiData?.technoEconomics?.total_capital_investment, 2, selectedCurrency),
+        },
+        {
+          label: `Total OPEX (${currSymbol}/year)`,
+          value: formatValue(apiData?.technoEconomics?.total_opex, 2, selectedCurrency),
+        },
+        {
+          label: `Total Indirect OPEX (${currSymbol}/year)`,
+          value: formatValue(apiData?.technoEconomics?.total_indirect_opex, 2, selectedCurrency),
+        },
+        {
+          label: `Feedstock Cost (${currSymbol}/year)`,
+          value: formatValue(apiData?.technoEconomics?.feedstock_cost, 2, selectedCurrency),
+        },
+        {
+          label: `Levelized Cost of Production (${currSymbol}/ton)`,
+          value: formatValue(apiData?.technoEconomics?.LCOP, 2, selectedCurrency),
+        },
+      ],
     },
-    {
-      label: `Levelized Cost of Production (${currencyRates[selectedCurrency].name}/ton)`,
-      value: formatValue(apiData?.technoEconomics?.LCOP, 2, selectedCurrency),
-      hasCurrencyToggle: false,
+    environmental: {
+      title: "Environmental Metrics",
+      color: "#00b8d8",
+      stats: [
+        {
+          label: "Carbon Intensity (gCO₂/MJ)",
+          value: formatNumber(apiData?.technoEconomics?.carbon_intensity, 2),
+        },
+        {
+          label: "Carbon Conversion Efficiency (%)",
+          value: formatNumber(apiData?.technoEconomics?.carbon_conversion_efficiency_percent, 2),
+        },
+        {
+          label: "Total CO₂ Emission (kg/year)",
+          value: formatNumber(apiData?.technoEconomics?.total_co2_emissions, 2),
+        },
+      ],
     },
-  ];
+  };
 
   return (
-    <Container fluid className="main-content-container px-4 d-flex flex-column">
+    <Container fluid className="main-content-container px-2">
       {/* Main Layout */}
-      <Row className="flex-grow-1 d-flex align-items-stretch">
+      <Row>
         {/* Left Form */}
-        <Col lg="3" md="12" className="d-flex" style={{ height: "500px", minHeight: 0 }}>
+        <Col lg="3" md="12" className="mb-3" style={{ height: "calc(100vh - 100px)" }}>
           <BiofuelForm
             inputs={inputs}
-            TCI_2023={TCI_2023}
             handleSliderChange={handleSliderChange}
-            setTCI_2023={setTCI_2023}
-            handleCalculate={handleCalculate}
             onProcessChange={setSelectedProcess}
             onFeedstockChange={setSelectedFeedstock}
-            selectedProcess={selectedProcess}
-            selectedFeedstock={selectedFeedstock}
           />
         </Col>
 
-        {/* Right: Chart + KPIs */}
-        <Col lg="9" md="12" className="d-flex flex-column" style={{ height: "500px", minHeight: 0 }}>
-          <Row className="flex-grow-1 align-items-stretch">
-            {/* Chart */}
-            <Col lg="9" md="12" className="d-flex">
-              <Card small className="mb-4 flex-fill">
-                <CardHeader className="border-bottom d-flex justify-content-between align-items-center">
-                  <h6 className="m-0">Breakeven Analysis</h6>
+        {/* Right: Chart + KPIs Side by Side */}
+        <Col lg="9" md="12">
+          <Row>
+            {/* Chart - 9 columns */}
+            <Col lg="9" md="12" className="d-flex flex-column" style={{ height: "calc(100vh - 100px)" }}>
+              <Card small className="flex-fill d-flex flex-column">
+                <CardHeader className="border-bottom d-flex justify-content-between align-items-center p-2">
+                  <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>Breakeven Analysis</h6>
                   <Button
-                    size="md"
+                    size="sm"
                     style={{ backgroundColor: "#07193D", borderColor: "#07193D", color: "#fff" }}
                     onClick={() => setOpenTable(true)}
                   >
                     Cash Flow Table
                   </Button>
                 </CardHeader>
-                <CardBody style={{ height: "100%" }}>
+                <CardBody className="flex-fill" style={{ padding: "10px", minHeight: 0 }}>
                   <BreakevenBarChart data={chartData} />
                 </CardBody>
               </Card>
             </Col>
 
-            {/* KPI Cards */}
-            <Col lg="3" md="12" className="d-flex flex-column">
-              {smallStats.map((stats, idx) => (
-                <Card small className="flex-fill mb-3" key={idx}>
-                  <CardHeader className="border-bottom text-center p-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <h6 className="m-0 font-weight-bold flex-grow-1">{stats.label}</h6>
-                      {stats.hasCurrencyToggle && (
-                        <FormSelect
-                          size="sm"
-                          value={selectedCurrency}
-                          onChange={(e) => setSelectedCurrency(e.target.value)}
-                          style={{ width: "70px", fontSize: "0.75rem" }}
-                        >
-                          {Object.keys(currencyRates).map((currency) => (
-                            <option key={currency} value={currency}>
-                              {currency}
-                            </option>
-                          ))}
-                        </FormSelect>
-                      )}
+            {/* KPI Cards - 3 columns, scrollable */}
+            <Col lg="3" md="12">
+              <div style={{ maxHeight: "calc(100vh - 100px)", overflowY: "auto", overflowX: "hidden" }}>
+                {/* KPI Cards Grid - Grouped by Context with Collapsible Sections */}
+                {Object.entries(kpiGroups).map(([groupKey, group]) => (
+                  <div key={groupKey} className="mb-2">
+                    {/* Section Header - Clickable to expand/collapse */}
+                    <div
+                      onClick={() => toggleGroup(groupKey)}
+                      style={{
+                        backgroundColor: "#fff",
+                        padding: "8px 12px",
+                        borderRadius: "4px",
+                        border: `2px solid ${group.color}`,
+                        marginBottom: expandedGroups[groupKey] ? "8px" : "0",
+                        cursor: "pointer",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>
+                        {group.title}
+                      </h6>
+                      <span style={{ fontSize: "1rem", fontWeight: "bold" }}>
+                        {expandedGroups[groupKey] ? "−" : "+"}
+                      </span>
                     </div>
-                  </CardHeader>
-                  <CardBody className="d-flex align-items-center justify-content-center">
-                    <div style={{ fontSize: "1.2rem", fontWeight: "400", color: "#1f2937" }}>
-                      {stats.value}
-                    </div>
-                  </CardBody>
-                </Card>
-              ))}
+
+                    {/* Cards in this group - Only show when expanded */}
+                    {expandedGroups[groupKey] && (
+                      <div>
+                        {group.stats.map((stat, idx) => (
+                          <Card small className="mb-2" key={idx}>
+                            <CardHeader
+                              className="border-bottom p-2"
+                              style={{
+                                borderLeftColor: group.color,
+                                borderLeftWidth: "3px",
+                                borderLeftStyle: "solid"
+                              }}
+                            >
+                              <h6 className="m-0" style={{ fontSize: "0.7rem", fontWeight: "600", lineHeight: "1.2" }}>
+                                {stat.label}
+                              </h6>
+                            </CardHeader>
+                            <CardBody className="d-flex align-items-center justify-content-center p-2">
+                              <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#1f2937" }}>
+                                {stat.value}
+                              </div>
+                            </CardBody>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </Col>
           </Row>
         </Col>

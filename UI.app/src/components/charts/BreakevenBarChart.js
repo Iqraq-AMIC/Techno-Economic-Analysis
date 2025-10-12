@@ -117,6 +117,7 @@ const BreakevenBarChart = ({ data }) => {
       },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
         legend: {
           display: false
         },
@@ -155,7 +156,7 @@ const BreakevenBarChart = ({ data }) => {
           yAxes: [{
             scaleLabel: {
               display: true,
-              labelString: "Cumulative Present Value ($)"
+              labelString: "Cumulative Discounted Cash Flow ($)"
             },
             ticks: {
               beginAtZero: false,
@@ -180,20 +181,53 @@ const BreakevenBarChart = ({ data }) => {
     };
   }, [data]);
 
-  return <canvas ref={canvasRef} />;
+  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
 };
 
 // Helper: cumulative PV + breakeven index
+// const preprocessData = (rows) => {
+//   let cumulative = 0;
+//   const labels = rows.map((r) => r["Project Lifetime"] ?? r["Year"]);
+//   const pv = rows.map((r) => {
+//     cumulative += r["Present Value"];
+//     return cumulative;
+//   });
+
+//   const breakevenIndex = pv.findIndex((v) => v >= 0);
+//   return { labels, pv, breakevenIndex };
+// };
 const preprocessData = (rows) => {
-  let cumulative = 0;
-  const labels = rows.map((r) => r["Project Lifetime"] ?? r["Year"]);
+  // Flexible label detection - try multiple possible keys
+  const labels = rows.map((r) => r["Year"] ?? r["year"] ?? r["Project Lifetime"] ?? 0);
+
+  // Flexible key detection for cumulative DCF values
+  const key =
+    Object.keys(rows[0] || {}).find((k) =>
+      k.toLowerCase().includes("cumulative") && k.toLowerCase().includes("dcf")
+    ) || "Cumulative DCF (USD)";
+
+  console.log("=== Chart Data Debug ===");
+  console.log("Number of rows:", rows.length);
+  console.log("Detected key:", key);
+  console.log("First row:", rows[0]);
+  console.log("Labels (first 5):", labels.slice(0, 5));
+
   const pv = rows.map((r) => {
-    cumulative += r["Present Value"];
-    return cumulative;
+    const value = r[key];
+    // Don't use || 0 because it converts falsy values (including 0) to 0
+    return value !== null && value !== undefined ? Number(value) : 0;
   });
 
+  console.log("PV values (first 5):", pv.slice(0, 5));
+  console.log("PV values (last 5):", pv.slice(-5));
+  console.log("All zero?", pv.every(v => v === 0));
+
   const breakevenIndex = pv.findIndex((v) => v >= 0);
+  console.log("Breakeven at index:", breakevenIndex);
+
   return { labels, pv, breakevenIndex };
 };
+
+
 
 export default BreakevenBarChart;

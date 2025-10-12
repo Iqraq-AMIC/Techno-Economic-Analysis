@@ -82,7 +82,7 @@ class CalculationRequest(BaseModel):
     inputs: dict
     process_technology: str
     feedstock: str
-    TCI_2023: float
+    product_key: str = "jet"  # Optional parameter with default value
 
 
 
@@ -97,21 +97,26 @@ def calculate(request: CalculationRequest):
         results = econ.run(
             process_technology=request.process_technology,
             feedstock=request.feedstock,
-            TCI_2023=request.TCI_2023
+            product_key=request.product_key  # Updated: removed TCI_2023, added product_key
         )
+
+        # Map new keys to expected format
+        capex = results["TCI"]  # Changed from "Adjusted CAPEX" to "TCI"
+        revenue = results["Revenue"]
+        opex = results["Total OPEX"]  # Changed from "OPEX" to "Total OPEX"
 
         fa = FinancialAnalysis(discount_rate=inputs.discount_factor)
         cashflow_df = fa.cash_flow_table(
-            capex=results["Adjusted CAPEX"],
-            revenue=results["Revenue"],
-            opex=results["OPEX"],
+            capex=capex,
+            revenue=revenue,
+            opex=opex,
             plant_lifetime=inputs.plant_lifetime
         )
 
         financials = {
-            "npv": safe_float(fa.npv(results["Adjusted CAPEX"], results["Revenue"], results["OPEX"], inputs.plant_lifetime)),
-            "irr": safe_float(fa.irr(results["Adjusted CAPEX"], results["Revenue"], results["OPEX"], inputs.plant_lifetime)),
-            "paybackPeriod": safe_float(fa.payback_period(results["Adjusted CAPEX"], results["Revenue"], results["OPEX"], inputs.plant_lifetime)),
+            "npv": safe_float(fa.npv(capex, revenue, opex, inputs.plant_lifetime)),
+            "irr": safe_float(fa.irr(capex, revenue, opex, inputs.plant_lifetime)),
+            "paybackPeriod": safe_float(fa.payback_period(capex, revenue, opex, inputs.plant_lifetime)),
             "cashFlowTable": cashflow_df.to_dict(orient="records")
         }
 

@@ -82,7 +82,7 @@ class CalculationRequest(BaseModel):
     inputs: dict
     process_technology: str
     feedstock: str
-    TCI_2023: float
+    product_key: str = "jet"  # Optional parameter with default value
 
 
 
@@ -97,21 +97,35 @@ def calculate(request: CalculationRequest):
         results = econ.run(
             process_technology=request.process_technology,
             feedstock=request.feedstock,
-            TCI_2023=request.TCI_2023
+            product_key=request.product_key  # Updated: removed TCI_2023, added product_key
         )
 
-        fa = FinancialAnalysis(discount_rate=inputs.discount_factor)
+        # Map new keys to expected format
+        tci = results["TCI"]  # Total Capital Investment
+        revenue = results["Revenue"]
+        manufacturing_cost = results["Total OPEX"]  # Manufacturing cost = Total OPEX
+
+        # Initialize Financial Analysis with fixed parameters
+        fa = FinancialAnalysis(
+            discount_rate=inputs.discount_factor,
+            tax_rate=0.28,
+            equity=0.4,
+            bank_interest=0.04,
+            loan_term=10
+        )
+
+        # Generate cash flow table
         cashflow_df = fa.cash_flow_table(
-            capex=results["Adjusted CAPEX"],
-            revenue=results["Revenue"],
-            opex=results["OPEX"],
+            tci=tci,
+            revenue=revenue,
+            manufacturing_cost=manufacturing_cost,
             plant_lifetime=inputs.plant_lifetime
         )
 
         financials = {
-            "npv": safe_float(fa.npv(results["Adjusted CAPEX"], results["Revenue"], results["OPEX"], inputs.plant_lifetime)),
-            "irr": safe_float(fa.irr(results["Adjusted CAPEX"], results["Revenue"], results["OPEX"], inputs.plant_lifetime)),
-            "paybackPeriod": safe_float(fa.payback_period(results["Adjusted CAPEX"], results["Revenue"], results["OPEX"], inputs.plant_lifetime)),
+            "npv": safe_float(fa.npv(tci, revenue, manufacturing_cost, inputs.plant_lifetime)),
+            "irr": safe_float(fa.irr(tci, revenue, manufacturing_cost, inputs.plant_lifetime)),
+            "paybackPeriod": safe_float(fa.payback_period(tci, revenue, manufacturing_cost, inputs.plant_lifetime)),
             "cashFlowTable": cashflow_df.to_dict(orient="records")
         }
 

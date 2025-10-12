@@ -12,9 +12,6 @@ import {
   Slider,
   Row,
   Col,
-  Nav,
-  NavItem,
-  NavLink,
   Modal,
   ModalHeader,
   ModalBody,
@@ -33,9 +30,7 @@ const formatNumber = (num, decimals = 0) => {
 
 const BiofuelForm = ({
   inputs,
-  TCI_2023,
   handleSliderChange,
-  setTCI_2023,
   onProcessChange,
   onFeedstockChange,
 }) => {
@@ -45,7 +40,6 @@ const BiofuelForm = ({
   const [selectedProcess, setSelectedProcess] = useState("");
   const [selectedFeedstock, setSelectedFeedstock] = useState("");
   const [selectedCountry, setSelectedCountry] = useState("Malaysia");
-  const [activeTab, setActiveTab] = useState("plant");
   const [showDataNotAvailableModal, setShowDataNotAvailableModal] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_URL;
@@ -117,13 +111,13 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
   };
 
   return (
-    <FormGroup className="mb-3">
+    <FormGroup className="mb-2">
       <Row form className="align-items-center">
         <Col xs="7">
           <label
             htmlFor={id}
             className="mb-0"
-            style={{ fontSize: "0.9rem", fontWeight: 600 }}
+            style={{ fontSize: "0.75rem", fontWeight: 600 }}
           >
             {label}
           </label>
@@ -135,7 +129,7 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
             value={formatNumber(value, decimals)}
             size="sm"
             className="text-right"
-            style={{ fontSize: "0.9rem", backgroundColor: "#f8f9fa" }}
+            style={{ fontSize: "0.75rem", backgroundColor: "#f8f9fa", padding: "4px 8px" }}
             onChange={(e) => {
               // strip commas when typing
               const raw = e.target.value.replace(/,/g, "");
@@ -169,133 +163,112 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
 };
 
   return (
-    <Card small className="mb-3 flex-fill d-flex flex-column h-100">
-      <CardHeader className="border-bottom py-2">
-        <h6 className="m-0">Scenario Inputs</h6>
+    <Card small className="d-flex flex-column" style={{ height: "100%" }}>
+      <CardHeader className="p-2" style={{ flexShrink: 0 }}>
+        <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>Scenario Inputs</h6>
       </CardHeader>
 
-      <CardBody className="p-3 d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
-        <Form className="d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
+      <CardBody className="p-2 d-flex flex-column" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <Form className="d-flex flex-column" style={{ height: "100%" }}>
           {/* 🔹 Process & Feedstock & Country */}
-          <Row form className="align-items-end">
-            <Col md="4">
-              <FormGroup>
-                <label htmlFor="process_technology">Process Technology</label>
-                <FormSelect
-                  id="process_technology"
-                  value={selectedProcess}
-                  onChange={handleProcessSelect}
-                >
-                  <option value="">-- Select Process --</option>
-                  {processes.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </FormSelect>
-              </FormGroup>
-            </Col>
-            <Col md="4">
-              {selectedProcess && (
-                <FormGroup>
-                  <label htmlFor="feedstock">Feedstock</label>
+          <div style={{ flexShrink: 0 }}>
+            <Row form className="align-items-end">
+              <Col md="4">
+                <FormGroup className="mb-2">
+                  <label htmlFor="process_technology" style={{ fontSize: "0.75rem", fontWeight: 600 }}>Process Technology</label>
                   <FormSelect
-                    id="feedstock"
-                    value={selectedFeedstock}
-                    onChange={handleFeedstockSelect}
+                    id="process_technology"
+                    value={selectedProcess}
+                    onChange={handleProcessSelect}
+                    size="sm"
+                    style={{ fontSize: "0.75rem" }}
                   >
-                    <option value="">-- Select Feedstock --</option>
-                    {feedstocks.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
+                    <option value="">-- Select Process --</option>
+                    {processes.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
                       </option>
                     ))}
                   </FormSelect>
                 </FormGroup>
-              )}
-            </Col>
-            <Col md="4">
-              {selectedProcess && (
-                <FormGroup>
-                  <label htmlFor="country">Country</label>
-                  <FormSelect
-                    id="country"
-                    value={selectedCountry}
-                    onChange={handleCountrySelect}
-                  >
-                    <option value="">-- Select Country --</option>
-                    {countries.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </FormSelect>
-                </FormGroup>
-              )}
-            </Col>
-          </Row>
+              </Col>
+              <Col md="4">
+                {selectedProcess && (
+                  <FormGroup className="mb-2">
+                    <label htmlFor="feedstock" style={{ fontSize: "0.75rem", fontWeight: 600 }}>Feedstock</label>
+                    <FormSelect
+                      id="feedstock"
+                      value={selectedFeedstock}
+                      onChange={handleFeedstockSelect}
+                      size="sm"
+                      style={{ fontSize: "0.75rem" }}
+                    >
+                      <option value="">-- Select Feedstock --</option>
+                      {feedstocks.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </FormSelect>
+                  </FormGroup>
+                )}
+              </Col>
+              <Col md="4">
+                {selectedProcess && (
+                  <FormGroup className="mb-2">
+                    <label htmlFor="country" style={{ fontSize: "0.75rem", fontWeight: 600 }}>Country</label>
+                    <FormSelect
+                      id="country"
+                      value={selectedCountry}
+                      onChange={handleCountrySelect}
+                      size="sm"
+                      style={{ fontSize: "0.75rem" }}
+                    >
+                      <option value="">-- Select Country --</option>
+                      {countries.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </FormSelect>
+                  </FormGroup>
+                )}
+              </Col>
+            </Row>
+          </div>
 
-          {/* 🔹 Tabs */}
-          <Nav tabs>
-            <NavItem>
-              <NavLink active={activeTab === "plant"} onClick={() => setActiveTab("plant")}>
-                Plant Parameters
-              </NavLink>
-            </NavItem>
-            <NavItem>
-              <NavLink active={activeTab === "costs"} onClick={() => setActiveTab("costs")}>
-                Costs
-              </NavLink>
-            </NavItem>
-            <NavItem>
-              <NavLink active={activeTab === "finance"} onClick={() => setActiveTab("finance")}>
-                Finance
-              </NavLink>
-            </NavItem>
-          </Nav>
-
-          {/* 🔹 Tab Panels */}
-          <div className="flex-grow-1 mt-3 d-flex flex-column" style={{ minHeight: 0 }}>
-            {activeTab === "plant" && (
-              <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
-                {renderSlider("production_capacity", "Plant Total Liquid Fuel Production Capacity  (tons/year)", inputs.production_capacity,
-                  { min: 100, max: 10000 }, 100, handleSliderChange("production_capacity"))}
-                {renderSlider("CEPCI", "CEPCI Index", inputs.CEPCI,
-                  { min: 500, max: 1000 }, 1, handleSliderChange("CEPCI"))}
-                {renderSlider("plant_lifetime", "Project Lifetime (years)", inputs.plant_lifetime,
-                  { min: 5, max: 50 }, 1, (vals) => {
-                    const value = Number(vals[0]);
-                    if (!isNaN(value)) handleSliderChange("plant_lifetime")([value]);
-                  })}
-              </div>
-            )}
-
-            {activeTab === "costs" && (
-              <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
-                {renderSlider("biomass_price", "Biomass Price ($/ton)", inputs.biomass_price,
-                  { min: 50, max: 500 }, 5, handleSliderChange("biomass_price"))}
-                {renderSlider("hydrogen_price", "Hydrogen Price ($/kg)", inputs.hydrogen_price,
-                  { min: 1, max: 10 }, 0.1, handleSliderChange("hydrogen_price"), 2)}
-                {renderSlider("electricity_rate", "Electricity Rate ($/kWh)", inputs.electricity_rate,
-                  { min: 0.05, max: 0.5 }, 0.01, handleSliderChange("electricity_rate"), 3)}
-                {renderSlider("yearly_wage_operator", "Yearly Wage Operator ($/year)", inputs.yearly_wage_operator,
-                  { min: 50000, max: 150000 }, 1000, handleSliderChange("yearly_wage_operator"))}
-                {renderSlider("product_price", "Product Price ($/ton)", inputs.product_price,
-                  { min: 500, max: 5000 }, 10, handleSliderChange("product_price"))}
-                {renderSlider("land_cost", "Land Cost ($)", inputs.land_cost,
-                  { min: 100000, max: 5000000 }, 50000, handleSliderChange("land_cost"))}
-              </div>
-            )}
-
-            {activeTab === "finance" && (
-              <div className="flex-grow-1" style={{ overflowY: "auto", paddingRight: "6px" }}>
-                {renderSlider("discount_factor", "Discount Factor (%)", inputs.discount_factor,
-                  { min: 0.01, max: 0.2 }, 0.01, handleSliderChange("discount_factor"), 2)}
-
-                {renderSlider("Total Capital Investment", "Total Capital Investment ($)", TCI_2023,
-                  { min: 100000, max: 50000000 }, 100000, (vals) => setTCI_2023(Number(vals[0])))}
-              </div>
-            )}
+          {/* 🔹 Input Sliders - Scrollable Section */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              overflowX: "hidden",
+              marginTop: "12px",
+              paddingRight: "6px"
+            }}
+          >
+            {renderSlider("production_capacity", "Plant Total Liquid Fuel Capacity (tons/year)", inputs.production_capacity,
+              { min: 100, max: 10000 }, 100, handleSliderChange("production_capacity"), 0)}
+            {renderSlider("feedstock_price", "Feedstock Price ($/ton)", inputs.feedstock_price,
+              { min: 50, max: 500 }, 5, handleSliderChange("feedstock_price"), 2)}
+            {renderSlider("hydrogen_price", "Hydrogen Price ($/kg)", inputs.hydrogen_price,
+              { min: 0, max: 10 }, 0.1, handleSliderChange("hydrogen_price"), 2)}
+            {renderSlider("electricity_rate", "Electricity Rate ($/kWh)", inputs.electricity_rate,
+              { min: 0, max: 0.5 }, 0.01, handleSliderChange("electricity_rate"), 3)}
+            {renderSlider("feedstock_carbon_intensity", "Feedstock Carbon Intensity (gCO2/MJ)", inputs.feedstock_carbon_intensity,
+              { min: 0, max: 200 }, 1, handleSliderChange("feedstock_carbon_intensity"), 2)}
+            {renderSlider("product_energy_content", "Product Energy Content (MJ/kg)", inputs.product_energy_content,
+              { min: 20, max: 50 }, 0.5, handleSliderChange("product_energy_content"), 2)}
+            {renderSlider("feedstock_carbon_content", "Feedstock Carbon Content", inputs.feedstock_carbon_content,
+              { min: 0, max: 1 }, 0.01, handleSliderChange("feedstock_carbon_content"), 3)}
+            {renderSlider("product_price", "Product Price ($/ton)", inputs.product_price,
+              { min: 500, max: 5000 }, 10, handleSliderChange("product_price"), 0)}
+            {renderSlider("plant_lifetime", "Project Lifetime (years)", inputs.plant_lifetime,
+              { min: 5, max: 50 }, 1, handleSliderChange("plant_lifetime"), 0)}
+            {renderSlider("land_cost","Land Cost ($)",inputs.land_cost,
+            { min: 0, max: 5000000 }, 10000, handleSliderChange("land_cost"), 0)}
+            {renderSlider("discount_factor", "Discount Rate (%)", inputs.discount_factor * 100,
+              { min: 1, max: 20 }, 0.5, (vals) => handleSliderChange("discount_factor")([vals[0] / 100]), 2)}
           </div>
         </Form>
       </CardBody>
@@ -322,9 +295,7 @@ const renderSlider = (id, label, value, range, step, handler, decimals = 2) => {
 
 BiofuelForm.propTypes = {
   inputs: PropTypes.object.isRequired,
-  TCI_2023: PropTypes.number.isRequired,
   handleSliderChange: PropTypes.func.isRequired,
-  setTCI_2023: PropTypes.func.isRequired,
   onProcessChange: PropTypes.func.isRequired,
   onFeedstockChange: PropTypes.func.isRequired,
 };
