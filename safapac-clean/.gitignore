@@ -57,3 +57,16 @@ logs/
 # OS
 Thumbs.db
 .DS_Store
+
+
+backend/venv/
+backend/.venv/
+backend/test_venv/
+backend/__pycache__/
+backend/**/*.pyc
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.next/
+frontend/.cache/
+frontend/.env*

@@ -1,1 +1,0 @@
-ssh -i "D:\Codebase\AWS-key\safapac-backend.pem" ubuntu@43.217.145.240
