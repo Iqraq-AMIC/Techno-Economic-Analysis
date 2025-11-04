@@ -59,6 +59,8 @@ class BiofuelEconomics:
         }
 
         # Override table defaults with user-specified values when supplied
+        # Only override if the user value is different from the database value
+
         if "tci_ref" in self.inputs_flat:
             ref["tci_ref"] = self.inputs_flat["tci_ref"]
         if "capacity_ref" in self.inputs_flat:
@@ -67,6 +69,40 @@ class BiofuelEconomics:
         conversion_ci_default = self.inputs_flat.get("conversion_process_ci_default")
         if conversion_ci_default is not None:
             ref["conversion_process_ci"][process_key] = conversion_ci_default
+
+        # Override process ratio with user-provided indirect_opex_to_tci_ratio
+        # Only if explicitly provided and different from database default
+        if "indirect_opex_to_tci_ratio" in self.inputs_flat:
+            user_ratio = self.inputs_flat["indirect_opex_to_tci_ratio"]
+            db_ratio = ref["process_ratio"].get(process_key, 0.0) / 100.0
+            # Only override if user value differs from database value (tolerance for rounding)
+            if abs(user_ratio - db_ratio) > 0.0001:
+                ref["process_ratio"][process_key] = user_ratio * 100
+
+        # Override yields with user-provided values if they differ from database
+        # Feedstock yield
+        if "feedstock_yield" in self.inputs_flat and self.inputs_flat["feedstock_yield"] is not None:
+            user_yield = self.inputs_flat["feedstock_yield"]
+            db_yield = ref["yield_biomass"]
+            # Only override if user value differs from database value
+            if abs(user_yield - db_yield) > 0.001:
+                ref["yield_biomass"] = user_yield
+
+        # Hydrogen yield
+        if "hydrogen_yield" in self.inputs_flat and self.inputs_flat["hydrogen_yield"] is not None:
+            user_h2 = self.inputs_flat["hydrogen_yield"]
+            db_h2 = ref["yield_h2"]
+            # Only override if user value differs from database value
+            if abs(user_h2 - db_h2) > 0.001:
+                ref["yield_h2"] = user_h2
+
+        # Electricity yield
+        if "electricity_yield" in self.inputs_flat and self.inputs_flat["electricity_yield"] is not None:
+            user_elec = self.inputs_flat["electricity_yield"]
+            db_elec = ref["yield_kwh"]
+            # Only override if user value differs from database value
+            if abs(user_elec - db_elec) > 0.001:
+                ref["yield_kwh"] = user_elec
 
         # Prepare the inputs for the layers (start with flattened structure)
         layer_inputs = dict(self.inputs_flat)
@@ -77,7 +113,13 @@ class BiofuelEconomics:
         layer1_results = self.layer1.compute(ref, layer_inputs)
         layer2_results = self.layer2.compute(layer1_results, ref, layer_inputs)
         layer3_results = self.layer3.compute([layer2_results])
-        layer4_results = self.layer4.compute(layer2_results, layer3_results, layer1_results)
+
+        # Get economic parameters for LCOP calculation
+        discount_rate = self.inputs_flat.get('discount_rate', 0.07)
+        plant_lifetime = self.inputs_flat.get('plant_lifetime', 20)
+
+        layer4_results = self.layer4.compute(layer2_results, layer3_results, layer1_results,
+                                             discount_rate, plant_lifetime)
 
         product_revenue_lookup = {
             (entry.get("name") or "").strip().lower(): entry
@@ -119,7 +161,17 @@ class BiofuelEconomics:
             "lcop": layer4_results["lcop"],
             "LCOP": layer4_results["lcop"],
             "yields": {
-                "biomass": row["Yield_biomass"],
+                "biomass": ref["yield_biomass"],  # Resolved value after overrides
+                "H2": ref["yield_h2"],            # Resolved value after overrides
+                "kWh": ref["yield_kwh"],          # Resolved value after overrides
+            },
+            "yields_source": {
+                "biomass": "user" if abs(ref["yield_biomass"] - row["Yield_biomass"]) > 0.001 else "database",
+                "H2": "user" if abs(ref["yield_h2"] - row["Yield_H2"]) > 0.001 else "database",
+                "kWh": "user" if abs(ref["yield_kwh"] - row["Yield_kWh"]) > 0.001 else "database",
+            },
+            "database_yields": {
+                "biomass": row["Yield_biomass"],  # Original database values
                 "H2": row["Yield_H2"],
                 "kWh": row["Yield_kWh"],
             },
