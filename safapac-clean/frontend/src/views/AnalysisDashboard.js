@@ -878,12 +878,12 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           cards: consumptionCards,
         },
         {
-          label: "Product Outputs",
+          label: "Product Outputs (t/yr)",
           value: formatNumber(productionOutput, 2),
           details: productOutputDetails,
         },
         {
-          label: "Carbon Intensity (kg CO2e per unit)",
+          label: "Carbon Intensity (kg CO2e/t product)",
           value: formatNumber(carbonIntensityPerProduct, 3),
         },
         {
@@ -901,28 +901,28 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       color: "#92400e",
       stats: [
         {
-          label: 'Total Capital Investment',
+          label: `Total Capital Investment (${currSymbol})`,
           value: formatValue(totalCapitalInvestment, 2, selectedCurrency),
         },
         {
-          label: 'Total direct OPEX',
+          label: `Total direct OPEX (${currSymbol}/yr)`,
           value: formatValue(totalDirectOpex, 2, selectedCurrency),
           details: [
-            { label: 'Cost of Feedstocks', value: formatValue(feedstockCostValue, 2, selectedCurrency) },
-            { label: 'Cost of Hydrogen', value: formatValue(hydrogenCost, 2, selectedCurrency) },
-            { label: 'Cost of Electricity', value: formatValue(electricityCost, 2, selectedCurrency) },
+            { label: `Cost of Feedstocks (${currSymbol}/yr)`, value: formatValue(feedstockCostValue, 2, selectedCurrency) },
+            { label: `Cost of Hydrogen (${currSymbol}/yr)`, value: formatValue(hydrogenCost, 2, selectedCurrency) },
+            { label: `Cost of Electricity (${currSymbol}/yr)`, value: formatValue(electricityCost, 2, selectedCurrency) },
           ],
         },
         {
-          label: 'Total Indirect OPEX',
+          label: `Total Indirect OPEX (${currSymbol}/yr)`,
           value: formatValue(totalIndirectOpexValue, 2, selectedCurrency),
         },
         {
-          label: 'Total OPEX',
+          label: `Total OPEX (${currSymbol}/yr)`,
           value: formatValue(totalOpexValue, 2, selectedCurrency),
         },
         {
-          label: 'Levelized Cost Of Production',
+          label: `Levelized Cost Of Production (${currSymbol}/t)`,
           value: formatValue(lcopValue, 2, selectedCurrency),
           details: [
             { label: 'TCI', value: lcopPctCapital !== null ? `${formatPercent(lcopPctCapital, 2)}%` : 'N/A' },
@@ -933,19 +933,19 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           ],
         },
         {
-          label: 'Levelized Cost Of Carbon Abatement',
+          label: `Levelized Cost Of Carbon Abatement (${currSymbol}/t CO2)`,
           value: formatValue(lccaValue, 2, selectedCurrency),
         },
         {
-          label: 'Net present value',
+          label: `Net present value (${currSymbol})`,
           value: formatValue(apiData?.financials?.npv, 2, selectedCurrency),
         },
         {
-          label: 'Internal rate of return',
+          label: 'Internal rate of return (%)',
           value: formatPercent(apiData?.financials?.irr, 2),
         },
         {
-          label: 'Payback period',
+          label: 'Payback period (years)',
           value: apiData?.financials?.paybackPeriod ? apiData.financials.paybackPeriod.toFixed(1) : 'N/A',
         },
       ],
@@ -1082,7 +1082,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         </div>
 
         {/* KPI Cards - narrower width, stays in place */}
-        <div style={{ width: "250px", minWidth: "250px", maxWidth: "250px", height: "100%" }}>
+        <div style={{ width: "300px", minWidth: "300px", maxWidth: "300px", height: "100%" }}>
           <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden" }}>
             {/* KPI Cards Grid - Grouped by Context with Collapsible Sections */}
             {Object.entries(kpiGroups).map(([groupKey, group]) => (

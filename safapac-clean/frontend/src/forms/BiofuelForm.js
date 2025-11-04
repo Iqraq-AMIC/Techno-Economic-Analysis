@@ -504,36 +504,99 @@ const BiofuelForm = ({
               />
             </FormGroup>
           </Col>
+
+          {/* Price slider with direct input */}
           <Col xs="12" className="mb-2">
-            <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price</label>
-            <Slider
-              connect={[true, false]}
-              start={[Number(product.price) || 0]}
-              range={{ min: 0, max: 10000 }}
-              step={5}
-              onSlide={handleProductSliderChange(index, "price")}
-              className="slider-product"
-            />
-            <div className="d-flex justify-content-between align-items-center" style={{ marginTop: "4px" }}>
-              <FormSelect
-                size="sm"
-                value={product.priceUnit}
-                onChange={(e) =>
-                  handleProductInputChange(index, "priceUnit")(e.target.value)
-                }
-                style={{ fontSize: "0.7rem", width: "40%" }}
-              >
-                {PRODUCT_UNIT_OPTIONS.priceUnit.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </FormSelect>
-              <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>
-                {formatNumber(product.price, 0)}
-              </span>
-            </div>
+            <FormGroup className="mb-1">
+              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price</label>
+              <Row form className="align-items-center mb-1">
+                <Col xs="7">
+                  <FormInput
+                    size="sm"
+                    type="text"
+                    value={product.price}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      // Allow typing decimal numbers
+                      if (val === '' || val === '-' || !isNaN(val)) {
+                        handleProductInputChange(index, "price")(val === '' ? 0 : val);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const num = Number(e.target.value);
+                      if (!isNaN(num)) {
+                        handleProductInputChange(index, "price")(num);
+                      }
+                    }}
+                    style={{ fontSize: "0.75rem" }}
+                  />
+                </Col>
+                <Col xs="5">
+                  <FormSelect
+                    size="sm"
+                    value={product.priceUnit}
+                    onChange={(e) =>
+                      handleProductInputChange(index, "priceUnit")(e.target.value)
+                    }
+                    style={{ fontSize: "0.7rem" }}
+                  >
+                    {PRODUCT_UNIT_OPTIONS.priceUnit.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </FormSelect>
+                </Col>
+              </Row>
+              <Slider
+                connect={[true, false]}
+                start={[Number(product.price) || 0]}
+                range={{ min: 0, max: 10000 }}
+                step={5}
+                onSlide={handleProductSliderChange(index, "price")}
+                className="slider-product"
+              />
+            </FormGroup>
           </Col>
+
+          {/* Mass Fraction slider with direct input - RIGHT UNDER PRICE */}
+          <Col xs="12" className="mb-2">
+            <FormGroup className="mb-1">
+              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Mass Fraction (%)</label>
+              <Row form className="align-items-center mb-1">
+                <Col xs="12">
+                  <FormInput
+                    size="sm"
+                    type="text"
+                    value={product.massFraction}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      // Allow typing decimal numbers
+                      if (val === '' || val === '-' || !isNaN(val)) {
+                        handleProductInputChange(index, "massFraction")(val === '' ? 0 : val);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const num = Number(e.target.value);
+                      if (!isNaN(num)) {
+                        handleProductInputChange(index, "massFraction")(num);
+                      }
+                    }}
+                    style={{ fontSize: "0.75rem" }}
+                  />
+                </Col>
+              </Row>
+              <Slider
+                connect={[true, false]}
+                start={[Number(product.massFraction) || 0]}
+                range={{ min: 0, max: 100 }}
+                step={0.5}
+                onSlide={handleProductSliderChange(index, "massFraction")}
+                className="slider-product"
+              />
+            </FormGroup>
+          </Col>
+
           <Col sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price Sensitivity</label>
@@ -541,11 +604,20 @@ const BiofuelForm = ({
                 <Col xs="7">
                   <FormInput
                     size="sm"
-                    type="number"
+                    type="text"
                     value={product.priceSensitivity}
-                    onChange={(e) =>
-                      handleProductInputChange(index, "priceSensitivity")(Number(e.target.value))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || val === '-' || !isNaN(val)) {
+                        handleProductInputChange(index, "priceSensitivity")(val === '' ? 0 : val);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const num = Number(e.target.value);
+                      if (!isNaN(num)) {
+                        handleProductInputChange(index, "priceSensitivity")(num);
+                      }
+                    }}
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
@@ -573,16 +645,26 @@ const BiofuelForm = ({
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Carbon Content (fraction)</label>
               <FormInput
                 size="sm"
-                type="number"
-                step="0.001"
+                type="text"
                 value={product.carbonContent}
-                onChange={(e) =>
-                  handleProductInputChange(index, "carbonContent")(Number(e.target.value))
-                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || val === '-' || !isNaN(val)) {
+                    handleProductInputChange(index, "carbonContent")(val === '' ? 0 : val);
+                  }
+                }}
+                onBlur={(e) => {
+                  const num = Number(e.target.value);
+                  if (!isNaN(num)) {
+                    handleProductInputChange(index, "carbonContent")(num);
+                  }
+                }}
                 style={{ fontSize: "0.75rem" }}
               />
             </FormGroup>
           </Col>
+
+          {/* Energy Content with direct input */}
           <Col sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Energy Content</label>
@@ -590,11 +672,20 @@ const BiofuelForm = ({
                 <Col xs="7">
                   <FormInput
                     size="sm"
-                    type="number"
+                    type="text"
                     value={product.energyContent}
-                    onChange={(e) =>
-                      handleProductInputChange(index, "energyContent")(Number(e.target.value))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || val === '-' || !isNaN(val)) {
+                        handleProductInputChange(index, "energyContent")(val === '' ? 0 : val);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const num = Number(e.target.value);
+                      if (!isNaN(num)) {
+                        handleProductInputChange(index, "energyContent")(num);
+                      }
+                    }}
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
@@ -617,6 +708,8 @@ const BiofuelForm = ({
               </Row>
             </FormGroup>
           </Col>
+
+          {/* Yield with direct input */}
           <Col sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Yield</label>
@@ -624,11 +717,20 @@ const BiofuelForm = ({
                 <Col xs="7">
                   <FormInput
                     size="sm"
-                    type="number"
+                    type="text"
                     value={product.yield}
-                    onChange={(e) =>
-                      handleProductInputChange(index, "yield")(Number(e.target.value))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || val === '-' || !isNaN(val)) {
+                        handleProductInputChange(index, "yield")(val === '' ? 0 : val);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const num = Number(e.target.value);
+                      if (!isNaN(num)) {
+                        handleProductInputChange(index, "yield")(num);
+                      }
+                    }}
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
@@ -650,20 +752,6 @@ const BiofuelForm = ({
                 </Col>
               </Row>
             </FormGroup>
-          </Col>
-          <Col xs="12">
-            <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Mass Fraction (%)</label>
-            <Slider
-              connect={[true, false]}
-              start={[Number(product.massFraction) || 0]}
-              range={{ min: 0, max: 100 }}
-              step={0.5}
-              onSlide={handleProductSliderChange(index, "massFraction")}
-              className="slider-product"
-            />
-            <div style={{ fontSize: "0.65rem", textAlign: "right", marginTop: "2px" }}>
-              {formatNumber(product.massFraction, 1)}%
-            </div>
           </Col>
         </Row>
           </div>
@@ -787,28 +875,18 @@ const BiofuelForm = ({
                   "slider-conversion"
                 )}
 
-                <FormGroup className="mb-2">
-                  <label style={{ fontSize: "0.75rem", fontWeight: 600 }}>Average Liquid Density</label>
-                  <Row form className="align-items-center">
-                    <Col xs="7">
-                      <FormInput
-                        size="sm"
-                        type="number"
-                        value={inputs.average_liquid_density}
-                        onChange={(e) =>
-                          handleInputChange("average_liquid_density")(Number(e.target.value))
-                        }
-                        style={{ fontSize: "0.75rem", backgroundColor: colors.inputBackground, padding: "4px 8px" }}
-                      />
-                    </Col>
-                    <Col xs="5">
-                      {renderUnitSelect(
-                        "average_liquid_density_unit",
-                        UNIT_OPTIONS.average_liquid_density_unit
-                      )}
-                    </Col>
-                  </Row>
-                </FormGroup>
+                {renderSlider(
+                  "average_liquid_density",
+                  "Average Liquid Density",
+                  inputs.average_liquid_density,
+                  { min: 600, max: 1000 },
+                  1,
+                  handleSliderChange("average_liquid_density"),
+                  2,
+                  "average_liquid_density_unit",
+                  UNIT_OPTIONS.average_liquid_density_unit,
+                  "slider-conversion"
+                )}
 
                 {renderSlider(
                   "annual_load_hours",

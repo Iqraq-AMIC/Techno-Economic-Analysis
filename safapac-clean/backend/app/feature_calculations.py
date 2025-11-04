@@ -68,13 +68,17 @@ class Layer1:
 
     # --- (8) Hydrogen Consumption ---
     def hydrogen_consumption(self, plant_capacity, yield_h2):
-        """Calculate hydrogen consumption: PlantCapacity × Yield_H2"""
-        return plant_capacity * yield_h2
+        """Calculate hydrogen consumption: PlantCapacity × Yield_H2
+        Plant capacity in tonnes/year, yield in kg/kg -> result in kg/year
+        """
+        return plant_capacity * 1000 * yield_h2  # Convert tonnes to kg
 
     # --- (9) Electricity Consumption ---
     def electricity_consumption(self, plant_capacity, yield_kwh):
-        """Calculate electricity consumption: PlantCapacity × Yield_kWh"""
-        return plant_capacity * yield_kwh
+        """Calculate electricity consumption: PlantCapacity × Yield_kWh
+        Plant capacity in tonnes/year, yield in kWh/kg -> result in kWh/year
+        """
+        return plant_capacity * 1000 * yield_kwh  # Convert tonnes to kg
 
     # --- Orchestrator (runs full layer) ---
     def compute(self, ref: dict, inputs: dict) -> dict:
@@ -383,19 +387,32 @@ class Layer4:
     # --- (3) Levelized Cost of Production (LCOP) ---
     def levelized_cost_of_production(self, feedstock_cost: float, hydrogen_cost: float,
                                      electricity_cost: float, indirect_opex: float,
-                                     capital_investment: float, liquid_fuel_capacity: float) -> float:
+                                     capital_investment: float, liquid_fuel_capacity: float,
+                                     discount_rate: float = 0.07, plant_lifetime: int = 20) -> float:
         """
-        LCOP = (C_feedstock + C_H2 + C_electricity + C_indirect_OPEX + C_capital) / Q_liquid_fuel
+        LCOP = (C_feedstock + C_H2 + C_electricity + C_indirect_OPEX + C_capital_annualized) / Q_liquid_fuel
 
-        All costs in USD/year except C_capital which is total USD
+        All costs in USD/year including C_capital_annualized
         Q_liquid_fuel is plant capacity in tons/year
         Result is in USD/ton
+
+        Capital cost is annualized using Capital Recovery Factor (CRF):
+        CRF = r(1+r)^n / ((1+r)^n - 1)
         """
-        numerator = feedstock_cost + hydrogen_cost + electricity_cost + indirect_opex + capital_investment
+        # Calculate Capital Recovery Factor to annualize TCI
+        if discount_rate > 0:
+            crf = (discount_rate * (1 + discount_rate) ** plant_lifetime) / \
+                  ((1 + discount_rate) ** plant_lifetime - 1)
+        else:
+            crf = 1 / plant_lifetime  # Fallback if discount rate is 0
+
+        annualized_capital = capital_investment * crf
+        numerator = feedstock_cost + hydrogen_cost + electricity_cost + indirect_opex + annualized_capital
         return numerator / (liquid_fuel_capacity + 1e-12)
 
     # --- Orchestrator ---
-    def compute(self, layer2_results: dict, layer3_results: dict, layer1_results: dict) -> dict:
+    def compute(self, layer2_results: dict, layer3_results: dict, layer1_results: dict,
+                discount_rate: float = 0.07, plant_lifetime: int = 20) -> dict:
         """
         Combine all layers to compute final process outputs.
         """
@@ -416,7 +433,8 @@ class Layer4:
         total_co2 = self.total_co2_emissions(carbon_intensity, product_energy_content, production)
         lcop = self.levelized_cost_of_production(
             feedstock_cost, hydrogen_cost, electricity_cost,
-            total_indirect_opex, capital_investment, liquid_fuel_capacity
+            total_indirect_opex, capital_investment, liquid_fuel_capacity,
+            discount_rate, plant_lifetime
         )
 
         return {

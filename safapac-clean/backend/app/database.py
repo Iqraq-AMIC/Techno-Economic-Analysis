@@ -9,7 +9,25 @@ class BiofuelDatabase:
 
 
             {
-                "Process Technology": "HEFA", "Feedstock": "FOGs", "TCI_ref": 400, "Capacity_ref": 500,
+                "Process Technology": "HEFA", "Feedstock": "UCO", "TCI_ref": 400, "Capacity_ref": 500,
+                "Yield_biomass": 1.2048, "Yield_H2": 0.042, "Yield_kWh": 0.12,
+                "P_steps": 3, "Nnp_steps": 28,
+                "MassFractions": {"Jet": 69, "Diesel": 0, "Gasoline": 31, "Propane": 0, "Naphtha": 0}
+            },
+            {
+                "Process Technology": "HEFA", "Feedstock": "Animal Fats", "TCI_ref": 400, "Capacity_ref": 500,
+                "Yield_biomass": 1.2048, "Yield_H2": 0.042, "Yield_kWh": 0.12,
+                "P_steps": 3, "Nnp_steps": 28,
+                "MassFractions": {"Jet": 69, "Diesel": 0, "Gasoline": 31, "Propane": 0, "Naphtha": 0}
+            },
+            {
+                "Process Technology": "HEFA", "Feedstock": "Algae Oil", "TCI_ref": 400, "Capacity_ref": 500,
+                "Yield_biomass": 1.2048, "Yield_H2": 0.042, "Yield_kWh": 0.12,
+                "P_steps": 3, "Nnp_steps": 28,
+                "MassFractions": {"Jet": 69, "Diesel": 0, "Gasoline": 31, "Propane": 0, "Naphtha": 0}
+            },
+            {
+                "Process Technology": "HEFA", "Feedstock": "Yellow Grease", "TCI_ref": 400, "Capacity_ref": 500,
                 "Yield_biomass": 1.2048, "Yield_H2": 0.042, "Yield_kWh": 0.12,
                 "P_steps": 3, "Nnp_steps": 28,
                 "MassFractions": {"Jet": 69, "Diesel": 0, "Gasoline": 31, "Propane": 0, "Naphtha": 0}
