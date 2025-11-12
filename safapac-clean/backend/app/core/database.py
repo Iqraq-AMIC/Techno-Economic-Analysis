@@ -68,8 +68,8 @@ REFERENCE_DATA_SEED: Dict[str, Any] = {
         {"name": "Animal Manure", "carbon_content_kg_c_per_kg": 0.40, "energy_content_mj_per_kg": 15.0, "ci_ref_gco2e_per_mj": 15.0, "price_ref_usd_per_unit": 10.0, "yield_ref": 8.5},
     ],
     "utilities": [ # NEW: Separated from feedstocks
-        {"name": "Hydrogen", "carbon_content_kg_c_per_kg": 0.0, "energy_content_mj_per_kg": 120.0, "ci_ref_gco2e_per_mj": 10.0},
-        {"name": "Electricity", "carbon_content_kg_c_per_kg": 0.0, "energy_content_mj_per_kg": 0.0, "ci_ref_gco2e_per_mj": 150.0},
+        {"name": "Hydrogen", "carbon_content_kg_c_per_kg": 0.0, "energy_content_mj_per_kg": 120.0, "ci_ref_gco2e_per_mj": 10.0, "yield_ref": 0},
+        {"name": "Electricity", "carbon_content_kg_c_per_kg": 0.0, "energy_content_mj_per_kg": 0.0, "ci_ref_gco2e_per_mj": 150.0, "yield_ref": 0},
     ],
     
     # --- Reference Data (P+F, P+F+C, U+C) ---
@@ -295,7 +295,8 @@ def seed_master_data(db: Session, seed_data: Dict[str, Any]) -> Dict[str, Dict[s
                 name=data["name"],
                 carbon_content_kg_c_per_kg=data["carbon_content_kg_c_per_kg"],
                 energy_content_mj_per_kg=data["energy_content_mj_per_kg"],
-                ci_ref_gco2e_per_mj=data["ci_ref_gco2e_per_mj"]
+                ci_ref_gco2e_per_mj=data["ci_ref_gco2e_per_mj"],
+                yield_ref=data["yield_ref"]
             ))
         db.commit()
         logger.info(f"{len(seed_data['utilities'])} Utilities seeded.")

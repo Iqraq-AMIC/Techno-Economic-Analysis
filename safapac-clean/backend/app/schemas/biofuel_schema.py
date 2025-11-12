@@ -179,10 +179,10 @@ class QuantityInputSchema(BaseModel):
 class ProductDataSchema(BaseModel):
     name: str
     price: QuantityInputSchema # CHANGED: Now consistent with other Quantity inputs
-    price_sensitivity_to_ci: float = Field(..., alias="price_sensitivity")
+    price_sensitivity_to_ci: float
     carbon_content: float
     energy_content: float
-    yield_percent: float = Field(..., alias="yield")
+    yield_percent: float
     product_density: float # NEW FIELD
     
     class Config:
@@ -220,7 +220,7 @@ class FeedstockDataSchema(BaseModel):
     carbon_content: float
     carbon_intensity: QuantityInputSchema # CHANGED
     energy_content: float
-    yield_percent: float = Field(..., alias="yield")
+    yield_percent: float
     
     class Config:
         allow_population_by_field_name = True
@@ -231,7 +231,7 @@ class UtilityDataSchema(BaseModel):
     carbon_content: float
     carbon_intensity: QuantityInputSchema # CHANGED
     energy_content: float
-    yield_percent: float = Field(default=0.0, alias="yield")
+    yield_percent: float
     
     class Config:
         allow_population_by_field_name = True

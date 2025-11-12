@@ -59,6 +59,7 @@ class Utility(Base):
     carbon_content_kg_c_per_kg = Column(Float)
     energy_content_mj_per_kg = Column(Float)
     ci_ref_gco2e_per_mj = Column(Float)
+    yield_ref = Column(Float, default=0.0)
     
     # Relationships
     consumption_refs = relationship("ProcessUtilityConsumptionRef", back_populates="utility")
