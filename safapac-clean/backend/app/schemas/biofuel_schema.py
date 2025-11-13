@@ -115,9 +115,73 @@ class UserInputs:
     product_data: List[ProductData]
 
     def to_flat_dict(self) -> Dict[str, Union[float, str]]:
-        # IMPORTANT: Keep this method definition. It is called by the BiofuelEconomics service.
-        # ... your complex flattening logic goes here (currently mocked as 'return {}')
-        return {}
+        """Convert structured inputs to flat dictionary for calculation layers."""
+        flat = {}
+
+         # DEBUG: Check unit conversions
+        print("DEBUG: Original plant capacity:", self.conversion_plant.plant_capacity.value, "unit_id:", self.conversion_plant.plant_capacity.unit_id)
+        
+        # Conversion Plant - Apply unit conversion if needed
+        plant_capacity_value = self.conversion_plant.plant_capacity.value
+        plant_capacity_unit_id = self.conversion_plant.plant_capacity.unit_id
+        
+        # If unit is kt/yr (unit_id 2 or 3), convert to t/yr (unit_id 1)
+        if plant_capacity_unit_id in [2, 3]:  # kt/yr or kta
+            plant_capacity_value *= 1000  # Convert kt to t
+            print("DEBUG: Converted plant capacity from kt to t:", plant_capacity_value)
+        
+        flat["plant_total_liquid_fuel_capacity"] = plant_capacity_value
+        
+        # Conversion Plant
+        flat["plant_total_liquid_fuel_capacity"] = self.conversion_plant.plant_capacity.value
+        flat["annual_load_hours"] = self.conversion_plant.annual_load_hours
+        flat["ci_process_default"] = self.conversion_plant.ci_process_default
+        
+        # Economic Parameters
+        flat["discount_rate"] = self.economic_parameters.discount_rate_percent / 100.0  # Convert % to decimal
+        flat["project_lifetime_years"] = self.economic_parameters.project_lifetime_years
+        flat["tci_scaling_exponent"] = self.economic_parameters.tci_scaling_exponent
+        flat["working_capital_tci_ratio"] = self.economic_parameters.working_capital_tci_ratio
+        flat["indirect_opex_tci_ratio"] = self.economic_parameters.indirect_opex_tci_ratio
+        
+        # Products - FIXED: Include products in the flat dict
+        flat["products"] = []
+        for product in self.product_data:
+            flat["products"].append({
+                "name": product.name,
+                "mass_fraction": product.yield_percent / 100.0,  # Convert % to decimal
+                "product_yield": product.yield_percent / 100.0,  # Convert % to decimal
+                "product_energy_content": product.energy_content,
+                "product_carbon_content": product.carbon_content,
+                "product_price": product.price.value,
+                "product_price_sensitivity_ci": product.price_sensitivity_to_ci,
+            })
+        
+        # Feedstock Data (take first feedstock)
+        if self.feedstock_data:
+            feedstock = self.feedstock_data[0]
+            flat["feedstock_price"] = feedstock.price.value
+            flat["feedstock_carbon_content"] = feedstock.carbon_content
+            flat["feedstock_carbon_intensity"] = feedstock.carbon_intensity.value
+            flat["feedstock_energy_content"] = feedstock.energy_content
+            flat["feedstock_yield"] = feedstock.yield_percent / 100.0  # Convert % to decimal
+        
+        # Utilities (Hydrogen and Electricity)
+        for utility in self.utility_data:
+            if utility.name.lower() == "hydrogen":
+                flat["hydrogen_price"] = utility.price.value
+            elif utility.name.lower() == "electricity":
+                flat["electricity_rate"] = utility.price.value
+            
+            # Products (take first product for now)
+            if self.product_data:
+                product = self.product_data[0]
+                flat["product_price"] = product.price.value
+                flat["product_energy_content"] = product.energy_content
+                flat["product_carbon_content"] = product.carbon_content
+                flat["product_yield"] = product.yield_percent / 100.0  # Convert % to decimal
+        
+        return flat
         
 # --- Master Data Schemas (for GET /master_data) ---
 

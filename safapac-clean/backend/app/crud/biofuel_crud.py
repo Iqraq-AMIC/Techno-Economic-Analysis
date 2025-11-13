@@ -59,6 +59,7 @@ class BiofuelCRUD:
             .options(
                 joinedload(DefaultParameterSet.process),
                 joinedload(DefaultParameterSet.country),
+                joinedload(DefaultParameterSet.feedstock),
             )
         )
         default_params_record = self.db.execute(stmt).scalar_one_or_none()
@@ -77,10 +78,10 @@ class BiofuelCRUD:
             )
             .options(
                 joinedload(ProcessFeedstockRef.utility_consumptions).joinedload(ProcessUtilityConsumptionRef.utility),
-                joinedload(ProcessFeedstockRef.product_breakdown)
-            )
+                joinedload(ProcessFeedstockRef.product_breakdowns).joinedload(ProductReferenceBreakdown.product)            
+                )
         )
-        pfr_record = self.db.execute(pfr_stmt).scalar_one_or_none()
+        pfr_record = self.db.execute(pfr_stmt).unique().scalar_one_or_none()
 
         # 3. Get Country-specific Utility Prices
         price_stmt = (
@@ -94,7 +95,7 @@ class BiofuelCRUD:
         data: Dict[str, Any] = {
             # Default Parameters
             "Process Technology": default_params_record.process.name,
-            "Feedstock": Feedstock.name, # Feedstock name must be fetched explicitly
+            "Feedstock": default_params_record.feedstock.name, # Feedstock name must be fetched explicitly
             "Country": default_params_record.country.name,
             "TCI_ref": default_params_record.tci_ref_musd,
             "Capacity_ref": default_params_record.plant_capacity_ktpa_ref,
@@ -108,13 +109,21 @@ class BiofuelCRUD:
             "P_steps": default_params_record.p_steps,
             "Nnp_steps": default_params_record.nnp_steps,
             
+            "process_type": process_name.upper(),
+            "conversion_process_ci": default_params_record.ci_process_default_gco2_mj,
+            "process_ratio": default_params_record.indirect_opex_tci_ratio,
+            
+            # For Layer2 calculations
+            "feedstock_ci": default_params_record.feedstock.ci_ref_gco2e_per_mj,
+            "feedstock_carbon_content": default_params_record.feedstock.carbon_content_kg_c_per_kg,
+            "feedstock_price": default_params_record.feedstock.price_ref_usd_per_unit,
             # Process/Feedstock Ref Data
             "average_product_density_ref": pfr_record.average_product_density_ref,
             
             # Products (List of Dicts)
             "products": [
                 {
-                    "name": p.name,
+                    "name": p.product.name,
                     "mass_fraction_percent": p.product_yield_ref * 100, # Use product_yield_ref as mass fraction
                     "energy_content_mj_per_kg": p.energy_content_mj_per_kg,
                     "carbon_content_kg_c_per_kg": p.carbon_content_kg_c_per_kg,
@@ -122,7 +131,7 @@ class BiofuelCRUD:
                     "price_sensitivity_ref": p.price_sensitivity_ref,
                     "product_density": p.product_density,
                 }
-                for p in pfr_record.product_breakdown
+                for p in pfr_record.product_breakdowns
             ],
             
             # Utilities (Consolidated Dict for consumption and price)
@@ -132,6 +141,9 @@ class BiofuelCRUD:
         # Consolidate Utility Data (Consumption + Price)
         utility_prices = {up.utility.name: up.price_ref_usd_per_unit for up in price_records}
         
+        # Dictionary to hold all utility reference data
+        utility_ref_data: Dict[str, Any] = {}
+
         for uc in pfr_record.utility_consumptions:
             u_name = uc.utility.name
             data["utilities"][u_name] = {
@@ -142,6 +154,33 @@ class BiofuelCRUD:
                 "price_ref_usd_per_unit": utility_prices.get(u_name, 0.0), # Fallback price
             }
         
+        # Add the consolidated utility data
+        data["utilities"] = utility_ref_data
+        
+        # --- ✅ NEW FIX: Add keys expected by economics.py for backward compatibility/bridge ---
+        # Assuming Yield_biomass is the feedstock's reference yield
+        data["Yield_biomass"] = default_params_record.feedstock.yield_ref
+        
+        # Assuming Yield_H2 and Yield_kWh are the reference consumption ratios for Hydrogen and electricity
+        # Use .get() to safely retrieve values if the utility is defined.
+        data["Yield_H2"] = utility_ref_data.get("Hydrogen", {}).get("consumption_ratio_ref", 0.0)
+        data["Yield_kWh"] = utility_ref_data.get("electricity", {}).get("consumption_ratio_ref", 0.0)
+
+        data["MassFractions"] = [
+            p["mass_fraction_percent"] / 100.0 
+            for p in data["products"]
+        ]
+
+        # In the data dictionary, add:
+        data["process_type"] = process_name.upper()  # For Layer2
+        data["conversion_process_ci"] = {process_name.upper(): default_params_record.ci_process_default_gco2_mj}
+        data["process_ratio"] = {process_name.upper(): default_params_record.indirect_opex_tci_ratio * 100}  # Convert to %
+
+        # For backward compatibility with old calculation structure
+        data["feedstock_ci"] = default_params_record.feedstock.ci_ref_gco2e_per_mj
+        data["feedstock_carbon_content"] = default_params_record.feedstock.carbon_content_kg_c_per_kg
+        data["feedstock_price"] = default_params_record.feedstock.price_ref_usd_per_unit
+
         return data
 
     # ------------------------------------------------------------

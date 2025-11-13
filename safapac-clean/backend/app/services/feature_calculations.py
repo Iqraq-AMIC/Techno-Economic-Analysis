@@ -300,6 +300,12 @@ class Layer2:
         electricity_cost = self.electricity_cost(electricity_consumption, electricity_rate)
         total_carbon_intensity = self.total_carbon_intensity(feedstock_ci, conversion_process_ci)
 
+        # Add after revenue calculation
+        print("DEBUG: Revenue Verification:")
+        print(f"  - Product Amount: {amount:,.0f} tons/year")
+        print(f"  - Product Price: ${price:,.2f}/ton")
+        print(f"  - Revenue: ${revenue_i:,.2f}/year")
+
         # Output dictionary
         return {
             "process_type": process_type,
@@ -401,16 +407,33 @@ class Layer4:
         Capital cost is annualized using Capital Recovery Factor (CRF):
         CRF = r(1+r)^n / ((1+r)^n - 1)
         """
-        # Calculate Capital Recovery Factor to annualize TCI
+        print("DEBUG: LCOP Detailed Breakdown:")
+        print(f"  - Feedstock Cost (annual): ${feedstock_cost:,.2f}")
+        print(f"  - Hydrogen Cost (annual): ${hydrogen_cost:,.2f}")
+        print(f"  - Electricity Cost (annual): ${electricity_cost:,.2f}")
+        print(f"  - Indirect OPEX (annual): ${indirect_opex:,.2f}")
+        print(f"  - Capital Investment (total): ${capital_investment:,.2f}")
+        print(f"  - Plant Capacity (annual): {liquid_fuel_capacity:,.2f} tons/year")
+        print(f"  - Discount Rate: {discount_rate:.3f}")
+        print(f"  - Plant Lifetime: {plant_lifetime} years")
+        
+        # Calculate Capital Recovery Factor
         if discount_rate > 0:
             crf = (discount_rate * (1 + discount_rate) ** plant_lifetime) / \
-                  ((1 + discount_rate) ** plant_lifetime - 1)
+                ((1 + discount_rate) ** plant_lifetime - 1)
         else:
-            crf = 1 / plant_lifetime  # Fallback if discount rate is 0
-
+            crf = 1 / plant_lifetime
+        
         annualized_capital = capital_investment * crf
+        print(f"  - Annualized Capital: ${annualized_capital:,.2f}")
+        
         numerator = feedstock_cost + hydrogen_cost + electricity_cost + indirect_opex + annualized_capital
-        return numerator / (liquid_fuel_capacity + 1e-12)
+        lcop = numerator / (liquid_fuel_capacity + 1e-12)
+        
+        print(f"  - Total Annual Cost: ${numerator:,.2f}")
+        print(f"  - LCOP: ${lcop:,.2f}/ton")
+        
+        return lcop
 
     # --- Orchestrator ---
     def compute(self, layer2_results: dict, layer3_results: dict, layer1_results: dict,
