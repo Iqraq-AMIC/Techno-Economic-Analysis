@@ -3,7 +3,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 # CORRECTED: New Import for DB Setup - already correct
-from app.core.database import initialize_database 
+from app.core.seeding import initialize_database
 # CORRECTED: Router import - the local import name should match the module structure
 # It is better practice to import directly as the variable name 'router'
 from app.api.endpoints.projects import router as projects_router # <<< Renamed for clarity
