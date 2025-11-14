@@ -73,6 +73,15 @@ class BiofuelEconomics:
         self.inputs_flat.get("project_lifetime_years", 20)
     )
         
+        print("🔍 DEBUG YIELD CHECK:")
+        print(f"   User feedstock yield: {self.inputs_flat.get('feedstock_yield')}")
+        print(f"   Reference feedstock yield: {ref.get('Yield_biomass')}")
+        print(f"   Final feedstock yield used: {ref.get('Yield_biomass')}")
+
+        print("🔍 DEBUG UNIT CHECK:")
+        print(f"   Plant capacity input: {self.inputs_flat['plant_total_liquid_fuel_capacity']}")
+        print(f"   Expected units: KTA (thousand tons per year)")
+
         # DEBUG: Check what calculation results we have
         print("DEBUG: Layer1 results keys:", list(layer1_results.keys()))
         print("DEBUG: Layer4 results keys:", list(layer4_results.keys()))
@@ -99,22 +108,24 @@ class BiofuelEconomics:
         try:
             # Create financial analysis instance
             fa = FinancialAnalysis(
-                discount_rate=self.inputs_flat.get("discount_rate", 0.07),
-                tax_rate=0.28,  # Default tax rate
-                equity=0.4,     # Default equity percentage
-                bank_interest=0.04,  # Default interest rate
-                loan_term=10    # Default loan term
+                discount_rate=self.inputs_flat.get("discount_rate", 0.07)
             )
             
-            # Calculate financial metrics
-            tci = layer1_results.get("total_capital_investment", 0)
+             # Calculate financial metrics
+            tci_usd = layer1_results.get("total_capital_investment", 0) * 1_000_000
             revenue = layer2_results.get("revenue", 0)
             total_opex = layer4_results.get("total_opex", 0)
             plant_lifetime = self.inputs_flat.get("project_lifetime_years", 20)
-            
-            npv = fa.npv(tci, revenue, total_opex, plant_lifetime)
-            irr = fa.irr(tci, revenue, total_opex, plant_lifetime)
-            payback = fa.payback_period(tci, revenue, total_opex, plant_lifetime)
+
+            npv = fa.npv(tci_usd, revenue, total_opex, plant_lifetime)
+            irr = fa.irr(tci_usd, revenue, total_opex, plant_lifetime)
+            payback = fa.payback_period(tci_usd, revenue, total_opex, plant_lifetime)
+
+            # Handle NaN values for database storage
+            if irr is not None and (isinstance(irr, float) and (irr != irr)):  # Check for NaN
+                irr = None
+            if payback is not None and (isinstance(payback, float) and (payback != payback)):
+                payback = None
             
             print("DEBUG: Financial Results - NPV:", npv)
             print("DEBUG: Financial Results - IRR:", irr)
@@ -136,7 +147,23 @@ class BiofuelEconomics:
                 "total_opex": layer4_results.get("total_opex", 0),
                 "total_co2_emissions": layer4_results.get("total_co2_emissions", 0),
                 "carbon_intensity": layer4_results.get("carbon_intensity", 0),
-                # Add any other techno-economic metrics you have
+
+                "utility_consumption": {
+                    "hydrogen": layer1_results.get("hydrogen_consumption", 0),
+                    "electricity": layer1_results.get("electricity_consumption", 0)
+                },
+                "product_breakdown": {
+                    "jet": next((p["amount_of_product"] for p in layer1_results.get("products", []) if p["name"].lower() == "jet"), 0),
+                    "diesel": next((p["amount_of_product"] for p in layer1_results.get("products", []) if p["name"].lower() == "diesel"), 0),
+                    "naphtha": next((p["amount_of_product"] for p in layer1_results.get("products", []) if p["name"].lower() == "naphtha"), 0)
+                },
+                "carbon_conversion_efficiency": layer1_results.get("carbon_conversion_efficiency_percent", 0),
+                "opex_breakdown": {
+                    "feedstock": layer2_results.get("feedstock_cost", 0),
+                    "hydrogen": layer2_results.get("hydrogen_cost", 0),
+                    "electricity": layer2_results.get("electricity_cost", 0),
+                    "indirect_opex": layer2_results.get("total_indirect_opex", 0)
+                }
             },
             "financials": {
                 "npv": npv,

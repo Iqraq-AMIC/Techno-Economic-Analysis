@@ -123,12 +123,9 @@ class UserInputs:
         
         # Conversion Plant - Apply unit conversion if needed
         plant_capacity_value = self.conversion_plant.plant_capacity.value
-        plant_capacity_unit_id = self.conversion_plant.plant_capacity.unit_id
         
-        # If unit is kt/yr (unit_id 2 or 3), convert to t/yr (unit_id 1)
-        if plant_capacity_unit_id in [2, 3]:  # kt/yr or kta
-            plant_capacity_value *= 1000  # Convert kt to t
-            print("DEBUG: Converted plant capacity from kt to t:", plant_capacity_value)
+        # DEBUG: Check unit conversions
+        print("DEBUG: Plant capacity:", self.conversion_plant.plant_capacity.value, "unit_id:", self.conversion_plant.plant_capacity.unit_id)
         
         flat["plant_total_liquid_fuel_capacity"] = plant_capacity_value
         
@@ -149,8 +146,8 @@ class UserInputs:
         for product in self.product_data:
             flat["products"].append({
                 "name": product.name,
-                "mass_fraction": product.yield_percent / 100.0,  # Convert % to decimal
-                "product_yield": product.yield_percent / 100.0,  # Convert % to decimal
+                "mass_fraction": product.yield_percent / 100.0,
+                "product_yield": product.yield_percent / 100.0,
                 "product_energy_content": product.energy_content,
                 "product_carbon_content": product.carbon_content,
                 "product_price": product.price.value,
@@ -164,14 +161,18 @@ class UserInputs:
             flat["feedstock_carbon_content"] = feedstock.carbon_content
             flat["feedstock_carbon_intensity"] = feedstock.carbon_intensity.value
             flat["feedstock_energy_content"] = feedstock.energy_content
-            flat["feedstock_yield"] = feedstock.yield_percent / 100.0  # Convert % to decimal
+            flat["feedstock_yield"] = feedstock.yield_percent / 100.0
         
         # Utilities (Hydrogen and Electricity)
         for utility in self.utility_data:
             if utility.name.lower() == "hydrogen":
                 flat["hydrogen_price"] = utility.price.value
+                flat["hydrogen_yield"] = utility.yield_percent / 100.0  # FIX: Convert % to decimal
             elif utility.name.lower() == "electricity":
-                flat["electricity_rate"] = utility.price.value
+                # FIX: Convert electricity rate from $/MWh to $/kWh
+                flat["electricity_rate"] = utility.price.value / 1000.0  # $55/MWh → $0.055/kWh
+                flat["electricity_yield"] = utility.yield_percent / 100.0
+                print(f"DEBUG Electricity Rate: ${utility.price.value}/MWh → ${flat['electricity_rate']}/kWh")
             
             # Products (take first product for now)
             if self.product_data:

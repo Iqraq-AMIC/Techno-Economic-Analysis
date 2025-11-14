@@ -42,15 +42,22 @@ class Layer1:
     # --- (1) Total Capital Investment ---
     def total_capital_investment(self, tci_ref, plant_capacity, capacity_ref):
         """Economy-of-scale capital scaling."""
-        return tci_ref * (plant_capacity / capacity_ref) ** 0.6
+        print(f"🚨 DEBUG TCI DETAILS:")
+        print(f"   tci_ref: ${tci_ref}M")
+        print(f"   plant_capacity: {plant_capacity:,.0f} tons/year") 
+        print(f"   capacity_ref: {capacity_ref:,.0f} tons/year")
+        print(f"   Ratio: {plant_capacity} / {capacity_ref} = {plant_capacity/capacity_ref}")
+        print(f"   Ratio^0.6: {(plant_capacity/capacity_ref) ** 0.6}")
+        result = tci_ref * (plant_capacity / capacity_ref) ** 0.6
+        print(f"   Final TCI: ${result:,.2f}M")
+        return result
 
     # --- (2) Production ---
     def production(self, plant_capacity, product_yield):
-        return plant_capacity * product_yield
+        return plant_capacity * 1000 * product_yield  # Convert KTA → tons/year
 
-    # --- (3) Feedstock Consumption ---
     def feedstock_consumption(self, plant_capacity, feedstock_yield):
-        return plant_capacity * feedstock_yield
+        return plant_capacity * 1000 * feedstock_yield  # Convert KTA → tons/year
 
     # --- (4) Fuel Energy Content ---
     def fuel_energy_content(self, product_energy_content, mass_fraction):
@@ -66,21 +73,18 @@ class Layer1:
 
     # --- (7) Amount of Product ---
     def amount_of_product(self, plant_capacity, mass_fraction):
-        return plant_capacity * mass_fraction
+        return plant_capacity * 1000 * mass_fraction  # Convert KTA → tons/year
 
     # --- (8) Hydrogen Consumption ---
     def hydrogen_consumption(self, plant_capacity, yield_h2):
-        """Calculate hydrogen consumption: PlantCapacity × Yield_H2
-        Plant capacity in tonnes/year, yield in kg/kg -> result in kg/year
-        """
-        return plant_capacity * 1000 * yield_h2  # Convert tonnes to kg
+        """Calculate hydrogen consumption in kg/year"""
+        # plant_capacity (KTA) → tons/year → kg/year
+        return plant_capacity * 1000 * 1000 * yield_h2
 
-    # --- (9) Electricity Consumption ---
     def electricity_consumption(self, plant_capacity, yield_kwh):
-        """Calculate electricity consumption: PlantCapacity × Yield_kWh
-        Plant capacity in tonnes/year, yield in kWh/kg -> result in kWh/year
-        """
-        return plant_capacity * 1000 * yield_kwh  # Convert tonnes to kg
+        """Calculate electricity consumption in kWh/year"""  
+        # plant_capacity (KTA) → tons/year → kg/year (since yield is per kg)
+        return plant_capacity * 1000 * 1000 * yield_kwh
 
     # --- Orchestrator (runs full layer) ---
     def compute(self, ref: dict, inputs: dict) -> dict:
@@ -130,7 +134,7 @@ class Layer1:
             total_mass_fraction += mass_fraction
 
             product_yield = float(product.get("product_yield", 0.0))
-            amount = plant_capacity * product_yield
+            amount = plant_capacity * 1000 * product_yield
             total_production += amount
 
             energy_content = float(product.get("product_energy_content", 0.0))
@@ -151,6 +155,10 @@ class Layer1:
                 "product_price": float(product.get("product_price", 0.0)),
                 "product_price_sensitivity_ci": float(product.get("product_price_sensitivity_ci", 0.0)),
             })
+
+        print("🔍 DEBUG PRODUCT AMOUNTS:")
+        for product in product_results:
+            print(f"   {product['name']}: {product['amount_of_product']:,.0f} tons/year")
 
         if total_mass_fraction > 1.0 + 1e-6:
             raise ValueError("Total product mass fraction exceeds 100%")
@@ -179,6 +187,23 @@ class Layer1:
         )
 
         aggregated_product_yield = total_production / plant_capacity if plant_capacity else 0.0
+
+        print("🔍 DEBUG YIELD OVERRIDE CHECK:")
+        print(f"   User provided feedstock_yield: {inputs.get('feedstock_yield')}")
+        print(f"   Reference feedstock_yield: {ref.get('yield_biomass')}")
+        print(f"   Using feedstock_yield: {feedstock_yield}")  # This shows which one is actually used
+
+        print(f"   User provided hydrogen_yield: {inputs.get('hydrogen_yield')}")
+        print(f"   Reference hydrogen_yield: {ref.get('yield_h2')}")
+        print(f"   Using hydrogen_yield: {yield_h2}")  # This shows which one is actually used
+
+        print(f"   User provided electricity_yield: {inputs.get('electricity_yield')}")
+        print(f"   Reference electricity_yield: {ref.get('yield_kwh')}")
+        print(f"   Using electricity_yield: {yield_kwh}")  # This shows which one is actually used
+
+        print("🔍 DEBUG UTILITY CONSUMPTION:")
+        print(f"   Hydrogen: {h2_cons:,.0f} kg/year (should be ~21,000,000)")
+        print(f"   Electricity: {elec_cons:,.0f} kWh/year (should be ~60,000,000)")
 
         # return all intermediate + final values
         return {
@@ -232,7 +257,10 @@ class Layer2:
     # --- (4) Electricity Cost ---
     def electricity_cost(self, electricity_consumption, electricity_rate):
         """Calculate electricity cost: Electricity Consumption × Electricity Rate"""
-        return electricity_consumption * electricity_rate
+        print(f"DEBUG Electricity Cost: {electricity_consumption} kWh/year × ${electricity_rate}/kWh")
+        result = electricity_consumption * electricity_rate
+        print(f"DEBUG Electricity Result: ${result:,.2f}/year")
+        return result
 
     # --- (5) Total Carbon Intensity ---
     def total_carbon_intensity(self, feedstock_ci, conversion_process_ci):
@@ -293,8 +321,9 @@ class Layer2:
                 "mass_fraction": output_entry.get("mass_fraction") if output_entry else None,
             })
 
-        # Compute aggregated costs
-        total_indirect_opex = self.total_indirect_opex(process_ratio, total_capital_investment)
+        # Should be (using user input):
+        indirect_opex_ratio = inputs.get("indirect_opex_tci_ratio", 0.077)  # Use user input
+        total_indirect_opex = self.total_indirect_opex(indirect_opex_ratio, total_capital_investment * 1e6)        
         feedstock_cost = self.feedstock_cost(feedstock_consumption, feedstock_price)
         hydrogen_cost = self.hydrogen_cost(hydrogen_consumption, hydrogen_price)
         electricity_cost = self.electricity_cost(electricity_consumption, electricity_rate)
@@ -417,6 +446,9 @@ class Layer4:
         print(f"  - Discount Rate: {discount_rate:.3f}")
         print(f"  - Plant Lifetime: {plant_lifetime} years")
         
+        # FIX: Convert capital_investment from MUSD to USD
+        capital_investment_usd = capital_investment * 1_000_000
+        
         # Calculate Capital Recovery Factor
         if discount_rate > 0:
             crf = (discount_rate * (1 + discount_rate) ** plant_lifetime) / \
@@ -424,13 +456,13 @@ class Layer4:
         else:
             crf = 1 / plant_lifetime
         
-        annualized_capital = capital_investment * crf
-        print(f"  - Annualized Capital: ${annualized_capital:,.2f}")
+        annualized_capital = capital_investment_usd * crf
         
         numerator = feedstock_cost + hydrogen_cost + electricity_cost + indirect_opex + annualized_capital
         lcop = numerator / (liquid_fuel_capacity + 1e-12)
         
-        print(f"  - Total Annual Cost: ${numerator:,.2f}")
+        print(f"  - Capital Investment (USD): ${capital_investment_usd:,.2f}")
+        print(f"  - Annualized Capital: ${annualized_capital:,.2f}")
         print(f"  - LCOP: ${lcop:,.2f}/ton")
         
         return lcop
