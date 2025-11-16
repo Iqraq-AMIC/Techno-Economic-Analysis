@@ -446,7 +446,10 @@ class Layer4:
         print(f"  - Discount Rate: {discount_rate:.3f}")
         print(f"  - Plant Lifetime: {plant_lifetime} years")
         
-        # FIX: Convert capital_investment from MUSD to USD
+        # Convert liquid_fuel_capacity from KTA to tons/year
+        liquid_fuel_capacity_tons = liquid_fuel_capacity * 1000
+        
+        # Convert capital_investment from MUSD to USD
         capital_investment_usd = capital_investment * 1_000_000
         
         # Calculate Capital Recovery Factor
@@ -459,11 +462,10 @@ class Layer4:
         annualized_capital = capital_investment_usd * crf
         
         numerator = feedstock_cost + hydrogen_cost + electricity_cost + indirect_opex + annualized_capital
-        lcop = numerator / (liquid_fuel_capacity + 1e-12)
+        lcop = numerator / (liquid_fuel_capacity_tons + 1e-12)  # Now dividing by tons/year, not KTA
         
-        print(f"  - Capital Investment (USD): ${capital_investment_usd:,.2f}")
-        print(f"  - Annualized Capital: ${annualized_capital:,.2f}")
-        print(f"  - LCOP: ${lcop:,.2f}/ton")
+        print(f"  - Plant Capacity: {liquid_fuel_capacity_tons:,.0f} tons/year")  # Should show 500,000
+        print(f"  - LCOP: ${lcop:,.2f}/ton")  # Should be around $1,460/ton
         
         return lcop
 
