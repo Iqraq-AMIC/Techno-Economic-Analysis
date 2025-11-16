@@ -1,0 +1,95 @@
+{
+  "Objective": "",
+  "Inputs": {
+    "Conversion": {
+      "Plant production Capacity": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Plant Up-time": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Conversion Process %": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Plant Conversion Carbon Intensity": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Maintenance Cost": ["ADVANCE"],
+      "Default Value": ["ROADSHOW"],
+      "No maintenance cost": ["CORE"]
+    },
+    "Feedstock": {
+      "Type/Name": ["ROADSHOW"],
+      "Price": ["ROADSHOW"],
+      "Carbon content": ["ROADSHOW"],
+      "Carbon intensity": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Transport Carbon Intensity": ["ADVANCE"],
+      "Default Core Value": ["ROADSHOW"],
+      "Energy Content": ["ADVANCE"],
+      "Yield %": {
+        "CORE": "Yield %",
+        "ADVANCE": "Optimization Suggestion",
+        "ROADSHOW": "Default Core w/ Optimization potential"
+      }
+    },
+    "Product Data": {
+      "Product name(s)/type(s)": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Product(s) price": ["CORE", "ADVANCE"],
+      "Market Default + limit range": ["ROADSHOW"],
+      "Price sensitivity to Carbon Intensity": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Product(s) carbon content": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Product(s) energy content": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Product(s) yield": ["CORE", "ADVANCE", "ROADSHOW"]
+    },
+    "Economic Parameters": {
+      "Discount rate": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Project lifetime": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Total Capital Investment (TCI) @ reference plant production capacity": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Total Capital Investment (TCI) scaling law": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Reference plant production capacity": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Working Capital (WC)/TCI ratio": {
+        "CORE": "Working Capital (WC)/TCI ratio",
+        "ADVANCE": "Working Capital (WC)/TCI ratio",
+        "ROADSHOW": "No working capital"
+      },
+      "Indirect OPEX/TCI ratio": ["CORE", "ADVANCE", "ROADSHOW"]
+    }
+  },
+  "Outputs": {
+    "Process Outputs": {
+      "Total Consumption": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Total Production": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Total SAF Production": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Carbon Intensity (by product)": {
+        "CORE": "Carbon Intensity (by product)",
+        "ADVANCE": "Carbon Intensity (by product)",
+        "ROADSHOW": "no breakdown"
+      },
+      "Carbon Conversion Intensity": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Total CO2 Emissions": ["CORE", "ADVANCE", "ROADSHOW"]
+    },
+    "Economic Outputs": {
+      "Total Capital Investment": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Direct OPEX (breakdown per feedstock and utility)": {
+        "CORE": "Detailed breakdown",
+        "ADVANCE": "Detailed breakdown",
+        "ROADSHOW": "Simple breakdown"
+      },
+      "Total Indirect OPEX": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Total OPEX": ["CORE", "ADVANCE", "ROADSHOW"],
+      "Levelized Cost Of Production (LCOP) and breakdown": {
+        "CORE": "Yes",
+        "ADVANCE": "Yes",
+        "ROADSHOW": "No"
+      },
+      "Levelized Cost Of Carbon Abatement (LCCA)": {
+        "CORE": "Yes",
+        "ADVANCE": "Yes",
+        "ROADSHOW": "No"
+      },
+      "Net present value (NPV)": {
+        "CORE": "Yes",
+        "ADVANCE": "Yes",
+        "ROADSHOW": "No"
+      },
+      "Internal rate of return (IRR)": {
+        "CORE": "Yes",
+        "ADVANCE": "Yes",
+        "ROADSHOW": "No"
+      },
+      "Payback period": ["CORE", "ADVANCE", "ROADSHOW"]
+    }
+  }
+}

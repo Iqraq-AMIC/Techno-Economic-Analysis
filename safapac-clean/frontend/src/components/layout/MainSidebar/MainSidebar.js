@@ -6,6 +6,7 @@ import { Col } from "shards-react";
 import SidebarMainNavbar from "./SidebarMainNavbar";
 import SidebarSearch from "./SidebarSearch";
 import SidebarNavItems from "./SidebarNavItems";
+import ScenarioTabs from "../../project/ScenarioTabs";
 
 import { Store } from "../../../flux";
 
@@ -55,6 +56,7 @@ class MainSidebar extends React.Component {
         <SidebarMainNavbar hideLogoText={this.props.hideLogoText} />
         <SidebarSearch />
         <SidebarNavItems />
+        <ScenarioTabs />
       </Col>
     );
   }

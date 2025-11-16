@@ -18,8 +18,8 @@ const MainFooter = ({ copyright }) => {
         alignItems: "center",
       }}
     >
-      <span style={{ color: "#ffffff", fontWeight: "400" }}>ver 3.0.0-alpha</span>
-      <span style={{ color: "#ffffff", fontWeight: "400" }}>{copyright}</span>
+      <span style={{ color: colors.text, fontWeight: "400" }}>ver4.0.0 alpha</span>
+      <span style={{ color: colors.text, fontWeight: "400" }}>{copyright}</span>
     </footer>
   );
 };
