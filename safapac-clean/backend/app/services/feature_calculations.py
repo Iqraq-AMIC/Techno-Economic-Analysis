@@ -118,8 +118,7 @@ class Layer1:
         total_mass_fraction = 0.0
         total_weighted_energy = 0.0
         total_production = 0.0
-        carbon_conversion_weighted = 0.0
-        carbon_conversion_weight_sum = 0.0
+        product_carbon_conversion_ratios = []
 
         for product in products_payload:
             name = (product.get("name") or "Product").strip()
@@ -141,9 +140,12 @@ class Layer1:
             total_weighted_energy += energy_content * mass_fraction
 
             carbon_content = float(product.get("product_carbon_content", 0.0))
-            carbon_conversion = self.carbon_conversion_efficiency(carbon_content, feedstock_carbon_content)
-            carbon_conversion_weighted += carbon_conversion * amount
-            carbon_conversion_weight_sum += amount
+            denominator = feedstock_carbon_content * feedstock_yield
+            if denominator > 1e-12:
+                carbon_ratio = (carbon_content * product_yield) / denominator * 100
+            else:
+                carbon_ratio = 0.0
+            product_carbon_conversion_ratios.append(carbon_ratio)
 
             product_results.append({
                 "name": name,
@@ -152,6 +154,7 @@ class Layer1:
                 "amount_of_product": amount,
                 "product_energy_content": energy_content,
                 "product_carbon_content": carbon_content,
+                "carbon_conversion_efficiency_percent": carbon_ratio,
                 "product_price": float(product.get("product_price", 0.0)),
                 "product_price_sensitivity_ci": float(product.get("product_price_sensitivity_ci", 0.0)),
             })
@@ -169,10 +172,12 @@ class Layer1:
         if total_weighted_energy <= 0:
             total_weighted_energy = 1.0
 
-        if carbon_conversion_weight_sum > 0:
-            carbon_eff = carbon_conversion_weighted / carbon_conversion_weight_sum
-        else:
-            carbon_eff = self.carbon_conversion_efficiency(product_results[0]["product_carbon_content"], feedstock_carbon_content)
+        carbon_eff = (
+            sum(product_carbon_conversion_ratios) / len(product_carbon_conversion_ratios)
+            if product_carbon_conversion_ratios
+            else 0.0
+        )
+
 
         # compute formulas step-by-step
         tci = self.total_capital_investment(tci_ref, plant_capacity, capacity_ref)

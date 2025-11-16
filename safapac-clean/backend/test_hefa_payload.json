@@ -1,0 +1,150 @@
+{
+  "inputs": {
+    "plant": {
+      "total_liquid_fuel_capacity": {
+        "value": 500,
+        "unit": "KTA"
+      },
+      "annual_load_hours": 8000,
+      "conversion_process_carbon_intensity_default": 20,
+      "process_type": "HEFA"
+    },
+    "feedstocks": [
+      {
+        "name": "UCO",
+        "price": {
+          "value": 930,
+          "unit": "USD/t"
+        },
+        "carbon_content": 0.76,
+        "carbon_intensity": {
+          "value": 14,
+          "unit": "gCO2/kg"
+        },
+        "energy_content": {
+          "value": 37.5,
+          "unit": "MJ/kg"
+        },
+        "yield_": {
+          "value": 1.21,
+          "unit": "kg/kg"
+        }
+      }
+    ],
+    "utilities": [
+      {
+        "name": "Hydrogen",
+        "price": {
+          "value": 5.4,
+          "unit": "USD/kg"
+        },
+        "carbon_intensity": {
+          "value": 0,
+          "unit": "gCO2/kg"
+        },
+        "yield_": {
+          "value": 0.042,
+          "unit": "kg/kg"
+        }
+      },
+      {
+        "name": "Electricity",
+        "price": {
+          "value": 0.055,
+          "unit": "USD/kWh"
+        },
+        "carbon_intensity": {
+          "value": 20,
+          "unit": "gCO2/kWh"
+        },
+        "yield_": {
+          "value": 0.12,
+          "unit": "kWh/kg"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "Jet Fuel",
+        "price": {
+          "value": 3000,
+          "unit": "USD/t"
+        },
+        "price_sensitivity_to_ci": {
+          "value": 0,
+          "unit": "USD/gCO2"
+        },
+        "carbon_content": 0.86,
+        "energy_content": {
+          "value": 43.8,
+          "unit": "MJ/kg"
+        },
+        "yield_": {
+          "value": 0.64,
+          "unit": "kg/kg"
+        },
+        "mass_fraction": 64.0
+      },
+      {
+        "name": "Diesel",
+        "price": {
+          "value": 1500,
+          "unit": "USD/t"
+        },
+        "price_sensitivity_to_ci": {
+          "value": 0,
+          "unit": "USD/gCO2"
+        },
+        "carbon_content": 0.87,
+        "energy_content": {
+          "value": 42.6,
+          "unit": "MJ/kg"
+        },
+        "yield_": {
+          "value": 0.15,
+          "unit": "kg/kg"
+        },
+        "mass_fraction": 15.0
+      },
+      {
+        "name": "Naphtha",
+        "price": {
+          "value": 1000,
+          "unit": "USD/t"
+        },
+        "price_sensitivity_to_ci": {
+          "value": 0,
+          "unit": "USD/gCO2"
+        },
+        "carbon_content": 0.85,
+        "energy_content": {
+          "value": 43.4,
+          "unit": "MJ/kg"
+        },
+        "yield_": {
+          "value": 0.21,
+          "unit": "kg/kg"
+        },
+        "mass_fraction": 21.0
+      }
+    ],
+    "economics": {
+      "discount_rate": 0.07,
+      "project_lifetime_years": 20,
+      "tci_at_reference_capacity": {
+        "value": 400000000,
+        "unit": "USD"
+      },
+      "tci_scaling_exponent": 0.6,
+      "reference_production_capacity": {
+        "value": 500,
+        "unit": "KTA"
+      },
+      "wc_to_tci_ratio": 0.15,
+      "indirect_opex_to_tci_ratio": 0.077
+    }
+  },
+  "process_technology": "HEFA",
+  "feedstock": "UCO",
+  "product_key": "jet"
+}

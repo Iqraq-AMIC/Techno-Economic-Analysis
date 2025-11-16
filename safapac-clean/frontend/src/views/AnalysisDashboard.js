@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Container,
   Row,
@@ -15,6 +15,9 @@ import BreakevenBarChart from "../components/charts/BreakevenBarChart";
 import BiofuelForm from "../forms/BiofuelForm";
 import CashFlowTable from "../forms/CashFlowTable";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAccess } from "../contexts/AccessContext";
+import { useProject } from "../contexts/ProjectContext";
+import ProjectStartupModal from "../components/project/ProjectStartupModal";
 
 // ✅ Mock data for fallback
 const mockCashFlowTable = [
@@ -127,7 +130,60 @@ const normalizeCarbonIntensity = (value, unit, baseUnit) => {
 
 const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const { colors } = useTheme();
+  const { selectedAccess } = useAccess();
+  const { currentProject, currentScenario, updateCurrentScenario, scenarios, comparisonScenarios } = useProject();
+
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+
+  // Use ref to access latest table value without triggering re-renders
+  const tableRef = React.useRef(null);
+
+  // Show project modal if no project is selected
+  useEffect(() => {
+    console.log("📊 AnalysisDashboard mounted");
+    console.log("📊 currentProject:", currentProject);
+    console.log("📊 showProjectModal:", showProjectModal);
+
+    if (!currentProject) {
+      console.log("🎭 No project selected, showing modal");
+      setShowProjectModal(true);
+    } else {
+      console.log("✅ Project already selected:", currentProject);
+    }
+  }, [currentProject]);
+
+  useEffect(() => {
+    console.log("🎭 showProjectModal changed to:", showProjectModal);
+  }, [showProjectModal]);
+
+  // Load inputs and outputs from current scenario when it changes
+  useEffect(() => {
+    if (currentScenario) {
+      console.log("🔄 Loading data from scenario:", currentScenario.scenario_name);
+
+      // Load inputs if they exist in scenario
+      if (currentScenario.inputs && Object.keys(currentScenario.inputs).length > 0) {
+        console.log("📥 Loading inputs from scenario");
+        setInputs(currentScenario.inputs);
+        setSelectedProcess(currentScenario.inputs.selected_process || "");
+        setSelectedFeedstock(currentScenario.inputs.selected_feedstock || "");
+      }
+
+      // Load outputs if they exist in scenario
+      if (currentScenario.outputs && Object.keys(currentScenario.outputs).length > 0) {
+        console.log("📥 Loading outputs from scenario");
+        if (currentScenario.outputs.apiData) {
+          setApiData(currentScenario.outputs.apiData);
+        }
+        if (currentScenario.outputs.table) {
+          setTable(currentScenario.outputs.table);
+          setChartData(buildChartData(currentScenario.outputs.table));
+        }
+      }
+    }
+  }, [currentScenario?.scenario_id]);
+
   const [inputs, setInputs] = useState({
     production_capacity: 5000,
     plant_capacity_unit: "t/yr",
@@ -176,6 +232,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         carbonContent: 0.7,
         energyContent: 43,
         energyUnit: "MJ/kg",
+        density: 820,
         yield: 0.4,
         yieldUnit: "kg/kg",
         massFraction: 70,
@@ -189,6 +246,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         carbonContent: 0.75,
         energyContent: 42,
         energyUnit: "MJ/kg",
+        density: 830,
         yield: 0.2,
         yieldUnit: "kg/kg",
         massFraction: 20,
@@ -202,6 +260,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         carbonContent: 0.65,
         energyContent: 40,
         energyUnit: "MJ/kg",
+        density: 750,
         yield: 0.1,
         yieldUnit: "kg/kg",
         massFraction: 10,
@@ -216,50 +275,110 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const [apiData, setApiData] = useState(null);
   const [table, setTable] = useState(mockCashFlowTable);
   const [chartData, setChartData] = useState(buildChartData(mockCashFlowTable));
+  const [comparisonChartData, setComparisonChartData] = useState([]);
   const [openTable, setOpenTable] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
-  // const [expandedGroups, setExpandedGroups] = useState({
-  //   financial: false,
-  //   production: false,
-  //   cost: false,
-  //   environmental: false,
-  // });
-  const [expandedGroups, setExpandedGroups] = useState({
-    processOutputs: false,
-    economicOutputs: false,
-  });
   const [expandedStatDetails, setExpandedStatDetails] = useState({});
+  const [maximizedKPI, setMaximizedKPI] = useState('processOutputs'); // 'processOutputs' or 'economicOutputs'
   const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000";
-  // When API has returned results, we use a bigger, centered value style for KPIs
-  const hasResults = Boolean(apiData && (apiData.technoEconomics || apiData.financials));
 
-  const toggleGroup = (groupKey) => {
-    setExpandedGroups((prev) => {
-      const isCurrentlyExpanded = prev[groupKey];
+  // Update ref when table changes (after table is declared)
+  useEffect(() => {
+    tableRef.current = table;
+  }, [table]);
 
-      // If clicking on an already expanded group, collapse it
-      if (isCurrentlyExpanded) {
-        return {
-          ...prev,
-          [groupKey]: false,
+  // Auto-save inputs to current scenario whenever they change
+  useEffect(() => {
+    if (currentScenario && inputs) {
+      const saveInputs = async () => {
+        const inputsToSave = {
+          ...inputs,
+          selected_process: selectedProcess,
+          selected_feedstock: selectedFeedstock,
         };
+
+        console.log("💾 Auto-saving inputs to scenario:", currentScenario.scenario_name);
+        await updateCurrentScenario({ inputs: inputsToSave });
+      };
+
+      // Debounce the save to avoid too many API calls
+      const timeoutId = setTimeout(saveInputs, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [inputs, selectedProcess, selectedFeedstock, currentScenario?.scenario_id]);
+
+  // Fetch comparison data when scenarios are selected for comparison
+  useEffect(() => {
+    const fetchComparisonData = async () => {
+      if (!comparisonScenarios || comparisonScenarios.length === 0) {
+        setComparisonChartData([]);
+        return;
       }
 
-      // If clicking on a collapsed group, collapse all others and expand this one
-      // return {
-      //   financial: false,
-      //   production: false,
-      //   cost: false,
-      //   environmental: false,
-      //   [groupKey]: true,
-      // };
-      return {
-        processOutputs: false,
-        economicOutputs: false,
-        [groupKey]: true,
-      };
-    });
-  };
+      console.log("📊 Fetching comparison data for scenarios:", comparisonScenarios);
+      console.log("📊 Available scenarios:", scenarios);
+
+      try {
+        const comparisonData = await Promise.all(
+          comparisonScenarios.map(async (scenarioId) => {
+            const scenario = scenarios.find(s => s.scenario_id === scenarioId);
+            console.log(`📊 Found scenario ${scenarioId}:`, scenario);
+
+            if (!scenario) {
+              console.log(`❌ Scenario ${scenarioId} not found`);
+              return null;
+            }
+
+            // Get outputs from scenario
+            const outputs = scenario.outputs;
+            console.log(`📊 Outputs for ${scenario.scenario_name}:`, outputs);
+
+            // Try different possible locations for the cash flow table
+            let cashFlowData = null;
+
+            if (outputs) {
+              // Try cash_flow_table first
+              if (outputs.cash_flow_table && outputs.cash_flow_table.length > 0) {
+                cashFlowData = outputs.cash_flow_table;
+                console.log(`✅ Found cash_flow_table for ${scenario.scenario_name}`);
+              }
+              // Try table property
+              else if (outputs.table && outputs.table.length > 0) {
+                cashFlowData = outputs.table;
+                console.log(`✅ Found table for ${scenario.scenario_name}`);
+              }
+            }
+
+            // If still no data and this is the current scenario, use current table
+            if (!cashFlowData && scenarioId === currentScenario?.scenario_id && tableRef.current && tableRef.current.length > 0) {
+              cashFlowData = tableRef.current;
+              console.log(`✅ Using current table for ${scenario.scenario_name}`);
+            }
+
+            if (!cashFlowData) {
+              console.log(`❌ No cash flow data found for ${scenario.scenario_name}`);
+              return null;
+            }
+
+            return {
+              name: scenario.scenario_name,
+              data: cashFlowData,
+            };
+          })
+        );
+
+        // Filter out null values
+        const validComparisons = comparisonData.filter(d => d !== null);
+        console.log("📊 Valid comparison data:", validComparisons);
+        setComparisonChartData(validComparisons);
+      } catch (error) {
+        console.error("Error fetching comparison data:", error);
+        setComparisonChartData([]);
+      }
+    };
+
+    fetchComparisonData();
+  }, [comparisonScenarios, scenarios, currentScenario?.scenario_id]);
 
   const toggleStatDetail = (statKey) => {
     setExpandedStatDetails((prev) => ({
@@ -322,6 +441,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           carbonContent: 0.6,
           energyContent: 35,
           energyUnit: "MJ/kg",
+          density: "",
           yield: 0.1,
           yieldUnit: "kg/kg",
           massFraction: 0,
@@ -341,56 +461,57 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const handleReset = () => {
     // Reset to initial default values
     setInputs({
-      production_capacity: 5000,
+      production_capacity: 0,
       plant_capacity_unit: "t/yr",
-      average_liquid_density: 820,
+      average_liquid_density: 0,
       average_liquid_density_unit: "kg/m3",
-      annual_load_hours: 8000,
-      conversion_process_ci_default: 45,
-      feedstock_price: 250,
+      annual_load_hours: 0,
+      conversion_process_ci_default: 0,
+      feedstock_price: 0,
       feedstock_price_unit: "USD/t",
-      hydrogen_price: 2.5,
+      hydrogen_price: 0,
       hydrogen_price_unit: "USD/kg",
-      electricity_rate: 0.12,
+      electricity_rate: 0,
       electricity_rate_unit: "USD/kWh",
-      feedstock_carbon_intensity: 50,
+      feedstock_carbon_intensity: 0,
       feedstock_ci_unit: "gCO2/kg",
-      feedstock_energy_content: 18,
+      feedstock_energy_content: 0,
       feedstock_energy_unit: "MJ/kg",
-      feedstock_yield: 1.5,
+      feedstock_yield: 0,
       feedstock_yield_unit: "kg/kg",
-      hydrogen_yield: 0.042,
+      hydrogen_yield: 0,
       hydrogen_yield_unit: "kg/kg",
-      electricity_yield: 0.12,
+      electricity_yield: 0,
       electricity_yield_unit: "kWh/kg",
       hydrogen_carbon_intensity: 0,
       hydrogen_ci_unit: "gCO2/kg",
       electricity_carbon_intensity: 0,
       electricity_ci_unit: "gCO2/kWh",
-      feedstock_carbon_content: 0.5,
-      plant_lifetime: 25,
-      discount_factor: 0.105,
-      land_cost: 1026898.876,
-      tci_ref: 250_000_000,
+      feedstock_carbon_content: 0,
+      plant_lifetime: 0,
+      discount_factor: 0,
+      land_cost: 0,
+      tci_ref: 0,
       tci_ref_unit: "USD",
-      capacity_ref: 50000,
+      capacity_ref: 0,
       capacity_ref_unit: "t/yr",
-      tci_scaling_exponent: 0.6,
-      wc_to_tci_ratio: 0.1,
-      indirect_opex_to_tci_ratio: 0.05,
+      tci_scaling_exponent: 0,
+      wc_to_tci_ratio: 0,
+      indirect_opex_to_tci_ratio: 0,
       products: [
         {
-          name: "Jet Fuel",
-          price: 2750,
+          name: "Product 1",
+          price: 0,
           priceUnit: "USD/t",
           priceSensitivity: 0,
           priceSensitivityUnit: "USD/gCO2",
-          carbonContent: 0.7,
-          energyContent: 43,
+          carbonContent: 0,
+          energyContent: 0,
           energyUnit: "MJ/kg",
-          yield: 0.4,
+          density: "",
+          yield: 0,
           yieldUnit: "kg/kg",
-          massFraction: 70,
+          massFraction: 0,
         },
       ],
     });
@@ -573,6 +694,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       },
       carbon_content: Number(product.carbonContent) || 0,
       energy_content: { value: Number(product.energyContent) || 0, unit: product.energyUnit },
+      density: Number(product.density) || null,
       yield_: { value: Number(product.yield) || 0, unit: product.yieldUnit },
       mass_fraction: Number(product.massFraction) || 0,
     }));
@@ -653,6 +775,17 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       } else if (res.data?.financials?.cashFlowTable?.length) {
         applyTableData(res.data.financials.cashFlowTable);
         console.log("Table updated with", res.data.financials.cashFlowTable.length, "rows of API data");
+
+        // Save outputs to current scenario
+        if (currentScenario) {
+          console.log("💾 Saving calculation outputs to scenario:", currentScenario.scenario_name);
+          await updateCurrentScenario({
+            outputs: {
+              apiData: res.data,
+              table: res.data.financials.cashFlowTable,
+            }
+          });
+        }
       } else {
         console.warn("No cash flow table in response, using mock data");
         console.warn("Response structure:", Object.keys(res.data));
@@ -805,21 +938,39 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       ? null
       : (hydrogenCost ?? 0) + (electricityCost ?? 0);
   const totalDirectOpex = toFiniteNumber(apiData?.technoEconomics?.total_direct_opex);
-  const annualCapacity = inputs?.production_capacity || 0;
+  const annualCapacity = toFiniteNumber(apiData?.technoEconomics?.production) || inputs?.production_capacity || 0;
   const safeCapacity = annualCapacity > 0 ? annualCapacity : null;
   const lcopValue = toFiniteNumber(apiData?.technoEconomics?.lcop ?? apiData?.technoEconomics?.LCOP);
   const totalCapitalInvestment = toFiniteNumber(apiData?.technoEconomics?.total_capital_investment);
   const feedstockCostValue = toFiniteNumber(apiData?.technoEconomics?.feedstock_cost);
   const totalIndirectOpexValue = toFiniteNumber(apiData?.technoEconomics?.total_indirect_opex);
   const totalOpexValue = toFiniteNumber(apiData?.technoEconomics?.total_opex);
-  const lcopCapital = safeCapacity && totalCapitalInvestment !== null ? totalCapitalInvestment / safeCapacity : null;
+
+  // Calculate annualized capital using Capital Recovery Factor (CRF)
+  const discountRate = inputs?.discount_factor || 0.07;
+  const plantLifetime = inputs?.plant_lifetime || 20;
+  const crf = discountRate > 0
+    ? (discountRate * Math.pow(1 + discountRate, plantLifetime)) / (Math.pow(1 + discountRate, plantLifetime) - 1)
+    : 1 / plantLifetime;
+  const annualizedCapital = totalCapitalInvestment !== null ? totalCapitalInvestment * crf : null;
+
+  const lcopCapital = safeCapacity && annualizedCapital !== null ? annualizedCapital / safeCapacity : null;
   const lcopFeedstock = safeCapacity && feedstockCostValue !== null ? feedstockCostValue / safeCapacity : null;
   const lcopUtility = safeCapacity && utilityCost !== null ? utilityCost / safeCapacity : null;
   const lcopHydrogen = safeCapacity && hydrogenCost !== null ? hydrogenCost / safeCapacity : null;
   const lcopElectricity = safeCapacity && electricityCost !== null ? electricityCost / safeCapacity : null;
   const lcopIndirect = safeCapacity && totalIndirectOpexValue !== null ? totalIndirectOpexValue / safeCapacity : null;
   // LCOP breakdown percentages (share of total LCOP)
-  const lcopPct = (part) => (lcopValue && part !== null ? part / lcopValue : null);
+  // Calculate individual components
+  const lcopComponents = [lcopCapital, lcopFeedstock, lcopHydrogen, lcopElectricity, lcopIndirect].filter(v => v !== null);
+  const lcopComponentsSum = lcopComponents.reduce((sum, val) => sum + val, 0);
+
+  // Normalize percentages to ensure they sum to exactly 100%
+  const lcopPct = (part) => {
+    if (part === null || !lcopComponentsSum) return null;
+    return part / lcopComponentsSum; // Use component sum instead of total LCOP to ensure 100%
+  };
+
   const lcopPctCapital = lcopPct(lcopCapital);
   const lcopPctFeedstock = lcopPct(lcopFeedstock);
   const lcopPctHydrogen = lcopPct(lcopHydrogen);
@@ -867,6 +1018,33 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     value: `${formatNumber(p.amount_of_product, 2)} t/yr`,
   }));
 
+  const productCarbonEfficiencyDetails = (apiData?.technoEconomics?.products || []).map((p) => ({
+    label: p.name || "Product",
+    value: `${formatNumber(p.carbon_conversion_efficiency_percent ?? 0, 2)}%`,
+  }));
+
+  // Helper function to check if a stat should be visible based on access level
+  const isStatVisible = (statLabel) => {
+    // For Economic Outputs
+    if (statLabel.includes("Payback period")) {
+      return selectedAccess === "CORE" || selectedAccess === "ADVANCE" || selectedAccess === "ROADSHOW";
+    }
+    if (statLabel.includes("OPEX") || statLabel.includes("Internal rate of return")) {
+      return selectedAccess === "ADVANCE" || selectedAccess === "ROADSHOW";
+    }
+    if (statLabel.includes("Net present value") || statLabel.includes("Levelized Cost")) {
+      return selectedAccess === "ROADSHOW";
+    }
+
+    // For Process Outputs - all visible in ROADSHOW, specific ones in other levels
+    if (selectedAccess === "ROADSHOW") {
+      return true; // All features visible in ROADSHOW
+    }
+
+    // Default: show the stat
+    return true;
+  };
+
   const kpiGroups = {
     processOutputs: {
       title: "Process Outputs",
@@ -889,6 +1067,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         {
           label: "Carbon Conversion Efficiency (%)",
           value: formatNumber(apiData?.technoEconomics?.carbon_conversion_efficiency_percent, 2),
+          details: productCarbonEfficiencyDetails,
         },
         {
           label: "Total CO2 Emissions (tons/year)",
@@ -948,15 +1127,85 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           label: 'Payback period (years)',
           value: apiData?.financials?.paybackPeriod ? apiData.financials.paybackPeriod.toFixed(1) : 'N/A',
         },
-      ],
+      ].filter(stat => isStatVisible(stat.label)),
     },
   };
 
+  const handleProjectSelected = (project, scenario) => {
+    console.log("📁 Project selected in TEA:", project);
+    console.log("📋 Scenario selected in TEA:", scenario);
+    setShowProjectModal(false);
+  };
+
   return (
-    <Container fluid className="main-content-container px-2">
+    <>
+      {/* Blur overlay when modal is open */}
+      {showProjectModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            zIndex: 1040,
+            pointerEvents: "none",
+          }}
+        />
+      )}
+
+      {/* Project Selection Modal */}
+      <ProjectStartupModal
+        isOpen={showProjectModal}
+        onProjectSelected={handleProjectSelected}
+      />
+
+      <Container fluid className="main-content-container px-2" style={{ filter: showProjectModal ? "blur(4px)" : "none", transition: "filter 0.3s ease", display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Project Header with Switch Button */}
+      {currentProject && (
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "0.5rem 0.75rem",
+          backgroundColor: colors.cardBackground,
+          borderBottom: `1px solid ${colors.border}`,
+          marginBottom: "0.5rem"
+        }}>
+          <div>
+            <h6 style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: colors.text }}>
+              {currentProject.project_name}
+            </h6>
+          </div>
+          <button
+            onClick={() => setShowProjectModal(true)}
+            style={{
+              background: "#006D7C",
+              border: "none",
+              color: "white",
+              cursor: "pointer",
+              fontSize: "0.8rem",
+              padding: "0.4rem 0.8rem",
+              borderRadius: "4px",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              fontWeight: 500
+            }}
+            title="Switch to another project"
+          >
+            <i className="material-icons" style={{ fontSize: "1rem" }}>swap_horiz</i>
+            Switch Project
+          </button>
+        </div>
+      )}
+
       {/* Main Layout */}
       {/* Tighten gap between scenario inputs (left) and chart (right) */}
-      <div style={{ display: "flex", flexDirection: "row", gap: "12px", width: "100%", height: "calc(100vh - 100px)" }}>
+      <div style={{ display: "flex", flexDirection: "row", gap: "12px", width: "100%", flex: 1, minHeight: 0, paddingBottom: "8px" }}>
         {/* Left Form - always show but with different width */}
         <div
           style={{
@@ -964,6 +1213,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
             minWidth: isLeftPanelCollapsed ? "50px" : "25%",
             maxWidth: isLeftPanelCollapsed ? "50px" : "25%",
             height: "100%",
+            minHeight: 0,
             position: "relative",
             transition: "all 0.3s ease"
           }}
@@ -1004,28 +1254,30 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
           {/* Form - only show when not collapsed */}
           {!isLeftPanelCollapsed && (
-            <BiofuelForm
-              inputs={inputs}
-              selectedProcess={selectedProcess}
-              selectedFeedstock={selectedFeedstock}
-              handleSliderChange={handleSliderChange}
-              handleInputChange={handleInputChange}
-              handleProductSliderChange={handleProductSliderChange}
-              handleProductInputChange={handleProductInputChange}
-              onAddProduct={addProduct}
-              onRemoveProduct={removeProduct}
-              onProcessChange={setSelectedProcess}
-              onFeedstockChange={setSelectedFeedstock}
-              onCalculate={calculateOutputs}
-              onReset={handleReset}
-              onSave={handleSave}
-              isCalculating={isCalculating}
-            />
+            <div style={{ height: "100%", overflowY: "auto", paddingRight: "4px", minHeight: 0 }}>
+              <BiofuelForm
+                inputs={inputs}
+                selectedProcess={selectedProcess}
+                selectedFeedstock={selectedFeedstock}
+                handleSliderChange={handleSliderChange}
+                handleInputChange={handleInputChange}
+                handleProductSliderChange={handleProductSliderChange}
+                handleProductInputChange={handleProductInputChange}
+                onAddProduct={addProduct}
+                onRemoveProduct={removeProduct}
+                onProcessChange={setSelectedProcess}
+                onFeedstockChange={setSelectedFeedstock}
+                onCalculate={calculateOutputs}
+                onReset={handleReset}
+                onSave={handleSave}
+                isCalculating={isCalculating}
+              />
+            </div>
           )}
         </div>
 
         {/* Chart area - expands when sidebar collapses */}
-        <div className="d-flex flex-column" style={{ flex: 1, height: "100%", transition: "all 0.3s ease", minWidth: 0 }}>
+        <div className="d-flex flex-column" style={{ flex: 1, height: "100%", minWidth: 0, minHeight: 0, transition: "all 0.3s ease" }}>
               <Card small className="flex-fill d-flex flex-column">
                 <CardHeader className="border-bottom d-flex justify-content-between align-items-center p-2">
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1075,168 +1327,181 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
                     </svg>
                   </Button>
                 </CardHeader>
-                <CardBody className="flex-fill" style={{ padding: "10px", minHeight: 0 }}>
-                  <BreakevenBarChart data={chartData} />
+                <CardBody className="flex-fill" style={{ padding: "10px", minHeight: 0, flex: 1 }}>
+                  <BreakevenBarChart data={chartData} comparisonData={comparisonChartData} />
                 </CardBody>
               </Card>
         </div>
 
         {/* KPI Cards - narrower width, stays in place */}
-        <div style={{ width: "300px", minWidth: "300px", maxWidth: "300px", height: "100%" }}>
-          <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden" }}>
-            {/* KPI Cards Grid - Grouped by Context with Collapsible Sections */}
-            {Object.entries(kpiGroups).map(([groupKey, group]) => (
-                  <div key={groupKey} className="mb-2">
-                    {/* Section Header - Clickable to expand/collapse */}
-                    <div
-                      onClick={() => toggleGroup(groupKey)}
-                      style={{
-                        backgroundColor: colors.cardBackground,
-                        padding: "8px 12px",
-                        borderRadius: "4px",
-                        border: "none",
-                        marginBottom: expandedGroups[groupKey] ? "8px" : "0",
-                        cursor: "pointer",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        transition: "all 0.2s ease"
-                      }}
-                    >
-                      <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>
-                        {group.title}
-                      </h6>
-                      <span style={{ fontSize: "1rem", fontWeight: "bold" }}>
-                        {expandedGroups[groupKey] ? "−" : "+"}
-                      </span>
-                    </div>
+        <div style={{ width: "300px", minWidth: "300px", maxWidth: "300px", height: "calc(100% - 8px)", minHeight: 0, display: "flex", flexDirection: "column", gap: "12px", marginBottom: "8px" }}>
+            {/* Consolidated KPI Cards - Mutually Exclusive Maximized Views */}
+            {Object.entries(kpiGroups).map(([groupKey, group]) => {
+              const isMaximized = maximizedKPI === groupKey;
+              const cardHeight = isMaximized ? "67%" : "33%";
 
-                    {/* Cards in this group - Only show when expanded */}
-                    {expandedGroups[groupKey] && (
-                      <div>
-                        {group.stats.map((stat, idx) => {
-                          const detailKey = `${groupKey}:${stat.label}`;
-                          const hasDetails = Array.isArray(stat.details) && stat.details.length > 0;
-                          const isDetailOpen = hasDetails && expandedStatDetails[detailKey];
-                          const isConsumptionCards = stat.type === "consumptionCards";
-                          return (
-                            <Card small className="mb-2" key={idx}>
-                              <CardHeader
-                                className="border-bottom p-2 d-flex justify-content-between align-items-center"
-                                style={{
-                                  borderLeft: "none"
-                                }}
-                              >
-                                <h6 className="m-0" style={{ fontSize: "0.7rem", fontWeight: "600", lineHeight: "1.2" }}>
-                                  {stat.label}
-                                </h6>
-                                {hasDetails && (
-                                  <Button
-                                    size="sm"
-                                    theme="light"
-                                    style={{ fontSize: "0.65rem", padding: "2px 6px" }}
-                                    onClick={() => toggleStatDetail(detailKey)}
-                                  >
-                                    {isDetailOpen ? "Hide" : "View"}
-                                  </Button>
-                                )}
-                              </CardHeader>
-                                <CardBody className="p-2">
-                                  {isConsumptionCards ? (
-                                    stat.cards && stat.cards.length ? (
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          gap: "6px",
-                                        }}
-                                      >
-                                        {stat.cards.map((card) => (
-                                          <div
-                                            key={card.key || card.label}
-                                            style={{
-                                              flex: 1,
-                                              backgroundColor: colors.background,
-                                              borderRadius: "6px",
-                                              padding: "6px 8px",
-                                              textAlign: "center",
-                                              border: "none",
-                                            }}
-                                          >
-                                            <div style={{ fontSize: "0.65rem", fontWeight: 600, color: "#475569" }}>
-                                              {card.label}
-                                            </div>
-                                            <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1f2937" }}>
-                                              {card.value ?? "N/A"}
-                                            </div>
-                                            <div style={{ fontSize: "0.65rem", color: "#6b7280" }}>{card.unit}</div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <div
-                                        style={{
-                                          fontSize: "0.85rem",
-                                          fontWeight: 600,
-                                          color: "#6b7280",
-                                          textAlign: "center",
-                                        }}
-                                      >
-                                        N/A
-                                      </div>
-                                    )
-                                  ) : (
-                                    <>
-                                  <div
-                                    className="d-flex align-items-center"
-                                    style={{
-                                      fontSize: hasResults ? "1.1rem" : "0.85rem",
-                                      fontWeight: hasResults ? "700" : "600",
-                                      color: "#1f2937",
-                                      justifyContent: hasResults || stat.value === 'N/A' ? 'center' : 'space-between'
-                                    }}
-                                  >
-                                    <span>{stat.value}</span>
+              return (
+                <Card
+                  small
+                  key={groupKey}
+                  style={{
+                    height: cardHeight,
+                    transition: "height 0.3s ease",
+                    display: "flex",
+                    flexDirection: "column"
+                  }}
+                >
+                  <CardHeader
+                    className="border-bottom p-3"
+                    onClick={() => setMaximizedKPI(groupKey)}
+                    style={{
+                      backgroundColor: group.color,
+                      color: "white",
+                      borderLeft: "none",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center"
+                    }}
+                  >
+                    <h6 className="m-0" style={{ fontSize: "0.95rem", fontWeight: "700", letterSpacing: "0.5px" }}>
+                      {group.title}
+                    </h6>
+                    <i className="material-icons" style={{ fontSize: "1.2rem" }}>
+                      {isMaximized ? "unfold_less" : "unfold_more"}
+                    </i>
+                  </CardHeader>
+                <CardBody className="p-3" style={{ flex: 1, overflowY: "auto" }}>
+                  {group.stats.map((stat, idx) => {
+                    const hasDetails = Array.isArray(stat.details) && stat.details.length > 0;
+                    const detailKey = `${groupKey}:${stat.label}`;
+                    const isDetailOpen = hasDetails && expandedStatDetails[detailKey];
+                    const isConsumptionCards = stat.type === "consumptionCards";
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          marginBottom: idx < group.stats.length - 1 ? "1rem" : "0",
+                          paddingBottom: idx < group.stats.length - 1 ? "1rem" : "0",
+                          borderBottom: idx < group.stats.length - 1 ? `1px solid ${colors.border}` : "none"
+                        }}
+                      >
+                        {/* Output Header */}
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: "0.5rem"
+                          }}
+                        >
+                          <h6
+                            style={{
+                              margin: 0,
+                              fontSize: "0.8rem",
+                              fontWeight: "600",
+                              color: colors.text,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px"
+                            }}
+                          >
+                            {stat.label}
+                          </h6>
+                          {hasDetails && (
+                            <Button
+                              size="sm"
+                              theme="light"
+                              style={{ fontSize: "0.7rem", padding: "2px 8px" }}
+                              onClick={() => toggleStatDetail(detailKey)}
+                            >
+                              {isDetailOpen ? "Hide" : "Details"}
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Output Value */}
+                        {isConsumptionCards ? (
+                          stat.cards && stat.cards.length ? (
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+                                gap: "8px",
+                              }}
+                            >
+                              {stat.cards.map((card) => (
+                                <div
+                                  key={card.key || card.label}
+                                  style={{
+                                    backgroundColor: colors.background,
+                                    borderRadius: "6px",
+                                    padding: "8px",
+                                    textAlign: "center",
+                                    border: `1px solid ${colors.border}`,
+                                  }}
+                                >
+                                  <div style={{ fontSize: "0.7rem", fontWeight: 600, color: colors.textSecondary, marginBottom: "4px" }}>
+                                    {card.label}
                                   </div>
-                                      {hasDetails && isDetailOpen && (
-                                        <div style={{ marginTop: "6px" }}>
-                                          {stat.details.map((detail, dIdx) => {
-                                            const isNA = detail.value === 'N/A';
-                                            return (
-                                              <div
-                                                key={dIdx}
-                                                style={{
-                                                  display: 'flex',
-                                                  justifyContent: isNA ? 'center' : 'space-between',
-                                                  fontSize: '0.75rem',
-                                                  fontWeight: 500,
-                                                  color: '#4b5563',
-                                                  padding: '2px 0'
-                                                }}
-                                              >
-                                                {isNA ? (
-                                                  <span>N/A</span>
-                                                ) : (
-                                                  <>
-                                                    <span>{detail.label}</span>
-                                                    <span>{detail.value}</span>
-                                                  </>
-                                                )}
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                </CardBody>
-                            </Card>
-                          );
-                        })}
+                                  <div style={{ fontSize: "1rem", fontWeight: 700, color: colors.text }}>
+                                    {card.value ?? "N/A"}
+                                  </div>
+                                  <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "2px" }}>{card.unit}</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: colors.textSecondary, textAlign: "center" }}>
+                              N/A
+                            </div>
+                          )
+                        ) : (
+                          <>
+                            <div
+                              style={{
+                                fontSize: "1.3rem",
+                                fontWeight: "700",
+                                color: colors.text,
+                                marginBottom: hasDetails && isDetailOpen ? "0.75rem" : "0"
+                              }}
+                            >
+                              {stat.value || "N/A"}
+                            </div>
+
+                            {/* Details sub-section */}
+                            {hasDetails && isDetailOpen && (
+                              <div style={{ marginTop: "0.5rem", paddingLeft: "0.5rem", borderLeft: `3px solid ${colors.border}` }}>
+                                {stat.details.map((detail, dIdx) => {
+                                  const isNA = detail.value === 'N/A';
+                                  return (
+                                    <div
+                                      key={dIdx}
+                                      style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 500,
+                                        color: colors.textSecondary,
+                                        padding: '4px 0'
+                                      }}
+                                    >
+                                      <span>{detail.label}</span>
+                                      <span style={{ fontWeight: 600, color: colors.text }}>{detail.value}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
-                    )}
-                  </div>
-            ))}
-          </div>
+                    );
+                  })}
+                </CardBody>
+              </Card>
+              );
+            })}
         </div>
       </div>
 
@@ -1247,6 +1512,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         </ModalBody>
       </Modal>
     </Container>
+    </>
   );
 };
 
