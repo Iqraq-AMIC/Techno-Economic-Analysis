@@ -1,3 +1,4 @@
+from fastapi import FastAPI, HTTPException
 # app/main.py
 
 from fastapi import FastAPI, Request
@@ -9,6 +10,11 @@ from app.core.seeding import initialize_database
 from app.api.endpoints.projects import router as projects_router # <<< Renamed for clarity
 import logging
 import time
+import csv
+import os
+import hashlib
+from pathlib import Path
+from datetime import datetime
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

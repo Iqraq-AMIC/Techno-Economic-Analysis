@@ -41,6 +41,12 @@ html, body, #root {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
+  overflow-y: hidden; /* Prevent page-level scrollbar */
+}
+
+/* Override Shards' min-height that causes page scrollbar */
+.main-content > .main-content-container.container-fluid {
+  min-height: 0 !important; /* Remove Shards' calc(100vh - 7.5rem) */
 }
 
 /* Common offenders: ensure cards and containers don't push beyond viewport */
@@ -49,11 +55,6 @@ html, body, #root {
 .container,
 .container-fluid {
   max-width: 100%;
-}
-
-/* All text elements */
-h1, h2, h3, h4, h5, h6, p, span, div, label, a {
-  color: var(--text-primary) !important;
 }
 
 /* Card headers */

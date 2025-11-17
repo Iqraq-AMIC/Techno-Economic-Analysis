@@ -51,12 +51,19 @@ npm start
 
 The application will open at: `http://localhost:3000`
 
+On first load you will see the login page. Use a credential from `backend/pw.csv`:
+
+- Use the value in the **“Suggested Password”** column as your password.
+- For simplicity during development, you can enter the same value in both the username and password fields.
+
 ## Verify Installation
 
 1. Open `http://localhost:8000/docs` - You should see the API documentation
-2. Open `http://localhost:3000` - You should see the SAFAPAC dashboard
-3. Try selecting a process technology and feedstock in the UI
-4. Submit a calculation to verify the full stack is working
+2. Open `http://localhost:3000` - You should see the login page
+3. Log in using a credential from `backend/pw.csv` (see note above)
+4. When prompted, create a new project and Scenario 1
+5. On the TEA dashboard, select a process technology and feedstock
+6. Submit a calculation to verify the full stack is working
 
 ## Troubleshooting
 

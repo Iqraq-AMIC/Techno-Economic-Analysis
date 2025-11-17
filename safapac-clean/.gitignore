@@ -70,3 +70,7 @@ frontend/dist/
 frontend/.next/
 frontend/.cache/
 frontend/.env*
+backend-20251104-130321.tar.gz
+backend-deployment.zip
+backend.zip
+patch_4.0_alpha.md

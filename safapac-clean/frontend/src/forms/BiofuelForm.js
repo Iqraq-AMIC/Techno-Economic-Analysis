@@ -20,6 +20,7 @@ import {
   Badge,
 } from "shards-react";
 import { useTheme } from "../contexts/ThemeContext";
+import ScenarioTabs from "../components/project/ScenarioTabs";
 // Heroicons via react-icons
 // Install: npm i react-icons
 // Fallback emoji icons (remove if using react-icons). If you want Heroicons,
@@ -252,6 +253,25 @@ const BiofuelForm = ({
 
   const massFractionExceeded = totalMassFraction > 100 + 1e-6;
   const massFractionShort = totalMassFraction < 100 - 1e-6;
+  const { allHaveDensity: allProductsHaveDensity, average: productDensityAverage } = useMemo(() => {
+    const densities = (inputs.products || []).map((product) => {
+      if (product.density === "" || product.density === null || product.density === undefined) {
+        return null;
+      }
+      const val = Number(product.density);
+      return Number.isFinite(val) ? val : null;
+    });
+    const filled = densities.filter((val) => val !== null);
+    const allHaveDensity = filled.length === densities.length && filled.length > 0;
+    const average = allHaveDensity ? filled.reduce((sum, val) => sum + val, 0) / filled.length : null;
+    return { allHaveDensity, average };
+  }, [inputs.products]);
+
+  useEffect(() => {
+    if (allProductsHaveDensity && productDensityAverage !== inputs.average_liquid_density) {
+      handleInputChange("average_liquid_density")(productDensityAverage);
+    }
+  }, [allProductsHaveDensity, productDensityAverage, inputs.average_liquid_density, handleInputChange]);
 
   const handleProcessSelect = (event) => {
     const value = event.target.value;
@@ -301,7 +321,7 @@ const BiofuelForm = ({
       size={size}
       value={inputs[unitKey]}
       onChange={(e) => handleInputChange(unitKey)(e)}
-      style={{ fontSize: "0.7rem" }}
+      style={{ fontSize: "0.7rem", minWidth: 120 }}
     >
       {(options || []).map((option) => (
         <option key={option.value} value={option.value}>
@@ -317,9 +337,9 @@ const BiofuelForm = ({
       <div
         style={{
           border: `1px solid ${colors.border}`,
-          borderRadius: "6px",
-          padding: "10px",
-          marginBottom: "12px",
+          borderRadius: "4px",
+          padding: "6px",
+          marginBottom: "6px",
           backgroundColor: colors.cardBackground,
         }}
       >
@@ -334,28 +354,28 @@ const BiofuelForm = ({
             backgroundColor: "transparent",
             border: "none",
             padding: "0",
-            marginBottom: subtitle ? "4px" : "8px",
+            marginBottom: subtitle ? "2px" : "4px",
             cursor: "pointer",
           }}
         >
           <div style={{ textAlign: "left" }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               {icon && (
-                <span aria-hidden="true" style={{ color: "#0f172a", lineHeight: 0 }}>
+                <span aria-hidden="true" style={{ color: colors.text, lineHeight: 0, fontSize: "0.9rem" }}>
                   {icon}
                 </span>
               )}
-              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#0f172a" }}>{title}</span>
+              <span style={{ fontSize: "0.7rem", fontWeight: 600, color: colors.text }}>{title}</span>
             </div>
             {subtitle && (
-              <div style={{ fontSize: "0.7rem", color: "#475569" }}>{subtitle}</div>
+              <div style={{ fontSize: "0.6rem", color: colors.textSecondary }}>{subtitle}</div>
             )}
           </div>
           <span
             style={{
-              fontSize: "1rem",
+              fontSize: "0.9rem",
               fontWeight: 600,
-              color: "#0f172a",
+              color: colors.text,
               lineHeight: 1,
             }}
           >
@@ -382,13 +402,13 @@ const BiofuelForm = ({
     const hasUnit = Boolean(unitKey && unitOptions.length);
     const startValue = Number.isFinite(value) ? Number(value) : 0;
     return (
-      <FormGroup className="mb-2">
+      <FormGroup className="mb-1">
         <Row form className="align-items-center">
-          <Col xs={hasUnit ? "5" : "7"}>
+          <Col xs={hasUnit ? "4" : "7"}>
             <label
               htmlFor={id}
               className="mb-0"
-              style={{ fontSize: "0.75rem", fontWeight: 600 }}
+              style={{ fontSize: "0.65rem", fontWeight: 600 }}
             >
               {label}
             </label>
@@ -399,7 +419,7 @@ const BiofuelForm = ({
               type="text"
               size="sm"
               className="text-right"
-              style={{ fontSize: "0.75rem", backgroundColor: colors.inputBackground, padding: "4px 8px" }}
+              style={{ fontSize: "0.65rem", backgroundColor: colors.inputBackground, padding: "2px 6px" }}
               value={formatNumber(startValue, decimals)}
               onChange={(e) => {
                 const raw = e.target.value.replace(/,/g, "");
@@ -418,7 +438,7 @@ const BiofuelForm = ({
             />
           </Col>
           {hasUnit && (
-            <Col xs="3">
+            <Col xs="4">
               {renderUnitSelect(unitKey, unitOptions)}
             </Col>
           )}
@@ -451,22 +471,22 @@ const BiofuelForm = ({
         key={`product-${index}`}
         style={{
           border: "1px solid #e2e8f0",
-          borderRadius: "6px",
-          padding: "8px",
-          marginBottom: "10px",
+          borderRadius: "4px",
+          padding: "4px",
+          marginBottom: "4px",
           backgroundColor: colors.cardBackground,
         }}
       >
         <div
           className="d-flex justify-content-between align-items-center"
-          style={{ marginBottom: isCollapsed ? "0" : "8px", cursor: "pointer" }}
+          style={{ marginBottom: isCollapsed ? "0" : "4px", cursor: "pointer" }}
           onClick={() => toggleProduct(index)}
         >
           <div className="d-flex align-items-center" style={{ flex: 1 }}>
-            <strong style={{ fontSize: "0.8rem", marginRight: "8px" }}>
+            <strong style={{ fontSize: "0.7rem", marginRight: "6px" }}>
               {product.name || `Product ${index + 1}`}
             </strong>
-            <span style={{ fontSize: "0.7rem", color: colors.textSecondary }}>
+            <span style={{ fontSize: "0.6rem", color: colors.textSecondary }}>
               ({formatNumber(product.massFraction, 1)}%)
             </span>
           </div>
@@ -491,8 +511,7 @@ const BiofuelForm = ({
 
         {!isCollapsed && (
           <div style={{ marginTop: "8px" }}>
-
-        <Row form>
+            <Row form>
           <Col xs="12" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Product Name</label>
@@ -510,7 +529,7 @@ const BiofuelForm = ({
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price</label>
               <Row form className="align-items-center mb-1">
-                <Col xs="7">
+                <Col xs="6">
                   <FormInput
                     size="sm"
                     type="text"
@@ -531,14 +550,14 @@ const BiofuelForm = ({
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
-                <Col xs="5">
+                <Col xs="6">
                   <FormSelect
                     size="sm"
                     value={product.priceUnit}
                     onChange={(e) =>
                       handleProductInputChange(index, "priceUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem" }}
+                    style={{ fontSize: "0.7rem", minWidth: 120 }}
                   >
                     {PRODUCT_UNIT_OPTIONS.priceUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -601,7 +620,7 @@ const BiofuelForm = ({
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price Sensitivity</label>
               <Row form>
-                <Col xs="7">
+                <Col xs="6">
                   <FormInput
                     size="sm"
                     type="text"
@@ -621,14 +640,14 @@ const BiofuelForm = ({
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
-                <Col xs="5">
+                <Col xs="6">
                   <FormSelect
                     size="sm"
                     value={product.priceSensitivityUnit}
                     onChange={(e) =>
                       handleProductInputChange(index, "priceSensitivityUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem" }}
+                    style={{ fontSize: "0.7rem", minWidth: 120 }}
                   >
                     {PRODUCT_UNIT_OPTIONS.priceSensitivityUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -664,12 +683,36 @@ const BiofuelForm = ({
             </FormGroup>
           </Col>
 
+          <Col sm="6" className="mb-2">
+            <FormGroup className="mb-1">
+              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Product Density (kg/m3)</label>
+              <FormInput
+                size="sm"
+                type="text"
+                value={product.density ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || val === '-' || !isNaN(val)) {
+                    handleProductInputChange(index, "density")(val === '' ? '' : val);
+                  }
+                }}
+                onBlur={(e) => {
+                  const num = Number(e.target.value);
+                  if (!isNaN(num)) {
+                    handleProductInputChange(index, "density")(num);
+                  }
+                }}
+                style={{ fontSize: "0.75rem" }}
+              />
+            </FormGroup>
+          </Col>
+
           {/* Energy Content with direct input */}
           <Col sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Energy Content</label>
               <Row form>
-                <Col xs="7">
+                <Col xs="6">
                   <FormInput
                     size="sm"
                     type="text"
@@ -689,14 +732,14 @@ const BiofuelForm = ({
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
-                <Col xs="5">
+                <Col xs="6">
                   <FormSelect
                     size="sm"
                     value={product.energyUnit}
                     onChange={(e) =>
                       handleProductInputChange(index, "energyUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem" }}
+                    style={{ fontSize: "0.7rem", minWidth: 120 }}
                   >
                     {PRODUCT_UNIT_OPTIONS.energyUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -714,7 +757,7 @@ const BiofuelForm = ({
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Yield</label>
               <Row form>
-                <Col xs="7">
+                <Col xs="6">
                   <FormInput
                     size="sm"
                     type="text"
@@ -734,14 +777,14 @@ const BiofuelForm = ({
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
-                <Col xs="5">
+                <Col xs="6">
                   <FormSelect
                     size="sm"
                     value={product.yieldUnit}
                     onChange={(e) =>
                       handleProductInputChange(index, "yieldUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem" }}
+                    style={{ fontSize: "0.7rem", minWidth: 120 }}
                   >
                     {PRODUCT_UNIT_OPTIONS.yieldUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -771,30 +814,253 @@ const BiofuelForm = ({
   const calculateDisabled =
     isCalculating || massFractionExceeded || !selectedProcess || !selectedFeedstock;
 
+  const feedstockUtilitiesForm = (
+    <div style={{ display: "grid", gap: "6px" }}>
+      <div
+        style={{
+          backgroundColor: colors.cardBackground,
+          borderRadius: "4px",
+          padding: "4px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "0.65rem",
+            fontWeight: 600,
+            color: colors.text,
+            marginBottom: "2px",
+          }}
+        >
+          Feedstock
+        </div>
+        {renderSlider(
+          "feedstock_price",
+          "Feedstock Price",
+          inputs.feedstock_price,
+          { min: 0, max: 1000 },
+          5,
+          handleSliderChange("feedstock_price"),
+          2,
+          "feedstock_price_unit",
+          UNIT_OPTIONS.feedstock_price_unit,
+          "slider-feedstock"
+        )}
+
+        {renderSlider(
+          "feedstock_carbon_intensity",
+          "Feedstock Carbon Intensity",
+          inputs.feedstock_carbon_intensity,
+          { min: 0, max: 200 },
+          1,
+          handleSliderChange("feedstock_carbon_intensity"),
+          2,
+          "feedstock_ci_unit",
+          UNIT_OPTIONS.feedstock_ci_unit,
+          "slider-feedstock"
+        )}
+
+        {renderSlider(
+          "feedstock_energy_content",
+          "Feedstock Energy Content",
+          inputs.feedstock_energy_content,
+          { min: 10, max: 60 },
+          0.5,
+          handleSliderChange("feedstock_energy_content"),
+          2,
+          "feedstock_energy_unit",
+          UNIT_OPTIONS.feedstock_energy_unit,
+          "slider-feedstock"
+        )}
+
+        {renderSlider(
+          "feedstock_carbon_content",
+          "Feedstock Carbon Content (fraction)",
+          inputs.feedstock_carbon_content,
+          { min: 0, max: 1 },
+          0.01,
+          handleSliderChange("feedstock_carbon_content"),
+          3,
+          null,
+          [],
+          "slider-feedstock"
+        )}
+
+        {renderSlider(
+          "feedstock_yield",
+          "Feedstock Yield",
+          inputs.feedstock_yield,
+          { min: 0, max: 10 },
+          0.05,
+          handleSliderChange("feedstock_yield"),
+          3,
+          "feedstock_yield_unit",
+          UNIT_OPTIONS.feedstock_yield_unit,
+          "slider-feedstock"
+        )}
+      </div>
+
+      <div
+        style={{
+          backgroundColor: colors.cardBackground,
+          border: "1px solid #e2e8f0",
+          borderRadius: "4px",
+          padding: "4px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "0.65rem",
+            fontWeight: 600,
+            color: colors.text,
+            marginBottom: "2px",
+          }}
+        >
+          Hydrogen
+        </div>
+        {renderSlider(
+          "hydrogen_price",
+          "Hydrogen Price",
+          inputs.hydrogen_price,
+          { min: 0, max: 20 },
+          0.1,
+          handleSliderChange("hydrogen_price"),
+          2,
+          "hydrogen_price_unit",
+          UNIT_OPTIONS.hydrogen_price_unit,
+          "slider-feedstock"
+        )}
+        {renderSlider(
+          "hydrogen_carbon_intensity",
+          "Hydrogen Carbon Intensity",
+          inputs.hydrogen_carbon_intensity,
+          { min: 0, max: 500 },
+          1,
+          handleSliderChange("hydrogen_carbon_intensity"),
+          1,
+          "hydrogen_ci_unit",
+          UNIT_OPTIONS.hydrogen_ci_unit,
+          "slider-feedstock"
+        )}
+        {renderSlider(
+          "hydrogen_yield",
+          "Hydrogen Yield",
+          inputs.hydrogen_yield,
+          { min: 0, max: 1 },
+          0.005,
+          handleSliderChange("hydrogen_yield"),
+          3,
+          "hydrogen_yield_unit",
+          UNIT_OPTIONS.hydrogen_yield_unit,
+          "slider-feedstock"
+        )}
+      </div>
+
+      <div
+        style={{
+          backgroundColor: colors.cardBackground,
+          border: "1px solid #e2e8f0",
+          borderRadius: "4px",
+          padding: "4px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "0.65rem",
+            fontWeight: 600,
+            color: colors.text,
+            marginBottom: "2px",
+          }}
+        >
+          Electricity
+        </div>
+        {renderSlider(
+          "electricity_rate",
+          "Electricity Price",
+          inputs.electricity_rate,
+          { min: 0, max: 1 },
+          0.01,
+          handleSliderChange("electricity_rate"),
+          3,
+          "electricity_rate_unit",
+          UNIT_OPTIONS.electricity_rate_unit,
+          "slider-feedstock"
+        )}
+        {renderSlider(
+          "electricity_carbon_intensity",
+          "Electricity Carbon Intensity",
+          inputs.electricity_carbon_intensity,
+          { min: 0, max: 800 },
+          5,
+          handleSliderChange("electricity_carbon_intensity"),
+          1,
+          "electricity_ci_unit",
+          UNIT_OPTIONS.electricity_ci_unit,
+          "slider-feedstock"
+        )}
+        {renderSlider(
+          "electricity_yield",
+          "Electricity Yield",
+          inputs.electricity_yield,
+          { min: 0, max: 2 },
+          0.01,
+          handleSliderChange("electricity_yield"),
+          3,
+          "electricity_yield_unit",
+          UNIT_OPTIONS.electricity_yield_unit,
+          "slider-feedstock"
+        )}
+      </div>
+    </div>
+  );
+
+  const feedstockUtilitiesPlaceholder = (
+    <div
+      style={{
+        padding: "12px",
+        borderRadius: "6px",
+        backgroundColor: colors.cardBackground,
+        border: `1px dashed ${colors.border}`,
+        fontSize: "0.75rem",
+        color: colors.textSecondary,
+      }}
+    >
+      The selected feedstock data will be used automatically. Choose <strong>Full Customization</strong> to override these settings directly.
+    </div>
+  );
+
+  const feedstockUtilitiesSubtitle = "Describe the primary feedstock and supporting utilities.";
+
+  const feedstockUtilitiesContent = feedstockUtilitiesForm;
+
   return (
     <Card small className="d-flex flex-column" style={{ height: "100%" }}>
-      <CardHeader className="p-2" style={{ flexShrink: 0 }}>
-        <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+      <CardHeader className="p-1" style={{ flexShrink: 0 }}>
+        <h6 className="m-0" style={{ fontSize: "0.75rem", fontWeight: 600 }}>
           Scenario Inputs
         </h6>
       </CardHeader>
 
-      <CardBody className="p-2 d-flex flex-column" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <CardBody className="p-1 d-flex flex-column" style={{ flex: 1, minHeight: 0, overflow: "hidden", height: "100%", paddingBottom: "8px" }}>
+        {/* Scenario Tabs - for switching between scenarios */}
+        <div style={{ flexShrink: 0, marginBottom: "0.5rem" }}>
+          <ScenarioTabs />
+        </div>
+
         <Form
           className="d-flex flex-column"
-          style={{ height: "100%" }}
+          style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
           onSubmit={handleFormSubmit}
         >
           <div style={{ flexShrink: 0 }}>
             <Row form>
-              <Col md="4" className="mb-2">
-                <FormGroup className="mb-1">
-                  <label style={{ fontSize: "0.75rem", fontWeight: 600 }}>Process Technology</label>
+              <Col md="4" className="mb-1">
+                <FormGroup className="mb-0">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, marginBottom: "2px" }}>Process Technology</label>
                   <FormSelect
                     size="sm"
                     value={selectedProcess}
                     onChange={handleProcessSelect}
-                    style={{ fontSize: "0.75rem" }}
+                    style={{ fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
                   >
                     <option value="">-- Select Process --</option>
                     {processes.map((process) => (
@@ -805,15 +1071,15 @@ const BiofuelForm = ({
                   </FormSelect>
                 </FormGroup>
               </Col>
-              <Col md="4" className="mb-2">
+              <Col md="4" className="mb-1">
                 {selectedProcess && (
-                  <FormGroup className="mb-1">
-                    <label style={{ fontSize: "0.75rem", fontWeight: 600 }}>Feedstock</label>
+                  <FormGroup className="mb-0">
+                    <label style={{ fontSize: "0.7rem", fontWeight: 600, marginBottom: "2px" }}>Feedstock</label>
                     <FormSelect
                       size="sm"
                       value={selectedFeedstock}
                       onChange={handleFeedstockSelect}
-                      style={{ fontSize: "0.75rem" }}
+                      style={{ fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
                     >
                       <option value="">-- Select Feedstock --</option>
                       {feedstocks.map((feedstock) => (
@@ -825,15 +1091,15 @@ const BiofuelForm = ({
                   </FormGroup>
                 )}
               </Col>
-              <Col md="4" className="mb-2">
+              <Col md="4" className="mb-1">
                 {selectedProcess && (
-                  <FormGroup className="mb-1">
-                    <label style={{ fontSize: "0.75rem", fontWeight: 600 }}>Country</label>
+                  <FormGroup className="mb-0">
+                    <label style={{ fontSize: "0.7rem", fontWeight: 600, marginBottom: "2px" }}>Country</label>
                     <FormSelect
                       size="sm"
                       value={selectedCountry}
                       onChange={handleCountrySelect}
-                      style={{ fontSize: "0.75rem" }}
+                      style={{ fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
                     >
                       <option value="">-- Select Country --</option>
                       {COUNTRIES.map((country) => (
@@ -848,13 +1114,15 @@ const BiofuelForm = ({
             </Row>
           </div>
 
+          {/* Scrollable input sections container - grouped parameters */}
           <div
             style={{
               flex: 1,
+              minHeight: 0,
               overflowY: "auto",
               overflowX: "hidden",
-              marginTop: "8px",
-              paddingRight: "6px",
+              marginTop: "4px",
+              paddingRight: "4px",
             }}
           >
             {renderSection(
@@ -872,19 +1140,6 @@ const BiofuelForm = ({
                   0,
                   "plant_capacity_unit",
                   UNIT_OPTIONS.plant_capacity_unit,
-                  "slider-conversion"
-                )}
-
-                {renderSlider(
-                  "average_liquid_density",
-                  "Average Liquid Density",
-                  inputs.average_liquid_density,
-                  { min: 600, max: 1000 },
-                  1,
-                  handleSliderChange("average_liquid_density"),
-                  2,
-                  "average_liquid_density_unit",
-                  UNIT_OPTIONS.average_liquid_density_unit,
                   "slider-conversion"
                 )}
 
@@ -920,187 +1175,8 @@ const BiofuelForm = ({
             {renderSection(
               "feedstockUtilities",
               "Feedstock & Utilities Data",
-              "Describe the primary feedstock and supporting utilities.",
-              <>
-                <div style={{ display: "grid", gap: "12px" }}>
-                  <div
-                    style={{
-                      backgroundColor: colors.cardBackground,
-                      //border: "1px solid #e2e8f0",
-                      borderRadius: "6px",
-                      padding: "-1px",
-                    }}
-                  >
-                    <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#1f2937", marginBottom: "4px" }}>
-                      Feedstock
-                    </div>
-                    {renderSlider(
-                      "feedstock_price",
-                      "Feedstock Price",
-                      inputs.feedstock_price,
-                      { min: 0, max: 1000 },
-                      5,
-                      handleSliderChange("feedstock_price"),
-                      2,
-                      "feedstock_price_unit",
-                      UNIT_OPTIONS.feedstock_price_unit,
-                      "slider-feedstock"
-                    )}
-
-                    {renderSlider(
-                      "feedstock_carbon_intensity",
-                      "Feedstock Carbon Intensity",
-                      inputs.feedstock_carbon_intensity,
-                      { min: 0, max: 200 },
-                      1,
-                      handleSliderChange("feedstock_carbon_intensity"),
-                      2,
-                      "feedstock_ci_unit",
-                      UNIT_OPTIONS.feedstock_ci_unit,
-                      "slider-feedstock"
-                    )}
-
-                    {renderSlider(
-                      "feedstock_energy_content",
-                      "Feedstock Energy Content",
-                      inputs.feedstock_energy_content,
-                      { min: 10, max: 60 },
-                      0.5,
-                      handleSliderChange("feedstock_energy_content"),
-                      2,
-                      "feedstock_energy_unit",
-                      UNIT_OPTIONS.feedstock_energy_unit,
-                      "slider-feedstock"
-                    )}
-
-                    {renderSlider(
-                      "feedstock_carbon_content",
-                      "Feedstock Carbon Content (fraction)",
-                      inputs.feedstock_carbon_content,
-                      { min: 0, max: 1 },
-                      0.01,
-                      handleSliderChange("feedstock_carbon_content"),
-                      3,
-                      null,
-                      [],
-                      "slider-feedstock"
-                    )}
-
-                    {renderSlider(
-                      "feedstock_yield",
-                      "Feedstock Yield",
-                      inputs.feedstock_yield,
-                      { min: 0, max: 10 },
-                      0.05,
-                      handleSliderChange("feedstock_yield"),
-                      3,
-                      "feedstock_yield_unit",
-                      UNIT_OPTIONS.feedstock_yield_unit,
-                      "slider-feedstock"
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      backgroundColor: colors.cardBackground,
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "6px",
-                      padding: "8px",
-                    }}
-                  >
-                    <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#1f2937", marginBottom: "4px" }}>
-                      Hydrogen
-                    </div>
-                    {renderSlider(
-                      "hydrogen_price",
-                      "Hydrogen Price",
-                      inputs.hydrogen_price,
-                      { min: 0, max: 20 },
-                      0.1,
-                      handleSliderChange("hydrogen_price"),
-                      2,
-                      "hydrogen_price_unit",
-                      UNIT_OPTIONS.hydrogen_price_unit,
-                      "slider-feedstock"
-                    )}
-                    {renderSlider(
-                      "hydrogen_carbon_intensity",
-                      "Hydrogen Carbon Intensity",
-                      inputs.hydrogen_carbon_intensity,
-                      { min: 0, max: 500 },
-                      1,
-                      handleSliderChange("hydrogen_carbon_intensity"),
-                      1,
-                      "hydrogen_ci_unit",
-                      UNIT_OPTIONS.hydrogen_ci_unit,
-                      "slider-feedstock"
-                    )}
-                    {renderSlider(
-                      "hydrogen_yield",
-                      "Hydrogen Yield",
-                      inputs.hydrogen_yield,
-                      { min: 0, max: 1 },
-                      0.005,
-                      handleSliderChange("hydrogen_yield"),
-                      3,
-                      "hydrogen_yield_unit",
-                      UNIT_OPTIONS.hydrogen_yield_unit,
-                      "slider-feedstock"
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      backgroundColor: colors.cardBackground,
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "6px",
-                      padding: "8px",
-                    }}
-                  >
-                    <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#1f2937", marginBottom: "4px" }}>
-                      Electricity
-                    </div>
-                    {renderSlider(
-                      "electricity_rate",
-                      "Electricity Price",
-                      inputs.electricity_rate,
-                      { min: 0, max: 1 },
-                      0.01,
-                      handleSliderChange("electricity_rate"),
-                      3,
-                      "electricity_rate_unit",
-                      UNIT_OPTIONS.electricity_rate_unit,
-                      "slider-feedstock"
-                    )}
-                    {renderSlider(
-                      "electricity_carbon_intensity",
-                      "Electricity Carbon Intensity",
-                      inputs.electricity_carbon_intensity,
-                      { min: 0, max: 800 },
-                      5,
-                      handleSliderChange("electricity_carbon_intensity"),
-                      1,
-                      "electricity_ci_unit",
-                      UNIT_OPTIONS.electricity_ci_unit,
-                      "slider-feedstock"
-                    )}
-                    {renderSlider(
-                      "electricity_yield",
-                      "Electricity Yield",
-                      inputs.electricity_yield,
-                      { min: 0, max: 2 },
-                      0.01,
-                      handleSliderChange("electricity_yield"),
-                      3,
-                      "electricity_yield_unit",
-                      UNIT_OPTIONS.electricity_yield_unit,
-                      "slider-feedstock"
-                    )}
-                  </div>
-                </div>
-              </>,
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-
-              </span>
+              feedstockUtilitiesSubtitle,
+              feedstockUtilitiesContent
             )}
 
             {renderSection(
@@ -1121,18 +1197,24 @@ const BiofuelForm = ({
                     Add Product
                   </Button>
                 </div>
-                <div className="mb-2">
-                  <Badge theme={massFractionExceeded ? "danger" : massFractionShort ? "warning" : "success"}>
+                <div className="mb-1">
+                  <Badge theme={massFractionExceeded ? "danger" : massFractionShort ? "warning" : "success"} style={{ fontSize: "0.65rem", padding: "0.2rem 0.4rem" }}>
                     Total mass fraction: {formatNumber(totalMassFraction, 1)}%
                   </Badge>
                 </div>
+                <div style={{ fontSize: "0.6rem", color: colors.textSecondary, marginBottom: "4px" }}>
+                  Product average density (auto):{" "}
+                  {allProductsHaveDensity
+                    ? `${formatNumber(productDensityAverage, 1)} kg/m3`
+                    : "Enter density for each product to calculate"}
+                </div>
                 {massFractionExceeded && (
-                  <div style={{ color: "#b91c1c", fontSize: "0.7rem", marginBottom: "6px" }}>
+                  <div style={{ color: "#b91c1c", fontSize: "0.6rem", marginBottom: "4px" }}>
                     Total product mass fractions exceed 100%. Adjust the sliders before calculating.
                   </div>
                 )}
                 {massFractionShort && !massFractionExceeded && (
-                  <div style={{ color: "#92400e", fontSize: "0.7rem", marginBottom: "6px" }}>
+                  <div style={{ color: "#92400e", fontSize: "0.6rem", marginBottom: "4px" }}>
                     Total mass fraction is below 100%. Remaining fraction will be treated as unassigned.
                   </div>
                 )}
@@ -1249,9 +1331,10 @@ const BiofuelForm = ({
             )}
           </div>
 
-          <div style={{ flexShrink: 0, paddingTop: "8px" }}>
+          {/* Fixed buttons footer - always visible */}
+          <div style={{ flexShrink: 0, paddingTop: "4px", borderTop: `1px solid ${colors.border}`, backgroundColor: colors.cardBackground }}>
             <Row style={{ margin: 0 }}>
-              <Col style={{ padding: "0 4px 0 0" }}>
+              <Col style={{ padding: "0 2px 0 0" }}>
                 <Button
                   block
                   disabled={calculateDisabled}
@@ -1259,14 +1342,14 @@ const BiofuelForm = ({
                   style={{
                     backgroundColor: colors.oxfordBlue,
                     borderColor: colors.oxfordBlue,
-                    fontSize: "0.75rem",
-                    padding: "0.5rem"
+                    fontSize: "0.7rem",
+                    padding: "0.35rem"
                   }}
                 >
                   {isCalculating ? "Calculating..." : "Calculate"}
                 </Button>
               </Col>
-              <Col style={{ padding: "0 2px" }}>
+              <Col style={{ padding: "0 1px" }}>
                 <Button
                   block
                   type="button"
@@ -1274,14 +1357,14 @@ const BiofuelForm = ({
                   style={{
                     backgroundColor: "#6c757d",
                     borderColor: "#6c757d",
-                    fontSize: "0.75rem",
-                    padding: "0.5rem"
+                    fontSize: "0.7rem",
+                    padding: "0.35rem"
                   }}
                 >
                   Reset
                 </Button>
               </Col>
-              <Col style={{ padding: "0 0 0 4px" }}>
+              <Col style={{ padding: "0 0 0 2px" }}>
                 <Button
                   block
                   type="button"
@@ -1289,8 +1372,8 @@ const BiofuelForm = ({
                   style={{
                     backgroundColor: "#28a745",
                     borderColor: "#28a745",
-                    fontSize: "0.75rem",
-                    padding: "0.5rem"
+                    fontSize: "0.7rem",
+                    padding: "0.35rem"
                   }}
                 >
                   Save

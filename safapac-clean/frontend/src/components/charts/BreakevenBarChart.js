@@ -8,50 +8,26 @@ const formatNumber = (num) => {
   return Number(num).toFixed(2);
 };
 
-const BreakevenBarChart = ({ data }) => {
+// Color palette for different scenarios
+const SCENARIO_COLORS = [
+  { line: "#006D7C", fill: "rgba(0, 109, 124, 0.2)" },  // Teal
+  { line: "#F59E0B", fill: "rgba(245, 158, 11, 0.2)" }, // Amber
+  { line: "#8B5CF6", fill: "rgba(139, 92, 246, 0.2)" }, // Purple
+];
+
+const BreakevenBarChart = ({ data, comparisonData = [] }) => {
   const canvasRef = useRef(null);
   const { theme, colors } = useTheme();
 
+  // Check if we're in comparison mode
+  const isComparisonMode = comparisonData && comparisonData.length > 0;
+
   useEffect(() => {
+    console.log("📊 Chart received data:", data?.length, "rows");
+    console.log("📊 Chart received comparisonData:", comparisonData);
+    console.log("📊 isComparisonMode:", isComparisonMode);
+
     if (!data || !data.length) return;
-
-    const { labels, pv, breakevenIndex } = preprocessData(data);
-
-    // Create high-density data by interpolating between points
-    const createHighDensityData = (originalLabels, originalPV) => {
-      const densityFactor = 10; // Add 10 interpolated points between each original point
-      const newLabels = [];
-      const newPV = [];
-
-      for (let i = 0; i < originalPV.length - 1; i++) {
-        newLabels.push(originalLabels[i]);
-        newPV.push(originalPV[i]);
-
-        // Add interpolated points between current and next point
-        for (let j = 1; j < densityFactor; j++) {
-          const ratio = j / densityFactor;
-          const interpolatedLabel = originalLabels[i] + (originalLabels[i + 1] - originalLabels[i]) * ratio;
-          const interpolatedPV = originalPV[i] + (originalPV[i + 1] - originalPV[i]) * ratio;
-
-          // Keep precise decimal values for smooth interpolation
-          newLabels.push(interpolatedLabel);
-          newPV.push(interpolatedPV);
-        }
-      }
-
-      // Add the last point
-      newLabels.push(originalLabels[originalLabels.length - 1]);
-      newPV.push(originalPV[originalPV.length - 1]);
-
-      return { labels: newLabels, pv: newPV };
-    };
-
-    const highDensity = createHighDensityData(labels, pv);
-    const densePV = highDensity.pv;
-    const denseLabels = highDensity.labels;
-
-    console.log("Original data points:", pv.length);
-    console.log("High-density data points:", densePV.length);
 
     const ctx = canvasRef.current.getContext("2d");
 
@@ -59,85 +35,156 @@ const BreakevenBarChart = ({ data }) => {
       canvasRef.current.chartInstance.destroy();
     }
 
-    const allData = densePV.map((v) => Number(formatNumber(v)));
+    // Create high-density data by interpolating between points
+    const createHighDensityData = (originalLabels, originalPV) => {
+      const densityFactor = 10;
+      const newLabels = [];
+      const newPV = [];
 
-    // Now with high-density data, the transitions will be much smoother
-    const negativeData = densePV.map((v) => v < 0 ? Number(formatNumber(v)) : null);
-    const positiveData = densePV.map((v) => v >= 0 ? Number(formatNumber(v)) : null);
+      for (let i = 0; i < originalPV.length - 1; i++) {
+        newLabels.push(originalLabels[i]);
+        newPV.push(originalPV[i]);
+
+        for (let j = 1; j < densityFactor; j++) {
+          const ratio = j / densityFactor;
+          const interpolatedLabel = originalLabels[i] + (originalLabels[i + 1] - originalLabels[i]) * ratio;
+          const interpolatedPV = originalPV[i] + (originalPV[i + 1] - originalPV[i]) * ratio;
+          newLabels.push(interpolatedLabel);
+          newPV.push(interpolatedPV);
+        }
+      }
+
+      newLabels.push(originalLabels[originalLabels.length - 1]);
+      newPV.push(originalPV[originalPV.length - 1]);
+
+      return { labels: newLabels, pv: newPV };
+    };
+
+    let datasets = [];
+    let allLabels = [];
+    let allPVValues = []; // Track all PV values for scaling
+
+    if (isComparisonMode) {
+      // Comparison mode - show multiple scenario lines
+      comparisonData.forEach((scenarioData, index) => {
+        const { labels, pv } = preprocessData(scenarioData.data);
+        const highDensity = createHighDensityData(labels, pv);
+        const color = SCENARIO_COLORS[index % SCENARIO_COLORS.length];
+
+        if (index === 0) {
+          allLabels = highDensity.labels;
+        }
+
+        // Collect all PV values for Y-axis scaling
+        allPVValues = allPVValues.concat(highDensity.pv);
+
+        datasets.push({
+          label: scenarioData.name,
+          data: highDensity.pv.map((v) => Number(formatNumber(v))),
+          fill: false,
+          backgroundColor: color.fill,
+          borderColor: color.line,
+          borderWidth: 3,
+          pointRadius: highDensity.labels.map((label, i) => {
+            return Number.isInteger(Number(label)) && i % 10 === 0 ? 4 : 0;
+          }),
+          pointBackgroundColor: color.line,
+          pointBorderColor: color.line,
+          pointBorderWidth: 2,
+          tension: 0.1,
+        });
+      });
+    } else {
+      // Single scenario mode - original visualization
+      const { labels, pv } = preprocessData(data);
+      const highDensity = createHighDensityData(labels, pv);
+      const densePV = highDensity.pv;
+      const denseLabels = highDensity.labels;
+      allLabels = denseLabels;
+      allPVValues = densePV;
+
+      const allData = densePV.map((v) => Number(formatNumber(v)));
+      const negativeData = densePV.map((v) => v < 0 ? Number(formatNumber(v)) : null);
+      const positiveData = densePV.map((v) => v >= 0 ? Number(formatNumber(v)) : null);
+
+      datasets = [
+        {
+          label: "Losses",
+          data: negativeData,
+          fill: 'origin',
+          backgroundColor: "rgba(239, 68, 68, 0.5)",
+          borderColor: "transparent",
+          borderWidth: 0,
+          pointRadius: 0,
+          spanGaps: false,
+          order: 3,
+        },
+        {
+          label: "Profits",
+          data: positiveData,
+          fill: 'origin',
+          backgroundColor: "rgba(34, 197, 94, 0.5)",
+          borderColor: "transparent",
+          borderWidth: 0,
+          pointRadius: 0,
+          spanGaps: false,
+          order: 2,
+        },
+        {
+          label: "Present Value",
+          data: allData,
+          fill: false,
+          backgroundColor: "transparent",
+          borderColor: theme === 'dark' ? "rgba(156, 163, 175, 1)" : "rgba(107, 114, 128, 1)",
+          borderWidth: 2,
+          pointBackgroundColor: denseLabels.map((_, i) =>
+            densePV[i] < 0 ? "rgba(239, 68, 68, 1)" : "rgba(34, 197, 94, 1)"
+          ),
+          pointBorderColor: denseLabels.map((_, i) =>
+            densePV[i] < 0 ? "rgba(220, 38, 38, 1)" : "rgba(22, 163, 74, 1)"
+          ),
+          pointBorderWidth: 2,
+          pointRadius: denseLabels.map((label, i) => {
+            return Number.isInteger(Number(label)) && i % 10 === 0 ? 5 : 0;
+          }),
+          order: 1,
+        }
+      ];
+    }
 
     canvasRef.current.chartInstance = new Chart(ctx, {
       type: "line",
-      plugins: [], // No plugins needed - smooth transitions from high-density data
+      plugins: [],
       data: {
-        labels: denseLabels,
-        datasets: [
-          // Red fill for negative portions of the curve (more vibrant)
-          {
-            label: "Losses",
-            data: negativeData,
-            fill: 'origin',
-            backgroundColor: "rgba(239, 68, 68, 0.5)",  // Brighter red with more opacity
-            borderColor: "transparent",
-            borderWidth: 0,
-            pointRadius: 0,
-            spanGaps: false,
-            order: 3,
-          },
-          // Green fill for positive portions of the curve (more vibrant)
-          {
-            label: "Profits",
-            data: positiveData,
-            fill: 'origin',
-            backgroundColor: "rgba(34, 197, 94, 0.5)",  // Brighter green with more opacity
-            borderColor: "transparent",
-            borderWidth: 0,
-            pointRadius: 0,
-            spanGaps: false,
-            order: 2,
-          },
-          // Main continuous line with colored dots (grey line)
-          {
-            label: "Present Value",
-            data: allData,
-            fill: false,
-            backgroundColor: "transparent",
-            borderColor: theme === 'dark' ? "rgba(156, 163, 175, 1)" : "rgba(107, 114, 128, 1)",  // Grey line
-            borderWidth: 2,  // Slightly thinner line
-            pointBackgroundColor: denseLabels.map((_, i) =>
-              densePV[i] < 0 ? "rgba(239, 68, 68, 1)" : "rgba(34, 197, 94, 1)"  // Brighter colors
-            ),
-            pointBorderColor: denseLabels.map((_, i) =>
-              densePV[i] < 0 ? "rgba(220, 38, 38, 1)" : "rgba(22, 163, 74, 1)"  // Darker borders for contrast
-            ),
-            pointBorderWidth: 2,
-            pointRadius: denseLabels.map((label, i) => {
-              // Only show dots at integer years
-              return Number.isInteger(Number(label)) && i % 10 === 0 ? 5 : 0;  // Larger points
-            }),
-            order: 1,
-          }
-        ],
+        labels: allLabels,
+        datasets: datasets,
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         legend: {
-          display: false,
+          display: isComparisonMode,
+          position: 'top',
           labels: {
-            fontColor: colors.text
+            fontColor: colors.text,
+            usePointStyle: true,
+            padding: 15,
           }
         },
         plugins: {
           tooltip: {
             callbacks: {
               label: (context) =>
-                `Cumulative PV: ${formatNumber(context.raw)}`, // ✅ tooltip 2 decimals
+                `${context.dataset.label}: ${formatNumber(context.raw)}`,
             },
           },
           legend: {
-            display: false,
+            display: isComparisonMode,
+            position: 'top',
             labels: {
-              fontColor: colors.text
+              fontColor: colors.text,
+              usePointStyle: true,
+              padding: 15,
             }
           },
           title: {
@@ -159,8 +206,8 @@ const BreakevenBarChart = ({ data }) => {
                 return Number.isInteger(Number(value)) ? value : '';
               },
               stepSize: 1, // Force 1-year intervals
-              max: Math.max(...denseLabels), // Set max to the highest year
-              min: Math.min(...denseLabels), // Set min to the lowest year
+              max: Math.max(...allLabels), // Set max to the highest year
+              min: Math.min(...allLabels), // Set min to the lowest year
               maxRotation: 0, // Keep labels horizontal
               minRotation: 0
             },
@@ -179,11 +226,29 @@ const BreakevenBarChart = ({ data }) => {
             ticks: {
               fontColor: colors.text,
               beginAtZero: false,
+              // Set min/max based on all data values for proper scaling with padding
+              min: (() => {
+                const minVal = Math.min(...allPVValues);
+                return minVal < 0 ? minVal * 1.1 : minVal * 0.9;
+              })(),
+              max: (() => {
+                const maxVal = Math.max(...allPVValues);
+                return maxVal > 0 ? maxVal * 1.1 : maxVal * 0.9;
+              })(),
               callback: (val) => {
                 if (val === null || val === undefined || isNaN(val)) return "-";
+                const absVal = Math.abs(val);
+
+                // Format in millions with M notation for values >= 1,000,000
+                if (absVal >= 1000000) {
+                  const millions = val / 1000000;
+                  return (val < 0 ? "-" : "") + millions.toFixed(1) + "M";
+                }
+
+                // For smaller values, use regular formatting
                 return Number(val).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0
                 });
               },
             },
@@ -203,7 +268,7 @@ const BreakevenBarChart = ({ data }) => {
         canvasRef.current.chartInstance.destroy();
       }
     };
-  }, [data, theme, colors]);
+  }, [data, comparisonData, isComparisonMode, theme, colors]);
 
   return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
 };

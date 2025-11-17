@@ -18,6 +18,12 @@ htmlcov/
 *.db
 *.sqlite
 
+# Local JSON data used as dev "database"
+data/users.json
+data/projects.json
+data/scenarios.json
+data/scenarios.json.backup
+
 # Environment
 .env
 .env.local
