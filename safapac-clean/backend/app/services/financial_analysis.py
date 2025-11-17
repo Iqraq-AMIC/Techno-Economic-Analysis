@@ -1,32 +1,14 @@
+# app/services/financial_analysis.py
+
 import numpy as np
 import pandas as pd
 import numpy_financial as nf
 
 
 class FinancialAnalysis:
-    def __init__(self, discount_rate: float, tax_rate: float = 0.28,
-                 equity: float = 0.4, bank_interest: float = 0.04, loan_term: int = 10):
-        """
-        Financial Analysis with Tax, Loan, Depreciation, and Construction Timeline.
-
-        Parameters
-        ----------
-        discount_rate : float
-            Discount rate for NPV calculations.
-        tax_rate : float
-            Income tax rate (default 28%).
-        equity : float
-            Fraction of TCI financed by equity (default 40%).
-        bank_interest : float
-            Annual loan interest rate (default 4%).
-        loan_term : int
-            Loan term in years (default 10).
-        """
+    def __init__(self, discount_rate: float):   
         self.discount_rate = discount_rate
-        self.tax_rate = tax_rate
-        self.equity = equity
-        self.bank_interest = bank_interest
-        self.loan_term = loan_term
+        
 
     # ------------------------------------------------------------
     # Core helper functions
@@ -115,6 +97,13 @@ class FinancialAnalysis:
             Cash flow table with all financial metrics
         """
 
+        print(f"🔍 FINANCIAL DEBUG - Input Summary:")
+        print(f"   TCI: ${tci:,.0f}")
+        print(f"   Annual Revenue: ${revenue:,.0f}")
+        print(f"   Annual Manufacturing Cost: ${manufacturing_cost:,.0f}")
+        print(f"   Annual Net Cash Flow: ${revenue - manufacturing_cost:,.0f}")
+        print(f"   Payback (simple): {tci/(revenue - manufacturing_cost):.1f} years")
+
         capex_sched = self.capex_schedule(tci)
         depreciation_annual = self.depreciation(tci)
         loan_payment = self.annual_loan_payment(tci)
@@ -186,24 +175,55 @@ class FinancialAnalysis:
     # NPV, IRR, Payback
     # ------------------------------------------------------------
     def npv(self, tci: float, revenue: float, manufacturing_cost: float, plant_lifetime: int) -> float:
-        """Net Present Value = Final Cumulative DCF"""
-        df = self.cash_flow_table(tci, revenue, manufacturing_cost, plant_lifetime)
-        return df["Cumulative DCF (USD)"].iloc[-1]
+        """
+        Simple NPV: Single investment at year 0, then annual cash flows
+        """
+        print(f"🔍 SIMPLE NPV CALCULATION:")
+        print(f"   Initial Investment: ${tci:,.0f}")
+        print(f"   Annual Cash Flow: ${revenue - manufacturing_cost:,.0f}")
+        print(f"   Plant Lifetime: {plant_lifetime} years")
+        print(f"   Discount Rate: {self.discount_rate:.1%}")
+        
+        # Year 0: Initial investment (negative)
+        cash_flows = [-tci]
+        
+        # Years 1 to plant_lifetime: Annual profit
+        annual_cash_flow = revenue - manufacturing_cost
+        cash_flows.extend([annual_cash_flow] * plant_lifetime)
+        
+        npv_result = nf.npv(self.discount_rate, cash_flows)
+        print(f"   NPV Result: ${npv_result:,.0f}")
+        return npv_result
 
     def irr(self, tci: float, revenue: float, manufacturing_cost: float, plant_lifetime: int) -> float:
-        """Internal Rate of Return: solve for IRR where NPV = 0"""
-        df = self.cash_flow_table(tci, revenue, manufacturing_cost, plant_lifetime)
-        cash_flows = df["After-Tax Cash Flow (USD)"].to_list()
+        """
+        Simple IRR: Single investment at year 0, then annual cash flows
+        """
+        print(f"🔍 SIMPLE IRR CALCULATION:")
+        print(f"   Initial Investment: ${tci:,.0f}")
+        print(f"   Annual Cash Flow: ${revenue - manufacturing_cost:,.0f}")
+        
+        cash_flows = [-tci]
+        annual_cash_flow = revenue - manufacturing_cost
+        cash_flows.extend([annual_cash_flow] * plant_lifetime)
+        
         try:
-            return nf.irr(cash_flows)
+            irr_result = nf.irr(cash_flows)
+            print(f"   IRR Result: {irr_result:.1%}")
+            return irr_result
         except:
-            return None  # IRR may not converge
+            print("   IRR calculation failed")
+            return 0.0
 
-    def payback_period(self, tci: float, revenue: float, manufacturing_cost: float, plant_lifetime: int) -> int:
-        """Payback Period: Year when Cumulative DCF first becomes positive"""
-        df = self.cash_flow_table(tci, revenue, manufacturing_cost, plant_lifetime)
-        positive_years = df.loc[df["Cumulative DCF (USD)"] > 0, "Year"]
-        return int(positive_years.min()) if not positive_years.empty else None
+    def payback_period(self, tci: float, revenue: float, manufacturing_cost: float, plant_lifetime: int) -> float:
+        """
+        Simple payback: Initial investment / annual cash flow
+        """
+        annual_cash_flow = revenue - manufacturing_cost
+        payback = tci / annual_cash_flow
+        print(f"🔍 SIMPLE PAYBACK:")
+        print(f"   Payback: {payback:.2f} years")
+        return payback
 
 
 if __name__ == "__main__":
