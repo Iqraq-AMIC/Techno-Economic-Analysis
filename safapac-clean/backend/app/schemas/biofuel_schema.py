@@ -1,12 +1,13 @@
 # app/schemas/biofuel_schema.py
 
 from typing import Any, Dict, List, Optional, Union
-# root_validator removed
 from pydantic import BaseModel, Field
-from dataclasses import dataclass # Re-import dataclass for the core UserInputs model
+from dataclasses import dataclass
 from uuid import UUID
+from datetime import datetime
 
-# Assuming the Quantity dataclass is defined and used for unit validation
+# ==================== CORE CALCULATION DATA CLASSES ====================
+
 @dataclass(frozen=True)
 class Quantity:
     value: float
@@ -14,13 +15,12 @@ class Quantity:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Quantity":
-        # Simplified for brevity, assumes robust validation happens elsewhere
-        return cls(value=data["value"], unit_id=data["unit_id"])    
-    
+        return cls(value=data["value"], unit_id=data["unit_id"])
+
 @dataclass(frozen=True)
 class ProductData:
     name: str
-    price: Quantity # Should be the Quantity dataclass
+    price: Quantity
     price_sensitivity_to_ci: float
     carbon_content: float
     energy_content: float
@@ -31,16 +31,13 @@ class ProductData:
     def from_schema(cls, **data) -> "ProductData":
         return cls(
             name=data["name"],
-            price=Quantity.from_dict(data["price"]), # Convert dict to Quantity
+            price=Quantity.from_dict(data["price"]),
             price_sensitivity_to_ci=data["price_sensitivity_to_ci"],
             carbon_content=data["carbon_content"],
             energy_content=data["energy_content"],
             yield_percent=data["yield_percent"],
             product_density=data["product_density"],
         )
-    
-
-# Define the other nested dataclasses (FeedstockData and UtilityData)
 
 @dataclass(frozen=True)
 class FeedstockData:
@@ -55,9 +52,9 @@ class FeedstockData:
     def from_schema(cls, **data) -> "FeedstockData":
         return cls(
             name=data["name"],
-            price=Quantity.from_dict(data["price"]), # Convert dict to Quantity
+            price=Quantity.from_dict(data["price"]),
             carbon_content=data["carbon_content"],
-            carbon_intensity=Quantity.from_dict(data["carbon_intensity"]), # Convert dict to Quantity
+            carbon_intensity=Quantity.from_dict(data["carbon_intensity"]),
             energy_content=data["energy_content"],
             yield_percent=data["yield_percent"],
         )
@@ -75,15 +72,15 @@ class UtilityData:
     def from_schema(cls, **data) -> "UtilityData":
         return cls(
             name=data["name"],
-            price=Quantity.from_dict(data["price"]), # Convert dict to Quantity
+            price=Quantity.from_dict(data["price"]),
             carbon_content=data["carbon_content"],
-            carbon_intensity=Quantity.from_dict(data["carbon_intensity"]), # Convert dict to Quantity
+            carbon_intensity=Quantity.from_dict(data["carbon_intensity"]),
             energy_content=data["energy_content"],
             yield_percent=data.get("yield_percent", 0.0)
         )
 
 @dataclass(frozen=True)
-class EconomicParameters: 
+class EconomicParameters:
     project_lifetime_years: int
     discount_rate_percent: float
     tci_ref_musd: Optional[float]
@@ -98,7 +95,6 @@ class ConversionPlant:
     annual_load_hours: float
     ci_process_default: float
 
-# The main dataclass that will be imported by app/main.py and app/services/economics.py
 @dataclass(frozen=True)
 class UserInputs:
     # Core Selections
@@ -109,7 +105,6 @@ class UserInputs:
     # Input Data Groups
     conversion_plant: ConversionPlant
     economic_parameters: EconomicParameters
-    
     feedstock_data: List[FeedstockData]
     utility_data: List[UtilityData] 
     product_data: List[ProductData]
@@ -118,30 +113,19 @@ class UserInputs:
         """Convert structured inputs to flat dictionary for calculation layers."""
         flat = {}
 
-         # DEBUG: Check unit conversions
-        print("DEBUG: Original plant capacity:", self.conversion_plant.plant_capacity.value, "unit_id:", self.conversion_plant.plant_capacity.unit_id)
-        
-        # Conversion Plant - Apply unit conversion if needed
-        plant_capacity_value = self.conversion_plant.plant_capacity.value
-        
-        # DEBUG: Check unit conversions
-        print("DEBUG: Plant capacity:", self.conversion_plant.plant_capacity.value, "unit_id:", self.conversion_plant.plant_capacity.unit_id)
-        
-        flat["plant_total_liquid_fuel_capacity"] = plant_capacity_value
-        
         # Conversion Plant
         flat["plant_total_liquid_fuel_capacity"] = self.conversion_plant.plant_capacity.value
         flat["annual_load_hours"] = self.conversion_plant.annual_load_hours
         flat["ci_process_default"] = self.conversion_plant.ci_process_default
         
         # Economic Parameters
-        flat["discount_rate"] = self.economic_parameters.discount_rate_percent / 100.0  # Convert % to decimal
+        flat["discount_rate"] = self.economic_parameters.discount_rate_percent / 100.0
         flat["project_lifetime_years"] = self.economic_parameters.project_lifetime_years
         flat["tci_scaling_exponent"] = self.economic_parameters.tci_scaling_exponent
         flat["working_capital_tci_ratio"] = self.economic_parameters.working_capital_tci_ratio
         flat["indirect_opex_tci_ratio"] = self.economic_parameters.indirect_opex_tci_ratio
         
-        # Products - FIXED: Include products in the flat dict
+        # Products
         flat["products"] = []
         for product in self.product_data:
             flat["products"].append({
@@ -154,7 +138,7 @@ class UserInputs:
                 "product_price_sensitivity_ci": product.price_sensitivity_to_ci,
             })
         
-        # Feedstock Data (take first feedstock)
+        # Feedstock Data
         if self.feedstock_data:
             feedstock = self.feedstock_data[0]
             flat["feedstock_price"] = feedstock.price.value
@@ -163,34 +147,26 @@ class UserInputs:
             flat["feedstock_energy_content"] = feedstock.energy_content
             flat["feedstock_yield"] = feedstock.yield_percent / 100.0
         
-        # Utilities (Hydrogen and Electricity)
+        # Utilities
         for utility in self.utility_data:
             if utility.name.lower() == "hydrogen":
                 flat["hydrogen_price"] = utility.price.value
-                flat["hydrogen_yield"] = utility.yield_percent / 100.0  # FIX: Convert % to decimal
+                flat["hydrogen_yield"] = utility.yield_percent / 100.0
             elif utility.name.lower() == "electricity":
-                # FIX: Convert electricity rate from $/MWh to $/kWh
-                flat["electricity_rate"] = utility.price.value / 1000.0  # $55/MWh → $0.055/kWh
+                flat["electricity_rate"] = utility.price.value / 1000.0
                 flat["electricity_yield"] = utility.yield_percent / 100.0
-                print(f"DEBUG Electricity Rate: ${utility.price.value}/MWh → ${flat['electricity_rate']}/kWh")
-            
-            # Products (take first product for now)
-            if self.product_data:
-                product = self.product_data[0]
-                flat["product_price"] = product.price.value
-                flat["product_energy_content"] = product.energy_content
-                flat["product_carbon_content"] = product.carbon_content
-                flat["product_yield"] = product.yield_percent / 100.0  # Convert % to decimal
         
         return flat
-        
-# --- Master Data Schemas (for GET /master_data) ---
+
+# ==================== MASTER DATA SCHEMAS ====================
 
 class ProcessTechnologySchema(BaseModel):
     id: int
     name: str
+    class Config:
+        orm_mode = True
 
-class CountrySchema(BaseModel): # NEW
+class CountrySchema(BaseModel):
     id: int
     name: str
     class Config:
@@ -202,7 +178,6 @@ class ProductSchema(BaseModel):
     class Config:
         orm_mode = True
 
-# MODIFIED: Feedstock Schema
 class FeedstockSchema(BaseModel):
     id: int
     name: str
@@ -214,7 +189,6 @@ class FeedstockSchema(BaseModel):
     class Config:
         orm_mode = True
 
-# NEW: Utility Schema
 class UtilitySchema(BaseModel):
     id: int
     name: str
@@ -223,41 +197,59 @@ class UtilitySchema(BaseModel):
     ci_ref_gco2e_per_mj: float
     class Config:
         orm_mode = True
-        
+
+class UnitGroupSchema(BaseModel):
+    id: int
+    name: str
+    base_unit_name: str
+    class Config:
+        orm_mode = True
+
+class UnitConversionSchema(BaseModel):
+    unit_id: int
+    conversion_factor: float
+    class Config:
+        orm_mode = True
+
+class UnitOfMeasureSchema(BaseModel):
+    id: int
+    unit_group_id: int
+    name: str
+    display_name: Optional[str] = None
+    group: UnitGroupSchema
+    conversion: UnitConversionSchema
+    class Config:
+        orm_mode = True
+
 class MasterDataResponse(BaseModel):
     processes: List[ProcessTechnologySchema]
-    feedstocks: List[FeedstockSchema] 
-    utilities: List[UtilitySchema] 
+    feedstocks: List[FeedstockSchema]
+    utilities: List[UtilitySchema]
     products: List[ProductSchema]
-    countries: List[CountrySchema] 
+    countries: List[CountrySchema]
+    units: List[UnitOfMeasureSchema]
 
-# ----------------------------------------------------------------------------
-# CORE INPUT DATA SCHEMAS (Pydantic models for data validation/transfer)
-# ----------------------------------------------------------------------------
+# ==================== INPUT DATA SCHEMAS ====================
 
-# NEW SCHEMA: QuantityInputSchema to fix the OpenAPI display
 class QuantityInputSchema(BaseModel):
     value: float
     unit_id: int
 
-# MODIFIED: ProductData to include density
 class ProductDataSchema(BaseModel):
     name: str
-    price: QuantityInputSchema # CHANGED: Now consistent with other Quantity inputs
+    price: QuantityInputSchema
     price_sensitivity_to_ci: float
     carbon_content: float
     energy_content: float
     yield_percent: float
-    product_density: float # NEW FIELD
+    product_density: float
     
     class Config:
         allow_population_by_field_name = True
 
-# NEW SCHEMA: EconomicParametersSchema
 class EconomicParametersSchema(BaseModel):
     project_lifetime_years: int
     discount_rate_percent: float
-    # These can be overridden by user but typically rely on P+F+C default
     tci_ref_musd: Optional[float] = None
     reference_capacity_ktpa: Optional[float] = None
     tci_scaling_exponent: float
@@ -267,23 +259,19 @@ class EconomicParametersSchema(BaseModel):
     class Config:
         allow_population_by_field_name = True
 
-
-# MODIFIED SCHEMAS: Update Quantity fields to use QuantityInputSchema
 class ConversionPlantSchema(BaseModel):
-    plant_capacity: QuantityInputSchema # CHANGED
+    plant_capacity: QuantityInputSchema
     annual_load_hours: float
     ci_process_default: float
     
     class Config:
         allow_population_by_field_name = True
 
-# Assuming FeedstockDataSchema and UtilityDataSchema exist, they will now be distinct
-
 class FeedstockDataSchema(BaseModel):
     name: str
-    price: QuantityInputSchema # CHANGED
+    price: QuantityInputSchema
     carbon_content: float
-    carbon_intensity: QuantityInputSchema # CHANGED
+    carbon_intensity: QuantityInputSchema
     energy_content: float
     yield_percent: float
     
@@ -292,135 +280,136 @@ class FeedstockDataSchema(BaseModel):
 
 class UtilityDataSchema(BaseModel):
     name: str
-    price: QuantityInputSchema # CHANGED
+    price: QuantityInputSchema
     carbon_content: float
-    carbon_intensity: QuantityInputSchema # CHANGED
+    carbon_intensity: QuantityInputSchema
     energy_content: float
     yield_percent: float
     
     class Config:
         allow_population_by_field_name = True
 
-# The final top-level UserInputs Pydantic schema used for API validation
 class UserInputsSchema(BaseModel):
-    """
-    Schema for user-editable calculation inputs. 
-    Selection parameters are derived from the Project ID.
-    """
-    # Core Selections (REMOVED: process_technology, feedstock, country)
-    
-    # Input Data Groups
     conversion_plant: ConversionPlantSchema 
     economic_parameters: EconomicParametersSchema
-    
     feedstock_data: List[FeedstockDataSchema]
     utility_data: List[UtilityDataSchema] 
     product_data: List[ProductDataSchema]
-    
-    class Config:
-        # Arbitrary types is no longer needed since we removed the root_validator
-        pass
 
-# Final Request and Response Schemas used by the API Router
-# Note: CalculationRequest still includes core selections for the API endpoint's logic
-class CalculationRequest(BaseModel):
-    process_technology: str
-    feedstock: str
-    country: str # NEW
-    inputs: UserInputsSchema
-
-class CalculationResponse(BaseModel):
-    technoEconomics: Dict[str, Any]
-    financials: Dict[str, Any]
-    resolvedInputs: Dict[str, Any]
-
-# --- Project Management Schemas ---
+# ==================== PROJECT SCHEMAS ====================
 
 class ProjectBase(BaseModel):
-    # This class might be empty or contain common fields
     pass
 
 class ProjectCreate(ProjectBase):
-    """
-    Schema for creating a new project. 
-    Uses IDs (integers) for foreign keys instead of names.
-    """
-    project_name: str
-    # CHANGE: Use 'id' suffix and integer type for clarity and correctness
-    process_technology_id: int
-    feedstock_id: int
-    country_id: int
+    project_name: str = Field(..., min_length=1, max_length=100)
+    initial_process_id: Optional[int] = None
+    initial_feedstock_id: Optional[int] = None
+    initial_country_id: Optional[int] = None
 
 class ProjectUpdate(ProjectBase):
-    """Schema for updating an existing project (all fields optional)."""
-    # Override fields to make them optional for updates
-    project_name: Optional[str] = None
-    process_technology: Optional[int] = None
-    feedstock: Optional[int] = None
-    country: Optional[int] = None
+    project_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    initial_process_id: Optional[int] = None
+    initial_feedstock_id: Optional[int] = None
+    initial_country_id: Optional[int] = None
 
-class ProjectSchema(ProjectBase):
-    """Schema for reading/returning a project object (corresponds to ORM model)."""
+class ProjectResponse(ProjectBase):
     id: UUID
     user_id: UUID
-    
-    # Nested schemas for relationships (assuming ProcessTechnologySchema, FeedstockSchema, CountrySchema are defined)
+    project_name: str
+    initial_process: Optional[ProcessTechnologySchema] = None
+    initial_feedstock: Optional[FeedstockSchema] = None
+    initial_country: Optional[CountrySchema] = None
+    scenario_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        orm_mode = True
+
+class ProjectWithScenariosResponse(ProjectResponse):
+    scenarios: List['ScenarioResponse']
+
+# ==================== SCENARIO SCHEMAS ====================
+
+class ScenarioBase(BaseModel):
+    pass
+
+class ScenarioCreate(ScenarioBase):
+    scenario_name: str = Field(..., min_length=1, max_length=100)
+    process_id: int
+    feedstock_id: int
+    country_id: int
+    user_inputs: UserInputsSchema
+    scenario_order: Optional[int] = None
+
+class ScenarioUpdate(ScenarioBase):
+    scenario_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    user_inputs: Optional[UserInputsSchema] = None
+    scenario_order: Optional[int] = None
+
+class ScenarioResponse(ScenarioBase):
+    id: UUID
+    project_id: UUID
+    scenario_name: str
+    scenario_order: int
     process: ProcessTechnologySchema
     feedstock: FeedstockSchema
     country: CountrySchema
-
-    class Config:
-        # This is critical for reading data directly from a SQLAlchemy ORM object
-        orm_mode = True 
-
-# --- Analysis Run Schemas ---
-
-class RunCreate(BaseModel):
-    """Schema for creating a new analysis run for a project."""
-    run_name: Optional[str] = None
-    inputs: UserInputsSchema # Assumes UserInputsSchema is already defined
-
-class RunSchema(BaseModel):
-    """Schema for reading/returning an analysis run object (corresponds to ORM model)."""
-    id: UUID
-    project_id: UUID
-    run_name: Optional[str] = None
-    
-    # Saved calculation results as JSONB/Dicts
-    user_inputs_json: Dict[str, Any]
-    techno_economics_json: Dict[str, Any]
-    financial_analysis_json: Dict[str, Any]
-    
-    class Config:
-        orm_mode = True 
-
-# NEW SCHEMA: UnitGroupSchema
-class UnitGroupSchema(BaseModel):
-    id: int
-    name: str
-    base_unit_name: str
-    
+    created_at: datetime
+    updated_at: datetime
     class Config:
         orm_mode = True
 
-# NEW SCHEMA: UnitConversionSchema (optional, for lookup)
-class UnitConversionSchema(BaseModel):
-    unit_id: int
-    conversion_factor: float
-    
-    class Config:
-        orm_mode = True
+class ScenarioDetailResponse(ScenarioResponse):
+    user_inputs: Dict[str, Any]
+    techno_economics: Optional[Dict[str, Any]] = None
+    financial_analysis: Optional[Dict[str, Any]] = None
 
-# NEW SCHEMA: UnitOfMeasureSchema (The primary output schema)
-class UnitOfMeasureSchema(BaseModel):
-    id: int
-    unit_group_id: int
-    name: str
-    display_name: Optional[str] = None
-    
-    # Nested relationships
-    group: UnitGroupSchema
-    conversion: UnitConversionSchema
+# ==================== CALCULATION SCHEMAS ====================
 
-    class Config:
-        orm_mode = True
+class QuickCalculationRequest(BaseModel):
+    process_technology: str
+    feedstock: str
+    country: str
+    inputs: UserInputsSchema
+
+class CalculationResponse(BaseModel):
+    techno_economics: Dict[str, Any]
+    financials: Dict[str, Any]
+    resolved_inputs: Dict[str, Any]
+
+class ReferenceDataResponse(BaseModel):
+    process_technology: str
+    feedstock: str
+    country: str
+    tci_ref: float
+    capacity_ref: float
+    ci_process_default_gco2_mj: float
+    project_lifetime_years: int
+    discount_rate_percent: float
+    tci_scaling_exponent: float
+    working_capital_tci_ratio: float
+    indirect_opex_tci_ratio: float
+    annual_load_hours_ref: float
+    p_steps: int
+    nnp_steps: int
+    feedstock_ci: float
+    feedstock_carbon_content: float
+    feedstock_price: float
+    average_product_density_ref: float
+    products: List[Dict[str, Any]]
+    utilities: Dict[str, Any]
+
+# ==================== AUTH SCHEMAS ====================
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., format="email")
+    password: str = Field(..., format="password")
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: UUID
+
+# Update forward references
+ProjectWithScenariosResponse.update_forward_refs()

@@ -1,21 +1,21 @@
-# app/crud/biofuel_crud.py (UPDATED)
+# app/crud/biofuel_crud.py
 
 import datetime
-from sqlalchemy.orm import Session, joinedload, aliased
-from sqlalchemy import select, func, and_
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select, and_, desc
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 
 # Import ORM models
 from app.models.biofuel_model import (
-    ProcessTechnology, Feedstock, UnitConversion, UnitGroup, UnitOfMeasure, Utility, Country,
-    ProcessFeedstockRef, ProcessUtilityConsumptionRef,
+    ProcessTechnology, Feedstock, UnitConversion, UnitGroup, UnitOfMeasure, 
+    Utility, Country, ProcessFeedstockRef, ProcessUtilityConsumptionRef,
     Product, ProductReferenceBreakdown, UtilityCountryPriceDefaults,
-    DefaultParameterSet, User, UserProject, ProjectAnalysisRun
+    DefaultParameterSet, User, UserProject, Scenario
 )
 
-# Pydantic Schemas for data transfer (assuming you have them)
-from app.schemas.biofuel_schema import ProjectCreate, ProjectUpdate, RunCreate
+# Pydantic Schemas
+from app.schemas.biofuel_schema import ProjectCreate, ProjectUpdate, ScenarioCreate
 
 class BiofuelCRUD:
     def __init__(self, db: Session):
@@ -27,13 +27,31 @@ class BiofuelCRUD:
     def get_process_technologies(self) -> List[ProcessTechnology]:
         return self.db.execute(select(ProcessTechnology)).scalars().all()
 
+    def get_feedstocks(self) -> List[Feedstock]:
+        return self.db.execute(select(Feedstock)).scalars().all()
+
     def get_countries(self) -> List[Country]:
         return self.db.execute(select(Country)).scalars().all()
-    
-    # ... (other master data getters)
+
+    def get_utilities(self) -> List[Utility]:
+        return self.db.execute(select(Utility)).scalars().all()
+
+    def get_products(self) -> List[Product]:
+        return self.db.execute(select(Product)).scalars().all()
+
+    def get_all_master_data(self) -> Dict[str, List]:
+        """Get all master data in one call for frontend initialization"""
+        return {
+            "processes": self.get_process_technologies(),
+            "feedstocks": self.get_feedstocks(),
+            "countries": self.get_countries(),
+            "utilities": self.get_utilities(),
+            "products": self.get_products(),
+            "units": self.get_all_units_for_conversion(),
+        }
 
     # ------------------------------------------------------------
-    # Core Reference Data Read Operations (COMPREHENSIVE FETCHER)
+    # Core Reference Data Read Operations
     # ------------------------------------------------------------
 
     def get_project_reference_data(self, process_name: str, feedstock_name: str, country_name: str) -> Optional[Dict[str, Any]]:
@@ -79,7 +97,7 @@ class BiofuelCRUD:
             .options(
                 joinedload(ProcessFeedstockRef.utility_consumptions).joinedload(ProcessUtilityConsumptionRef.utility),
                 joinedload(ProcessFeedstockRef.product_breakdowns).joinedload(ProductReferenceBreakdown.product)            
-                )
+            )
         )
         pfr_record = self.db.execute(pfr_stmt).unique().scalar_one_or_none()
 
@@ -95,7 +113,7 @@ class BiofuelCRUD:
         data: Dict[str, Any] = {
             # Default Parameters
             "Process Technology": default_params_record.process.name,
-            "Feedstock": default_params_record.feedstock.name, # Feedstock name must be fetched explicitly
+            "Feedstock": default_params_record.feedstock.name,
             "Country": default_params_record.country.name,
             "TCI_ref": default_params_record.tci_ref_musd,
             "Capacity_ref": default_params_record.plant_capacity_ktpa_ref,
@@ -124,7 +142,7 @@ class BiofuelCRUD:
             "products": [
                 {
                     "name": p.product.name,
-                    "mass_fraction_percent": p.product_yield_ref * 100, # Use product_yield_ref as mass fraction
+                    "mass_fraction_percent": p.product_yield_ref * 100,
                     "energy_content_mj_per_kg": p.energy_content_mj_per_kg,
                     "carbon_content_kg_c_per_kg": p.carbon_content_kg_c_per_kg,
                     "price_ref_usd_per_unit": p.price_ref_usd_per_unit,
@@ -146,23 +164,19 @@ class BiofuelCRUD:
 
         for uc in pfr_record.utility_consumptions:
             u_name = uc.utility.name
-            data["utilities"][u_name] = {
+            utility_ref_data[u_name] = {
                 "consumption_ratio_ref": uc.consumption_ratio_ref_unit_per_kg_fuel,
                 "ci_ref_gco2e_per_mj": uc.utility.ci_ref_gco2e_per_mj,
                 "energy_content_mj_per_kg": uc.utility.energy_content_mj_per_kg,
                 "carbon_content_kg_c_per_kg": uc.utility.carbon_content_kg_c_per_kg,
-                "price_ref_usd_per_unit": utility_prices.get(u_name, 0.0), # Fallback price
+                "price_ref_usd_per_unit": utility_prices.get(u_name, 0.0),
             }
         
         # Add the consolidated utility data
         data["utilities"] = utility_ref_data
         
-        # --- ✅ NEW FIX: Add keys expected by economics.py for backward compatibility/bridge ---
-        # Assuming Yield_biomass is the feedstock's reference yield
+        # Add keys expected by economics.py for backward compatibility
         data["Yield_biomass"] = default_params_record.feedstock.yield_ref
-        
-        # Assuming Yield_H2 and Yield_kWh are the reference consumption ratios for Hydrogen and electricity
-        # Use .get() to safely retrieve values if the utility is defined.
         data["Yield_H2"] = utility_ref_data.get("Hydrogen", {}).get("consumption_ratio_ref", 0.0)
         data["Yield_kWh"] = utility_ref_data.get("electricity", {}).get("consumption_ratio_ref", 0.0)
 
@@ -171,38 +185,32 @@ class BiofuelCRUD:
             for p in data["products"]
         ]
 
-        # In the data dictionary, add:
-        data["process_type"] = process_name.upper()  # For Layer2
-        data["conversion_process_ci"] = {process_name.upper(): default_params_record.ci_process_default_gco2_mj}
-        data["process_ratio"] = {process_name.upper(): default_params_record.indirect_opex_tci_ratio * 100}  # Convert to %
-
         # For backward compatibility with old calculation structure
-        data["feedstock_ci"] = default_params_record.feedstock.ci_ref_gco2e_per_mj
-        data["feedstock_carbon_content"] = default_params_record.feedstock.carbon_content_kg_c_per_kg
-        data["feedstock_price"] = default_params_record.feedstock.price_ref_usd_per_unit
+        data["process_type"] = process_name.upper()
+        data["conversion_process_ci"] = {process_name.upper(): default_params_record.ci_process_default_gco2_mj}
+        data["process_ratio"] = {process_name.upper(): default_params_record.indirect_opex_tci_ratio * 100}
 
         return data
 
     # ------------------------------------------------------------
-    # Project CRUD Operations (NEW)
+    # Project CRUD Operations
     # ------------------------------------------------------------
 
     def create_project(
         self, 
         project_name: str, 
-        user_id: UUID, 
-        # CHANGE: Accept IDs directly
-        process_id: int, 
-        feedstock_id: int, 
-        country_id: int
+        user_id: UUID,
+        initial_process_id: Optional[int] = None,
+        initial_feedstock_id: Optional[int] = None, 
+        initial_country_id: Optional[int] = None
     ) -> UserProject:
         
         db_project = UserProject(
             project_name=project_name,
             user_id=user_id,
-            process_id=process_id, # Use ID directly
-            feedstock_id=feedstock_id, # Use ID directly
-            country_id=country_id, # Use ID directly
+            initial_process_id=initial_process_id,
+            initial_feedstock_id=initial_feedstock_id,
+            initial_country_id=initial_country_id,
         )
         self.db.add(db_project)
         self.db.commit()
@@ -210,61 +218,175 @@ class BiofuelCRUD:
         return db_project
 
     def get_projects_by_user(self, user_id: UUID) -> List[UserProject]:
-        """Returns all projects for a given user, including process, feedstock, and country."""
+        """Returns all projects for a given user with related data."""
         stmt = (
             select(UserProject)
             .where(UserProject.user_id == user_id)
             .options(
-                joinedload(UserProject.process),
-                joinedload(UserProject.feedstock),
-                joinedload(UserProject.country),
+                joinedload(UserProject.initial_process),
+                joinedload(UserProject.initial_feedstock),
+                joinedload(UserProject.initial_country),
+                joinedload(UserProject.scenarios),
             )
-            .order_by(UserProject.updated_at.desc())
+            .order_by(desc(UserProject.updated_at))
         )
-        return self.db.execute(stmt).scalars().all()
+        return self.db.execute(stmt).unique().scalars().all()
 
     def get_project_by_id(self, project_id: UUID) -> Optional[UserProject]:
-        """Returns a single project by ID, including its analysis runs."""
+        """Returns a single project by ID with all related data."""
         stmt = (
             select(UserProject)
             .where(UserProject.id == project_id)
             .options(
-                joinedload(UserProject.process),
-                joinedload(UserProject.feedstock),
-                joinedload(UserProject.country),
-                # Load runs and eager load nested data for efficiency
-                joinedload(UserProject.analysis_runs)
+                joinedload(UserProject.initial_process),
+                joinedload(UserProject.initial_feedstock),
+                joinedload(UserProject.initial_country),
+                joinedload(UserProject.scenarios).joinedload(Scenario.process),
+                joinedload(UserProject.scenarios).joinedload(Scenario.feedstock),
+                joinedload(UserProject.scenarios).joinedload(Scenario.country),
             )
         )
         
         return self.db.execute(stmt).unique().scalar_one_or_none()
-    
-    def create_analysis_run(self, db_run: ProjectAnalysisRun) -> ProjectAnalysisRun:
-        """Creates a new ProjectAnalysisRun and updates the parent project's timestamp."""
-        # 1. Create the run
-        self.db.add(db_run)
+
+    def update_project(self, project_id: UUID, update_data: Dict[str, Any]) -> Optional[UserProject]:
+        """Update project fields."""
+        project = self.db.get(UserProject, project_id)
+        if not project:
+            return None
+            
+        for field, value in update_data.items():
+            if hasattr(project, field):
+                setattr(project, field, value)
         
-        # 2. Update parent project's timestamp
-        parent_project = self.db.query(UserProject).filter(UserProject.id == db_run.project_id).first()
+        project.updated_at = datetime.datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(project)
+        return project
+
+    def delete_project(self, project_id: UUID) -> bool:
+        """Delete a project and all its scenarios."""
+        project = self.db.get(UserProject, project_id)
+        if not project:
+            return False
+            
+        self.db.delete(project)
+        self.db.commit()
+        return True
+
+    # ------------------------------------------------------------
+    # Scenario CRUD Operations
+    # ------------------------------------------------------------
+
+    def create_scenario(self, scenario_data: Dict[str, Any]) -> Scenario:
+        """Create a new scenario."""
+        
+        # Determine scenario order if not provided
+        if scenario_data.get('scenario_order') is None:
+            existing_scenarios = self.db.execute(
+                select(Scenario)
+                .where(Scenario.project_id == scenario_data['project_id'])
+                .order_by(desc(Scenario.scenario_order))
+            ).scalars().first()
+            
+            scenario_data['scenario_order'] = (existing_scenarios.scenario_order + 1) if existing_scenarios else 1
+        
+        db_scenario = Scenario(**scenario_data)
+        self.db.add(db_scenario)
+        
+        # Update parent project timestamp
+        parent_project = self.db.get(UserProject, scenario_data['project_id'])
         if parent_project:
             parent_project.updated_at = datetime.datetime.utcnow()
         
         self.db.commit()
-        self.db.refresh(db_run)
-        return db_run
+        self.db.refresh(db_scenario)
+        return db_scenario
 
-    # Note: CRUD for Update/Delete are omitted for brevity but should be added later.
+    def get_scenario_by_id(self, scenario_id: UUID) -> Optional[Scenario]:
+        """Get scenario by ID with all related data."""
+        stmt = (
+            select(Scenario)
+            .where(Scenario.id == scenario_id)
+            .options(
+                joinedload(Scenario.project),
+                joinedload(Scenario.process),
+                joinedload(Scenario.feedstock),
+                joinedload(Scenario.country),
+            )
+        )
+        return self.db.execute(stmt).unique().scalar_one_or_none()
+
+    def get_scenarios_by_project(self, project_id: UUID) -> List[Scenario]:
+        """Get all scenarios for a project."""
+        stmt = (
+            select(Scenario)
+            .where(Scenario.project_id == project_id)
+            .options(
+                joinedload(Scenario.process),
+                joinedload(Scenario.feedstock),
+                joinedload(Scenario.country),
+            )
+            .order_by(Scenario.scenario_order)
+        )
+        return self.db.execute(stmt).unique().scalars().all()
+
+    def update_scenario(self, scenario_id: UUID, update_data: Dict[str, Any]) -> Optional[Scenario]:
+        """Update scenario fields."""
+        scenario = self.db.get(Scenario, scenario_id)
+        if not scenario:
+            return None
+            
+        for field, value in update_data.items():
+            if hasattr(scenario, field):
+                setattr(scenario, field, value)
+        
+        scenario.updated_at = datetime.datetime.utcnow()
+        
+        # Update parent project timestamp
+        if scenario.project:
+            scenario.project.updated_at = datetime.datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(scenario)
+        return scenario
+
+    def delete_scenario(self, scenario_id: UUID) -> bool:
+        """Delete a scenario."""
+        scenario = self.db.get(Scenario, scenario_id)
+        if not scenario:
+            return False
+            
+        # Update parent project timestamp before deletion
+        if scenario.project:
+            scenario.project.updated_at = datetime.datetime.utcnow()
+            
+        self.db.delete(scenario)
+        self.db.commit()
+        return True
+
+    def run_scenario_calculation(self, scenario_id: UUID, calculation_results: Dict[str, Any]) -> Optional[Scenario]:
+        """Update scenario with calculation results."""
+        scenario = self.db.get(Scenario, scenario_id)
+        if not scenario:
+            return None
+            
+        scenario.techno_economics_json = calculation_results.get('techno_economics', {})
+        scenario.financial_analysis_json = calculation_results.get('financials', {})
+        scenario.updated_at = datetime.datetime.utcnow()
+        
+        self.db.commit()
+        self.db.refresh(scenario)
+        return scenario
+
+    # ------------------------------------------------------------
+    # Unit Conversion Operations
+    # ------------------------------------------------------------
 
     def get_unit_conversion_factor(self, unit_name: str) -> Optional[dict]:
         """
         Fetches the conversion factor and unit group info based on the unit name.
-
-        Handles two cases:
-        1. Unit is in unit_conversion table (factor is retrieved).
-        2. Unit is a Base Unit (factor is assumed to be 1.0).
         """
-        
-        # 1. Attempt to find the unit and its explicit conversion factor
         stmt_explicit_factor = (
             select(
                 UnitConversion.conversion_factor,
@@ -285,7 +407,7 @@ class BiofuelCRUD:
                 'base_unit_name': result[2]
             }
         
-        # 2. If no explicit factor, check if the unit exists and assume a factor of 1.0
+        # Check if unit exists as base unit
         stmt_base_unit_check = (
             select(
                 UnitOfMeasure.unit_group_id,
@@ -297,19 +419,17 @@ class BiofuelCRUD:
         base_check_result = self.db.execute(stmt_base_unit_check).one_or_none()
         
         if base_check_result:
-            # It's a valid unit found in the unit_of_measure table, so it must be a Base Unit.
             return {
                 'conversion_factor': 1.0, 
                 'unit_group_id': base_check_result[0],
                 'base_unit_name': base_check_result[1]
             }
         
-        return None # Unit not found in the system
+        return None
     
     def get_all_units_for_conversion(self) -> List[UnitOfMeasure]:
         """
-        Returns all units of measure, eagerly loading their group and conversion factor.
-        This provides all data needed for client-side dropdowns and server-side conversion logic.
+        Returns all units of measure with group and conversion data.
         """
         stmt = (
             select(UnitOfMeasure)
