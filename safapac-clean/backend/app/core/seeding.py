@@ -8,14 +8,14 @@ from typing import Dict, Any, List
 import logging
 from uuid import UUID
 
-# Import all necessary models
+# Import all necessary models - REMOVE UnitRatio import
 from app.models.biofuel_model import (
-    UnitConversion, UnitGroup, UnitOfMeasure, UnitRatio, 
+    UnitConversion, UnitGroup, UnitOfMeasure,  # REMOVED: UnitRatio
     User, Utility, Country, UtilityCountryPriceDefaults, ProcessTechnology,
     Feedstock, ProcessFeedstockRef, ProcessUtilityConsumptionRef, ProductReferenceBreakdown,
     DefaultParameterSet, Product
 )
-from app.core.database import SessionLocal, create_tables # Import SessionLocal and create_tables
+from app.core.database import SessionLocal, create_tables
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 REFERENCE_DATA_SEED: Dict[str, Any] = {
     # --- Master Data ---
     "processes": ["HEFA", "FT-BtL", "ATJ", "CHJ"],
-    "countries": ["USA", "Malaysia"], # NEW
+    "countries": ["USA", "Malaysia"],
     "products": [
         {"name": "Jet", "carbon_content_kg_c_per_kg": 0.847, "energy_content_mj_per_kg": 43.8, "density_ref": 0.81},
         {"name": "Diesel", "carbon_content_kg_c_per_kg": 0.850, "energy_content_mj_per_kg": 42.6, "density_ref": 0.83},
@@ -36,12 +36,12 @@ REFERENCE_DATA_SEED: Dict[str, Any] = {
         {"name": "Propane", "carbon_content_kg_c_per_kg": 0.818, "energy_content_mj_per_kg": 46.3, "density_ref": 0.51},
         {"name": "Naphtha", "carbon_content_kg_c_per_kg": 0.849, "energy_content_mj_per_kg": 43.1, "density_ref": 0.70},
     ],
-    "feedstocks": [ # NEW: Separated from utilities
+    "feedstocks": [
         {"name": "UCO", "carbon_content_kg_c_per_kg": 0.77, "energy_content_mj_per_kg": 37.0, "ci_ref_gco2e_per_mj": 20.0, "price_ref_usd_per_unit": 930.0, "yield_ref": 1.2048},
         {"name": "Lignocellulosic Biomass", "carbon_content_kg_c_per_kg": 0.52, "energy_content_mj_per_kg": 18.0, "ci_ref_gco2e_per_mj": 5.0, "price_ref_usd_per_unit": 50.0, "yield_ref": 4.5},
         {"name": "Animal Manure", "carbon_content_kg_c_per_kg": 0.40, "energy_content_mj_per_kg": 15.0, "ci_ref_gco2e_per_mj": 15.0, "price_ref_usd_per_unit": 10.0, "yield_ref": 8.5},
     ],
-    "utilities": [ # NEW: Separated from feedstocks
+    "utilities": [
         {"name": "Hydrogen", "carbon_content_kg_c_per_kg": 0.0, "energy_content_mj_per_kg": 120.0, "ci_ref_gco2e_per_mj": 10.0, "yield_ref": 0},
         {"name": "Electricity", "carbon_content_kg_c_per_kg": 0.0, "energy_content_mj_per_kg": 0.0, "ci_ref_gco2e_per_mj": 150.0, "yield_ref": 0},
     ],
@@ -53,15 +53,14 @@ REFERENCE_DATA_SEED: Dict[str, Any] = {
             "process": "HEFA", "feedstock": "UCO", 
             "average_product_density_ref": 0.79, 
             "utilities": [
-                {"utility": "Hydrogen", "consumption_ratio": 0.042}, # kg H2 / kg fuel
-                {"utility": "Electricity", "consumption_ratio": 0.12}, # kWh / kg fuel
+                {"utility": "Hydrogen", "consumption_ratio": 0.042},
+                {"utility": "Electricity", "consumption_ratio": 0.12},
             ],
             "products": [
                 {"name": "Jet", "yield": 69.0, "price": 1.2, "sensitivity": 0.05},
                 {"name": "Diesel", "yield": 0.0, "price": 1.1, "sensitivity": 0.05},
                 {"name": "Gasoline", "yield": 31.0, "price": 1.0, "sensitivity": 0.05},
             ],
-            # P+F+C DEFAULTS (Will be repeated and modified for each country)
             "default_params": {
                 "general": {"annual_load_hours_ref": 8000, "ci_process_default_gco2_mj": 20.0, "tci_scaling_exponent": 0.6},
                 "USA": {"plant_capacity_ktpa_ref": 500, "tci_ref_musd": 400, "discount_rate_percent": 10.0, "project_lifetime_years": 25, "p_steps": 3, "nnp_steps": 28},
@@ -89,12 +88,10 @@ REFERENCE_DATA_SEED: Dict[str, Any] = {
         },
     ],
     
-    # NEW: Utility Prices (U+C)
+    # Utility Prices (U+C)
     "u_c_prices": [
-        # Hydrogen Prices
         {"utility": "Hydrogen", "country": "USA", "price_ref_usd_per_unit": 5.0},
         {"utility": "Hydrogen", "country": "Malaysia", "price_ref_usd_per_unit": 6.5},
-        # Electricity Prices
         {"utility": "Electricity", "country": "USA", "price_ref_usd_per_unit": 0.12},
         {"utility": "Electricity", "country": "Malaysia", "price_ref_usd_per_unit": 0.08},
     ]
@@ -123,31 +120,31 @@ UNITS_OF_MEASURE_AND_CONVERSIONS = [
     {"group_name": "Capacity (Mass/Time)", "name": "kta", "display_name": "kilotonne per annum (KTA)", "factor": 1000.0},
     # Density (Base Unit: kg/m3)
     {"group_name": "Density (Mass/Volume)", "name": "kg/m3", "display_name": "kilogram per cubic meter", "factor": 1.0},
-    {"group_name": "Density (Mass/Volume)", "name": "g/cm3", "display_name": "gram per cubic centimeter", "factor": 1000.0}, # 1 g/cm3 = 1000 kg/m3
+    {"group_name": "Density (Mass/Volume)", "name": "g/cm3", "display_name": "gram per cubic centimeter", "factor": 1000.0},
     # Price/Mass (Base Unit: USD/kg)
     {"group_name": "Price/Mass", "name": "usd/kg", "display_name": "USD per kilogram", "factor": 1.0},
-    {"group_name": "Price/Mass", "name": "usd/t", "display_name": "USD per tonne", "factor": 0.001}, # 1 USD/t = 0.001 USD/kg
-    {"group_name": "Price/Mass", "name": "usd/kt", "display_name": "USD per kilotonne", "factor": 1e-6}, # 1 USD/kt = 0.000001 USD/kg
+    {"group_name": "Price/Mass", "name": "usd/t", "display_name": "USD per tonne", "factor": 0.001},
+    {"group_name": "Price/Mass", "name": "usd/kt", "display_name": "USD per kilotonne", "factor": 1e-6},
     # Price/Power (Base Unit: USD/kWh)
     {"group_name": "Price/Power", "name": "usd/kwh", "display_name": "USD per kilowatt-hour", "factor": 1.0},
-    {"group_name": "Price/Power", "name": "usd/mwh", "display_name": "USD per megawatt-hour", "factor": 0.001}, # 1 USD/MWh = 0.001 USD/kWh
+    {"group_name": "Price/Power", "name": "usd/mwh", "display_name": "USD per megawatt-hour", "factor": 0.001},
     # CI/Mass (Base Unit: gCO2/kg)
     {"group_name": "CI/Mass", "name": "gco2/kg", "display_name": "gCO2 per kilogram", "factor": 1.0},
-    {"group_name": "CI/Mass", "name": "kgco2/t", "display_name": "kgCO2 per tonne", "factor": 1.0}, # 1 kgCO2/t = 1 gCO2/kg
+    {"group_name": "CI/Mass", "name": "kgco2/t", "display_name": "kgCO2 per tonne", "factor": 1.0},
     # CI/Power (Base Unit: gCO2/kWh)
     {"group_name": "CI/Power", "name": "gco2/kwh", "display_name": "gCO2 per kilowatt-hour", "factor": 1.0},
-    {"group_name": "CI/Power", "name": "kgco2/mwh", "display_name": "kgCO2 per megawatt-hour", "factor": 1.0}, # 1 kgCO2/MWh = 1 gCO2/kWh
+    {"group_name": "CI/Power", "name": "kgco2/mwh", "display_name": "kgCO2 per megawatt-hour", "factor": 1.0},
     # Energy/Mass (Base Unit: MJ/kg)
     {"group_name": "Energy/Mass", "name": "mj/kg", "display_name": "Megajoule per kilogram", "factor": 1.0},
     # Yield/Mass (Base Unit: kg/kg)
     {"group_name": "Yield/Mass", "name": "kg/kg", "display_name": "kilogram per kilogram", "factor": 1.0},
-    {"group_name": "Yield/Mass", "name": "t/t", "display_name": "tonne per tonne", "factor": 1.0}, # 1 t/t = 1 kg/kg
+    {"group_name": "Yield/Mass", "name": "t/t", "display_name": "tonne per tonne", "factor": 1.0},
     # Yield/Power (Base Unit: kWh/kg)
     {"group_name": "Yield/Power", "name": "kwh/kg", "display_name": "kilowatt-hour per kilogram", "factor": 1.0},
     {"group_name": "Yield/Power", "name": "mwh/kg", "display_name": "megawatt-hour per kilogram", "factor": 1000.0},
     # Price/CI (Base Unit: USD/gCO2)
     {"group_name": "Price/CI", "name": "usd/gco2", "display_name": "USD per gCO2", "factor": 1.0},
-    {"group_name": "Price/CI", "name": "usd/kgco2", "display_name": "USD per kgCO2", "factor": 0.001}, # 1 USD/kgCO2 = 0.001 USD/gCO2
+    {"group_name": "Price/CI", "name": "usd/kgco2", "display_name": "USD per kgCO2", "factor": 0.001},
     # Currency (Base Unit: USD)
     {"group_name": "Currency", "name": "usd", "display_name": "US Dollar", "factor": 1.0},
     {"group_name": "Currency", "name": "musd", "display_name": "Million US Dollar (MUS D)", "factor": 1_000_000.0},
@@ -166,7 +163,6 @@ USERS = [{"id": SEED_USER_UUID, "email": "admin@example.com", "password_hash": "
 
 def get_id_map(db: Session, model, name_field: str = 'name') -> Dict[str, int]:
     """Utility function to create a name-to-ID map for foreign key lookups."""
-    # Assuming primary key is 'id' and the lookup field is 'name'
     return {getattr(obj, name_field): obj.id for obj in db.execute(select(model)).scalars().all()}
 
 
@@ -397,7 +393,6 @@ def seed_p_f_references(db: Session, seed_data: Dict[str, Any], id_maps: Dict[st
                     discount_rate_percent=defaults['discount_rate_percent'],
                     tci_ref_musd=defaults['tci_ref_musd'],
                     tci_scaling_exponent=general_defaults['tci_scaling_exponent'],
-                    # Hardcoded TCI ratios based on typical industry assumptions (0.10, 0.03)
                     working_capital_tci_ratio=0.10, 
                     indirect_opex_tci_ratio=0.03,
                     
@@ -423,7 +418,12 @@ def seed_database(db: Session):
         # --- 2. Seed Users (Must run before projects for foreign key refs) ---
         if db.execute(select(User)).first() is None:
             for data in USERS:
-                db.add(User(id=UUID(data["id"]), email=data["email"], password_hash=data["password_hash"], created_at=datetime.utcnow()))
+                db.add(User(
+                    id=UUID(data["id"]), 
+                    email=data["email"], 
+                    password_hash=data["password_hash"], 
+                    created_at=datetime.utcnow()
+                ))
             db.commit()
             logger.info("Users seeded.")
 
