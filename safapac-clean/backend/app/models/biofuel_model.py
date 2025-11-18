@@ -267,10 +267,10 @@ class Scenario(Base):
     feedstock_id = Column(Integer, ForeignKey("feedstock.id"), nullable=False)
     country_id = Column(Integer, ForeignKey("country.id"), nullable=False)
     
-    # User inputs and results
-    user_inputs_json = Column(JSONB, nullable=False)
-    techno_economics_json = Column(JSONB)
-    financial_analysis_json = Column(JSONB)
+    # Change these field names:
+    user_inputs = Column(JSONB, nullable=False)  # Changed from user_inputs_json
+    techno_economics = Column(JSONB)  # Changed from techno_economics_json  
+    financial_analysis = Column(JSONB)  # Changed from financial_analysis_json
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

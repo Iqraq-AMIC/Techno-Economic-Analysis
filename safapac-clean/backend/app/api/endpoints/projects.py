@@ -190,7 +190,7 @@ def create_scenario(
             "process_id": scenario_in.process_id,
             "feedstock_id": scenario_in.feedstock_id,
             "country_id": scenario_in.country_id,
-            "user_inputs_json": scenario_in.user_inputs.dict(),
+            "user_inputs": scenario_in.user_inputs.dict(),
             "scenario_order": scenario_in.scenario_order,
         }
         
@@ -258,7 +258,7 @@ def update_scenario(
     
     # Handle user_inputs separately to maintain structure
     if 'user_inputs' in update_data:
-        update_data['user_inputs_json'] = update_data.pop('user_inputs').dict()
+        update_data['user_inputs'] = update_data.pop('user_inputs').dict()
     
     updated_scenario = crud.update_scenario(scenario_id, update_data)
     
@@ -316,37 +316,74 @@ def calculate_scenario(
         feedstock_name = db_scenario.feedstock.name  
         country_name = db_scenario.country.name
         
-        # Convert JSON inputs back to UserInputs dataclass
-        from app.schemas.biofuel_schema import UserInputs, ConversionPlant, EconomicParameters
-        from app.schemas.biofuel_schema import FeedstockData, UtilityData, ProductData, Quantity
+        # Convert stored user_inputs JSON to UserInputs dataclass
+        user_inputs_data = db_scenario.user_inputs
         
-        user_inputs_json = db_scenario.user_inputs_json
+        # Reconstruct UserInputs dataclass from stored data
+        from app.schemas.biofuel_schema import (
+            UserInputs, ConversionPlant, EconomicParameters, 
+            FeedstockData, UtilityData, ProductData, Quantity
+        )
         
-        # Reconstruct UserInputs dataclass (this would need proper deserialization)
-        # For now, we'll pass the raw data to the economics service
-        # In a real implementation, you'd want proper deserialization
+        # Convert nested dictionary data back to dataclass instances
+        conversion_plant_data = user_inputs_data["conversion_plant"]
+        conversion_plant = ConversionPlant(
+            plant_capacity=Quantity(**conversion_plant_data["plant_capacity"]),
+            annual_load_hours=conversion_plant_data["annual_load_hours"],
+            ci_process_default=conversion_plant_data["ci_process_default"]
+        )
         
-        # Run calculations using your existing economics service
-        # Note: This assumes BiofuelEconomics can work with the JSON data directly
-        # or we need to properly reconstruct the UserInputs dataclass
+        economic_params_data = user_inputs_data["economic_parameters"]
+        economic_parameters = EconomicParameters(**economic_params_data)
         
-        # Placeholder for calculation logic
-        # calculation_results = run_calculations(process_name, feedstock_name, country_name, user_inputs_json)
+        # Convert lists of data back to dataclass instances
+        feedstock_data = [
+            FeedstockData.from_schema(**data) for data in user_inputs_data["feedstock_data"]
+        ]
         
-        # For now, return a placeholder response
-        calculation_results = {
-            "techno_economics": {},
-            "financials": {},
-            "resolved_inputs": {}
-        }
+        utility_data = [
+            UtilityData.from_schema(**data) for data in user_inputs_data["utility_data"]
+        ]
+        
+        product_data = [
+            ProductData.from_schema(**data) for data in user_inputs_data["product_data"]
+        ]
+        
+        # Create the full UserInputs dataclass
+        user_inputs = UserInputs(
+            process_technology=process_name,
+            feedstock=feedstock_name,
+            country=country_name,
+            conversion_plant=conversion_plant,
+            economic_parameters=economic_parameters,
+            feedstock_data=feedstock_data,
+            utility_data=utility_data,
+            product_data=product_data
+        )
+        
+        # Run calculations using BiofuelEconomics service
+        economics = BiofuelEconomics(user_inputs, crud)
+        calculation_results = economics.run(
+            process_technology=process_name,
+            feedstock=feedstock_name,
+            country=country_name
+        )
         
         # Save results back to scenario
-        crud.run_scenario_calculation(scenario_id, calculation_results)
+        updated_scenario = crud.run_scenario_calculation(scenario_id, calculation_results)
         
+        if not updated_scenario:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save calculation results"
+            )
+        
+        # Convert the results to match CalculationResponse schema
+        # Note: BiofuelEconomics returns keys that match CalculationResponse
         return CalculationResponse(**calculation_results)
         
     except Exception as e:
-        logger.error(f"Calculation error for scenario {scenario_id}: {e}")
+        logger.error(f"Calculation error for scenario {scenario_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Calculation failed: {str(e)}"

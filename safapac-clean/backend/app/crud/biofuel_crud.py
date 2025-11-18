@@ -112,11 +112,11 @@ class BiofuelCRUD:
         # 4. Consolidate into a flat dictionary
         data: Dict[str, Any] = {
             # Default Parameters
-            "Process Technology": default_params_record.process.name,
-            "Feedstock": default_params_record.feedstock.name,
-            "Country": default_params_record.country.name,
-            "TCI_ref": default_params_record.tci_ref_musd,
-            "Capacity_ref": default_params_record.plant_capacity_ktpa_ref,
+            "process_technology": default_params_record.process.name, # Changed from "Process Technology"
+            "feedstock_name": default_params_record.feedstock.name, # Changed from "Feedstock"
+            "country_name": default_params_record.country.name, # Changed from "Country"
+            "tci_ref": default_params_record.tci_ref_musd, # Changed from "TCI_ref"
+            "capacity_ref": default_params_record.plant_capacity_ktpa_ref, # Changed from "Capacity_ref"
             "ci_process_default_gco2_mj": default_params_record.ci_process_default_gco2_mj,
             "project_lifetime_years": default_params_record.project_lifetime_years,
             "discount_rate_percent": default_params_record.discount_rate_percent,
@@ -124,8 +124,8 @@ class BiofuelCRUD:
             "working_capital_tci_ratio": default_params_record.working_capital_tci_ratio,
             "indirect_opex_tci_ratio": default_params_record.indirect_opex_tci_ratio,
             "annual_load_hours_ref": default_params_record.annual_load_hours_ref,
-            "P_steps": default_params_record.p_steps,
-            "Nnp_steps": default_params_record.nnp_steps,
+            "p_steps": default_params_record.p_steps, # Changed from "P_steps"
+            "nnp_steps": default_params_record.nnp_steps, # Changed from "Nnp_steps"
             
             "process_type": process_name.upper(),
             "conversion_process_ci": default_params_record.ci_process_default_gco2_mj,
@@ -176,16 +176,16 @@ class BiofuelCRUD:
         data["utilities"] = utility_ref_data
         
         # Add keys expected by economics.py for backward compatibility
-        data["Yield_biomass"] = default_params_record.feedstock.yield_ref
-        data["Yield_H2"] = utility_ref_data.get("Hydrogen", {}).get("consumption_ratio_ref", 0.0)
-        data["Yield_kWh"] = utility_ref_data.get("electricity", {}).get("consumption_ratio_ref", 0.0)
+        data["yield_biomass"] = default_params_record.feedstock.yield_ref # Changed from "Yield_biomass"
+        data["yield_h2"] = utility_ref_data.get("Hydrogen", {}).get("consumption_ratio_ref", 0.0) # Changed from "Yield_H2"
+        data["yield_kwh"] = utility_ref_data.get("electricity", {}).get("consumption_ratio_ref", 0.0)
 
-        data["MassFractions"] = [
+        data["mass_fractions"] = [ # Changed from "MassFractions"
             p["mass_fraction_percent"] / 100.0 
             for p in data["products"]
         ]
 
-        # For backward compatibility with old calculation structure
+        # Final cleanup on backward compatibility keys (Should be removed later)
         data["process_type"] = process_name.upper()
         data["conversion_process_ci"] = {process_name.upper(): default_params_record.ci_process_default_gco2_mj}
         data["process_ratio"] = {process_name.upper(): default_params_record.indirect_opex_tci_ratio * 100}
@@ -371,8 +371,8 @@ class BiofuelCRUD:
         if not scenario:
             return None
             
-        scenario.techno_economics_json = calculation_results.get('techno_economics', {})
-        scenario.financial_analysis_json = calculation_results.get('financials', {})
+        scenario.techno_economics = calculation_results.get('techno_economics', {})
+        scenario.financial_analysis = calculation_results.get('financials', {})
         scenario.updated_at = datetime.datetime.utcnow()
         
         self.db.commit()

@@ -137,7 +137,7 @@ class BiofuelEconomics:
 
        # Restructure the output to match API expectations
         final_result = {
-            "technoEconomics": {
+            "techno_economics": {
                 "process_technology": process_technology,
                 "feedstock": feedstock,
                 "LCOP": layer4_results.get("lcop", 0),
@@ -170,7 +170,7 @@ class BiofuelEconomics:
                 "irr": irr if irr else 0,
                 "payback_period": payback if payback else 0,
             },
-            "resolvedInputs": {
+            "resolved_inputs": {
                 "process_technology": process_technology,
                 "feedstock": feedstock, 
                 "country": country,

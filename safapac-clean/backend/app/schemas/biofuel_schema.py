@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from uuid import UUID
 from datetime import datetime
 
+from app.schemas.base import CamelCaseBaseModel
+
 # ==================== CORE CALCULATION DATA CLASSES ====================
 
 @dataclass(frozen=True)
@@ -160,25 +162,25 @@ class UserInputs:
 
 # ==================== MASTER DATA SCHEMAS ====================
 
-class ProcessTechnologySchema(BaseModel):
+class ProcessTechnologySchema(CamelCaseBaseModel):
     id: int
     name: str
     class Config:
         orm_mode = True
 
-class CountrySchema(BaseModel):
+class CountrySchema(CamelCaseBaseModel):
     id: int
     name: str
     class Config:
         orm_mode = True
 
-class ProductSchema(BaseModel):
+class ProductSchema(CamelCaseBaseModel):
     id: int
     name: str
     class Config:
         orm_mode = True
 
-class FeedstockSchema(BaseModel):
+class FeedstockSchema(CamelCaseBaseModel):
     id: int
     name: str
     carbon_content_kg_c_per_kg: float
@@ -189,7 +191,7 @@ class FeedstockSchema(BaseModel):
     class Config:
         orm_mode = True
 
-class UtilitySchema(BaseModel):
+class UtilitySchema(CamelCaseBaseModel):
     id: int
     name: str
     carbon_content_kg_c_per_kg: float
@@ -198,20 +200,20 @@ class UtilitySchema(BaseModel):
     class Config:
         orm_mode = True
 
-class UnitGroupSchema(BaseModel):
+class UnitGroupSchema(CamelCaseBaseModel):
     id: int
     name: str
     base_unit_name: str
     class Config:
         orm_mode = True
 
-class UnitConversionSchema(BaseModel):
+class UnitConversionSchema(CamelCaseBaseModel):
     unit_id: int
     conversion_factor: float
     class Config:
         orm_mode = True
 
-class UnitOfMeasureSchema(BaseModel):
+class UnitOfMeasureSchema(CamelCaseBaseModel):
     id: int
     unit_group_id: int
     name: str
@@ -221,7 +223,7 @@ class UnitOfMeasureSchema(BaseModel):
     class Config:
         orm_mode = True
 
-class MasterDataResponse(BaseModel):
+class MasterDataResponse(CamelCaseBaseModel):
     processes: List[ProcessTechnologySchema]
     feedstocks: List[FeedstockSchema]
     utilities: List[UtilitySchema]
@@ -231,11 +233,11 @@ class MasterDataResponse(BaseModel):
 
 # ==================== INPUT DATA SCHEMAS ====================
 
-class QuantityInputSchema(BaseModel):
+class QuantityInputSchema(CamelCaseBaseModel):
     value: float
     unit_id: int
 
-class ProductDataSchema(BaseModel):
+class ProductDataSchema(CamelCaseBaseModel):
     name: str
     price: QuantityInputSchema
     price_sensitivity_to_ci: float
@@ -247,7 +249,7 @@ class ProductDataSchema(BaseModel):
     class Config:
         allow_population_by_field_name = True
 
-class EconomicParametersSchema(BaseModel):
+class EconomicParametersSchema(CamelCaseBaseModel):
     project_lifetime_years: int
     discount_rate_percent: float
     tci_ref_musd: Optional[float] = None
@@ -259,7 +261,7 @@ class EconomicParametersSchema(BaseModel):
     class Config:
         allow_population_by_field_name = True
 
-class ConversionPlantSchema(BaseModel):
+class ConversionPlantSchema(CamelCaseBaseModel):
     plant_capacity: QuantityInputSchema
     annual_load_hours: float
     ci_process_default: float
@@ -267,7 +269,7 @@ class ConversionPlantSchema(BaseModel):
     class Config:
         allow_population_by_field_name = True
 
-class FeedstockDataSchema(BaseModel):
+class FeedstockDataSchema(CamelCaseBaseModel):
     name: str
     price: QuantityInputSchema
     carbon_content: float
@@ -278,7 +280,7 @@ class FeedstockDataSchema(BaseModel):
     class Config:
         allow_population_by_field_name = True
 
-class UtilityDataSchema(BaseModel):
+class UtilityDataSchema(CamelCaseBaseModel):
     name: str
     price: QuantityInputSchema
     carbon_content: float
@@ -289,7 +291,7 @@ class UtilityDataSchema(BaseModel):
     class Config:
         allow_population_by_field_name = True
 
-class UserInputsSchema(BaseModel):
+class UserInputsSchema(CamelCaseBaseModel):
     conversion_plant: ConversionPlantSchema 
     economic_parameters: EconomicParametersSchema
     feedstock_data: List[FeedstockDataSchema]
@@ -298,7 +300,7 @@ class UserInputsSchema(BaseModel):
 
 # ==================== PROJECT SCHEMAS ====================
 
-class ProjectBase(BaseModel):
+class ProjectBase(CamelCaseBaseModel):
     pass
 
 class ProjectCreate(ProjectBase):
@@ -331,7 +333,7 @@ class ProjectWithScenariosResponse(ProjectResponse):
 
 # ==================== SCENARIO SCHEMAS ====================
 
-class ScenarioBase(BaseModel):
+class ScenarioBase(CamelCaseBaseModel):
     pass
 
 class ScenarioCreate(ScenarioBase):
@@ -367,18 +369,18 @@ class ScenarioDetailResponse(ScenarioResponse):
 
 # ==================== CALCULATION SCHEMAS ====================
 
-class QuickCalculationRequest(BaseModel):
+class QuickCalculationRequest(CamelCaseBaseModel):
     process_technology: str
     feedstock: str
     country: str
     inputs: UserInputsSchema
 
-class CalculationResponse(BaseModel):
+class CalculationResponse(CamelCaseBaseModel):
     techno_economics: Dict[str, Any]
     financials: Dict[str, Any]
     resolved_inputs: Dict[str, Any]
 
-class ReferenceDataResponse(BaseModel):
+class ReferenceDataResponse(CamelCaseBaseModel):
     process_technology: str
     feedstock: str
     country: str
@@ -402,11 +404,11 @@ class ReferenceDataResponse(BaseModel):
 
 # ==================== AUTH SCHEMAS ====================
 
-class LoginRequest(BaseModel):
+class LoginRequest(CamelCaseBaseModel):
     email: str = Field(..., format="email")
     password: str = Field(..., format="password")
 
-class LoginResponse(BaseModel):
+class LoginResponse(CamelCaseBaseModel):
     access_token: str
     token_type: str = "bearer"
     user_id: UUID

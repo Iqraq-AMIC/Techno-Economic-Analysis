@@ -15,7 +15,6 @@ from app.schemas.biofuel_schema import (
     ConversionPlant, EconomicParameters, FeedstockData, 
     UtilityData, ProductData, Quantity
 )
-from app.schemas.biofuel_schema import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
