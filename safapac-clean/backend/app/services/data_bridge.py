@@ -14,14 +14,14 @@ class DataBridge:
         # Key mapping from database to calculation layer
         key_mapping = {
             # Capital case (DB) → lowercase (Calc)
-            "TCI_ref": "tci_ref",
-            "Capacity_ref": "capacity_ref", 
-            "Yield_biomass": "yield_biomass",
-            "Yield_H2": "yield_h2",
-            "Yield_kWh": "yield_kwh",
-            "MassFractions": "mass_fractions",
-            "P_steps": "p_steps",
-            "Nnp_steps": "nnp_steps",
+            "tci_ref": "tci_ref",
+            "capacity_ref": "capacity_ref", 
+            "yield_biomass": "yield_biomass",
+            "yield_h2": "yield_h2",
+            "yield_kwh": "yield_kwh",
+            "mass_fractions": "mass_fractions",
+            "p_steps": "p_steps",
+            "nnp_steps": "nnp_steps",
             
             # Additional mappings that might be needed
             "ci_process_default_gco2_mj": "ci_process_default",
@@ -38,11 +38,20 @@ class DataBridge:
         # FIX: Convert mass_fractions from list to dictionary format
         if "mass_fractions" in calc_data and isinstance(calc_data["mass_fractions"], list):
             # Convert list of numbers to dictionary with product names as keys
-            # Example: [0.69, 0.0, 0.31] → {"jet": 0.69, "diesel": 0.0, "gasoline": 0.31}
-            product_names = [p["name"].lower() for p in db_data.get("products", [])]
+            # Get product names from the products list in db_data
+            products = db_data.get("products", [])
+            product_names = []
+            for product in products:
+                # Handle both dictionary format and object format
+                if isinstance(product, dict):
+                    product_names.append(product.get("name", "").lower())
+                else:
+                    # If it's an ORM object, use the name attribute
+                    product_names.append(getattr(product, "name", "").lower())
+            
             mass_fractions_dict = {}
             for i, fraction in enumerate(calc_data["mass_fractions"]):
-                if i < len(product_names):
+                if i < len(product_names) and product_names[i]:
                     mass_fractions_dict[product_names[i]] = fraction
                 else:
                     mass_fractions_dict[f"product_{i}"] = fraction

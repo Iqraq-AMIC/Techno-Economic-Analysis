@@ -34,6 +34,13 @@ class BiofuelEconomics:
         
         if row is None:
             raise ValueError(f"No reference data found for process '{process_technology}' with feedstock '{feedstock}'")
+        
+        # DEBUG: Check the structure of row before conversion
+        print("DEBUG: Raw reference data structure:")
+        print(f"  - Products type: {type(row.get('products'))}")
+        print(f"  - Products value: {row.get('products')}")
+        print(f"  - Mass fractions type: {type(row.get('mass_fractions'))}")
+        print(f"  - Mass fractions value: {row.get('mass_fractions')}")
 
         # NEW: Convert database format to calculation format
         ref = self.data_bridge.db_to_calc_format(row)
@@ -41,6 +48,10 @@ class BiofuelEconomics:
         # Add process key for calculations
         ref["process_key"] = process_technology.upper()
         ref["feedstock_key"] = feedstock
+
+        print("DEBUG: After conversion:")
+        print(f"  - Mass fractions type: {type(ref.get('mass_fractions'))}")
+        print(f"  - Mass fractions value: {ref.get('mass_fractions')}")
 
         # DEBUG: Check what keys we have
         print("DEBUG: ref keys:", list(ref.keys()))
@@ -106,30 +117,30 @@ class BiofuelEconomics:
 
         # INTEGRATE FINANCIAL ANALYSIS
         try:
-            # Create financial analysis instance
+            # Create financial analysis instance with correct discount rate
             fa = FinancialAnalysis(
                 discount_rate=self.inputs_flat.get("discount_rate", 0.07)
             )
             
-             # Calculate financial metrics
-            tci_usd = layer1_results.get("total_capital_investment", 0) * 1_000_000
-            revenue = layer2_results.get("revenue", 0)
-            total_opex = layer4_results.get("total_opex", 0)
+            # Convert inputs to USD
+            tci_usd = layer1_results.get("total_capital_investment", 0) * 1_000_000  # Convert MUSD to USD
+            annual_revenue = layer2_results.get("revenue", 0)
+            annual_manufacturing_cost = layer4_results.get("total_opex", 0)
             plant_lifetime = self.inputs_flat.get("project_lifetime_years", 20)
 
-            npv = fa.npv(tci_usd, revenue, total_opex, plant_lifetime)
-            irr = fa.irr(tci_usd, revenue, total_opex, plant_lifetime)
-            payback = fa.payback_period(tci_usd, revenue, total_opex, plant_lifetime)
-
-            # Handle NaN values for database storage
-            if irr is not None and (isinstance(irr, float) and (irr != irr)):  # Check for NaN
-                irr = None
-            if payback is not None and (isinstance(payback, float) and (payback != payback)):
-                payback = None
+            # Calculate financial metrics using the corrected method
+            financial_results = fa.calculate_financial_metrics(
+                tci_usd, annual_revenue, annual_manufacturing_cost, plant_lifetime
+            )
             
-            print("DEBUG: Financial Results - NPV:", npv)
-            print("DEBUG: Financial Results - IRR:", irr)
-            print("DEBUG: Financial Results - Payback:", payback)
+            npv = financial_results['npv']
+            irr = financial_results['irr'] 
+            payback = financial_results['payback_period']
+            
+            print(f"DEBUG: Corrected Financial Results:")
+            print(f"  - NPV: ${npv:,.0f}")
+            print(f"  - IRR: {irr:.1%}")
+            print(f"  - Payback: {payback} years")
             
         except Exception as e:
             print(f"DEBUG: Financial Analysis Error: {e}")
