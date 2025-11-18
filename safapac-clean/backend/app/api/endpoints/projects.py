@@ -5,7 +5,9 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+import bcrypt  # Add bcrypt for password hashing
 
 # Core Database and CRUD
 from app.core.database import get_db
@@ -16,23 +18,43 @@ from app.services.economics import BiofuelEconomics
 
 # Schemas
 from app.schemas.biofuel_schema import (
-    ProjectCreate, ProjectResponse, ProjectWithScenariosResponse,
+    LoginRequest, ProjectCreate, ProjectResponse, ProjectWithScenariosResponse,
     ScenarioCreate, ScenarioResponse, ScenarioDetailResponse, ScenarioUpdate,
     UserInputsSchema, CalculationResponse, MasterDataResponse,
-    LoginResponse
+    LoginResponse, UserSchema
 )
 
 # Models
-from app.models.biofuel_model import UserProject, Scenario
+from app.models.biofuel_model import User, UserProject, Scenario
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 # --- Authentication Dependency ---
-def get_current_user_id() -> UUID:
-    # TODO: Replace with actual authentication
+def get_current_user_id(
+    db: Session = Depends(get_db),
+    # token: str = Depends(oauth2_scheme)  # You'll need to implement OAuth2 later
+) -> UUID:
+    # TODO: Replace with actual JWT token validation
+    # For now, using the first user as default
+    user = db.execute(select(User)).first()
+    if user:
+        return user[0].id
     return UUID("00000000-0000-0000-0000-000000000001")
+
+# Add this dependency for getting current user
+def get_current_user(
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id)
+) -> User:
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return user
 
 # --- Dependency Injection ---
 def get_biofuel_crud(db: Session = Depends(get_db)) -> BiofuelCRUD:
@@ -391,11 +413,61 @@ def calculate_scenario(
 
 # ==================== AUTH ENDPOINTS ====================
 
+# Update the login endpoint
 @router.post("/auth/login", response_model=LoginResponse)
-def login():
-    """User login endpoint."""
-    # TODO: Implement proper authentication
-    return LoginResponse(
-        access_token="placeholder_token",
-        user_id=UUID("00000000-0000-0000-0000-000000000001")
-    )
+def login(
+    login_data: LoginRequest,
+    db: Session = Depends(get_db),
+    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+):
+    """User login endpoint with email/password authentication."""
+    try:
+        # Find user by email
+        stmt = select(User).where(User.email == login_data.email)
+        user = db.execute(stmt).scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+        
+        # Verify password - handle both plain text (for testing) and hashed passwords
+        try:
+            # Try bcrypt verification first
+            password_valid = bcrypt.checkpw(
+                login_data.password.encode('utf-8'), 
+                user.password_hash.encode('utf-8')
+            )
+        except (ValueError, Exception):
+            # If bcrypt fails, check if it's plain text (for development)
+            password_valid = (user.password_hash == login_data.password)
+        
+        if not password_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+        
+        # Create user schema using constructor instead of from_orm
+        user_schema = UserSchema(
+            id=user.id,
+            name=user.name,
+            email=user.email
+        )
+        
+        # TODO: Generate proper JWT token
+        # For now, return a placeholder token
+        return LoginResponse(
+            access_token=f"placeholder_token_{user.id}",
+            user=user_schema
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Login failed"
+        )

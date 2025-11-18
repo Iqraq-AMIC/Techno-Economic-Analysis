@@ -1,12 +1,16 @@
 # app/core/seeding.py
 
+import csv
 from datetime import datetime
+from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from typing import Dict, Any, List
 import logging
 from uuid import UUID
+import bcrypt  # Add bcrypt for password hashing
+
 
 # Import all necessary models - REMOVE UnitRatio import
 from app.models.biofuel_model import (
@@ -407,6 +411,51 @@ def seed_p_f_references(db: Session, seed_data: Dict[str, Any], id_maps: Dict[st
     logger.info(f"{p_f_ref_count} Process-Feedstock references and associated default data seeded successfully.")
 
 
+# Add this function to handle password hashing
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+# Replace the USERS section with CSV reading logic
+def load_users_from_csv() -> List[Dict[str, str]]:
+    """Load users from CSV file"""
+    csv_path = Path(__file__).parent / "pw.csv"
+    
+    if not csv_path.exists():
+        logger.warning(f"CSV file not found at {csv_path}. Using default admin user.")
+        return [{
+            "id": SEED_USER_UUID,
+            "name": "Admin User",
+            "email": "admin@example.com", 
+            "password": "adminsaf1234"
+        }]
+    
+    users = []
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as file:
+            reader = csv.DictReader(file, delimiter='\t')  # Tab-delimited
+            for row in reader:
+                users.append({
+                    "name": row["Staff Name"],
+                    "email": row["Email Address"],
+                    "password": row["Suggested Password"]
+                })
+        logger.info(f"Loaded {len(users)} users from CSV")
+    except Exception as e:
+        logger.error(f"Error reading CSV file: {e}")
+        # Fallback to default user
+        users = [{
+            "id": SEED_USER_UUID,
+            "name": "Admin User",
+            "email": "admin@example.com",
+            "password": "adminsaf1234"
+        }]
+    
+    return users
+
+
 def seed_database(db: Session):
     """
     Core function to seed all necessary static reference data into the database.
@@ -417,15 +466,19 @@ def seed_database(db: Session):
         
         # --- 2. Seed Users (Must run before projects for foreign key refs) ---
         if db.execute(select(User)).first() is None:
-            for data in USERS:
+            users_data = load_users_from_csv()
+            
+            for i, data in enumerate(users_data):
+                user_id = UUID(data["id"]) if "id" in data else UUID(int=i+1)
                 db.add(User(
-                    id=UUID(data["id"]), 
-                    email=data["email"], 
-                    password_hash=data["password_hash"], 
+                    id=user_id,
+                    name=data["name"],
+                    email=data["email"],
+                    password_hash=hash_password(data["password"]),
                     created_at=datetime.utcnow()
                 ))
             db.commit()
-            logger.info("Users seeded.")
+            logger.info(f"{len(users_data)} Users seeded.")
 
         # --- 3. SEED MASTER DATA (Processes, Countries, Products, Feedstocks, Utilities) ---
         # Get ID maps for foreign key lookups in later steps

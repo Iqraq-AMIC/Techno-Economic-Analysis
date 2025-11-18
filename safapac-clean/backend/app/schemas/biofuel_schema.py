@@ -165,20 +165,14 @@ class UserInputs:
 class ProcessTechnologySchema(CamelCaseBaseModel):
     id: int
     name: str
-    class Config:
-        orm_mode = True
 
 class CountrySchema(CamelCaseBaseModel):
     id: int
     name: str
-    class Config:
-        orm_mode = True
 
 class ProductSchema(CamelCaseBaseModel):
     id: int
     name: str
-    class Config:
-        orm_mode = True
 
 class FeedstockSchema(CamelCaseBaseModel):
     id: int
@@ -188,8 +182,6 @@ class FeedstockSchema(CamelCaseBaseModel):
     ci_ref_gco2e_per_mj: float
     price_ref_usd_per_unit: float
     yield_ref: float
-    class Config:
-        orm_mode = True
 
 class UtilitySchema(CamelCaseBaseModel):
     id: int
@@ -197,21 +189,15 @@ class UtilitySchema(CamelCaseBaseModel):
     carbon_content_kg_c_per_kg: float
     energy_content_mj_per_kg: float
     ci_ref_gco2e_per_mj: float
-    class Config:
-        orm_mode = True
 
 class UnitGroupSchema(CamelCaseBaseModel):
     id: int
     name: str
     base_unit_name: str
-    class Config:
-        orm_mode = True
 
 class UnitConversionSchema(CamelCaseBaseModel):
     unit_id: int
     conversion_factor: float
-    class Config:
-        orm_mode = True
 
 class UnitOfMeasureSchema(CamelCaseBaseModel):
     id: int
@@ -220,8 +206,6 @@ class UnitOfMeasureSchema(CamelCaseBaseModel):
     display_name: Optional[str] = None
     group: UnitGroupSchema
     conversion: UnitConversionSchema
-    class Config:
-        orm_mode = True
 
 class MasterDataResponse(CamelCaseBaseModel):
     processes: List[ProcessTechnologySchema]
@@ -325,8 +309,6 @@ class ProjectResponse(ProjectBase):
     scenario_count: int = 0
     created_at: datetime
     updated_at: datetime
-    class Config:
-        orm_mode = True
 
 class ProjectWithScenariosResponse(ProjectResponse):
     scenarios: List['ScenarioResponse']
@@ -359,8 +341,6 @@ class ScenarioResponse(ScenarioBase):
     country: CountrySchema
     created_at: datetime
     updated_at: datetime
-    class Config:
-        orm_mode = True
 
 class ScenarioDetailResponse(ScenarioResponse):
     user_inputs: Dict[str, Any]
@@ -404,14 +384,19 @@ class ReferenceDataResponse(CamelCaseBaseModel):
 
 # ==================== AUTH SCHEMAS ====================
 
+class UserSchema(CamelCaseBaseModel):
+    id: UUID
+    name: str
+    email: str
+
 class LoginRequest(CamelCaseBaseModel):
     email: str = Field(..., format="email")
-    password: str = Field(..., format="password")
+    password: str = Field(..., min_length=1)
 
 class LoginResponse(CamelCaseBaseModel):
     access_token: str
     token_type: str = "bearer"
-    user_id: UUID
+    user: UserSchema  # Changed from user_id to user object
 
 # Update forward references
 ProjectWithScenariosResponse.update_forward_refs()

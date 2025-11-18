@@ -219,6 +219,7 @@ class UnitConversion(Base):
 class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False)  # NEW: Staff name field
     email = Column(String, nullable=False, unique=True)
     password_hash = Column(String, nullable=False, default='placeholder')
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
