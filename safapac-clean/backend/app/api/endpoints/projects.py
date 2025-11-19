@@ -1,5 +1,6 @@
 # app/api/endpoints/projects.py
 
+from datetime import timedelta
 import logging
 from typing import List, Optional
 from uuid import UUID
@@ -12,6 +13,12 @@ import bcrypt  # Add bcrypt for password hashing
 # Core Database and CRUD
 from app.core.database import get_db
 from app.crud.biofuel_crud import BiofuelCRUD
+from app.core.security import (
+    verify_password, 
+    create_access_token, 
+    get_current_active_user,
+    ACCESS_TOKEN_EXPIRE_MINUTES
+)
 
 # Service Layers
 from app.services.economics import BiofuelEconomics
@@ -32,29 +39,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # --- Authentication Dependency ---
-def get_current_user_id(
-    db: Session = Depends(get_db),
-    # token: str = Depends(oauth2_scheme)  # You'll need to implement OAuth2 later
-) -> UUID:
-    # TODO: Replace with actual JWT token validation
-    # For now, using the first user as default
-    user = db.execute(select(User)).first()
-    if user:
-        return user[0].id
-    return UUID("00000000-0000-0000-0000-000000000001")
+def get_current_user_id(current_user: User = Depends(get_current_active_user)) -> UUID:
+    return current_user.id
 
-# Add this dependency for getting current user
-def get_current_user(
-    db: Session = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id)
-) -> User:
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    return user
+def get_current_user_obj(current_user: User = Depends(get_current_active_user)) -> User:
+    return current_user # Returns the User object
 
 # --- Dependency Injection ---
 def get_biofuel_crud(db: Session = Depends(get_db)) -> BiofuelCRUD:
@@ -72,14 +61,13 @@ def get_master_data(crud: BiofuelCRUD = Depends(get_biofuel_crud)):
 @router.post("/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(
     project_in: ProjectCreate,
-    user_id: UUID = Depends(get_current_user_id),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    current_user: User = Depends(get_current_active_user),    crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Create a new project."""
     try:
         db_project = crud.create_project(
             project_name=project_in.project_name,
-            user_id=user_id,
+            user_id=current_user.id,
             initial_process_id=project_in.initial_process_id,
             initial_feedstock_id=project_in.initial_feedstock_id,
             initial_country_id=project_in.initial_country_id,
@@ -94,11 +82,11 @@ def create_project(
 
 @router.get("/projects", response_model=List[ProjectResponse])
 def read_projects(
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Get all projects for the current user."""
-    projects = crud.get_projects_by_user(user_id)
+    projects = crud.get_projects_by_user(current_user.id)
     
     # Calculate scenario counts for each project
     for project in projects:
@@ -109,13 +97,13 @@ def read_projects(
 @router.get("/projects/{project_id}", response_model=ProjectWithScenariosResponse)
 def read_project(
     project_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Get a specific project with its scenarios."""
     db_project = crud.get_project_by_id(project_id)
     
-    if not db_project or db_project.user_id != user_id:
+    if not db_project or db_project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found or access denied"
@@ -142,13 +130,13 @@ def read_project(
 def update_project(
     project_id: UUID,
     project_update: ProjectCreate,  # Using same schema for update for simplicity
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Update a project."""
     # Verify project exists and user has access
     db_project = crud.get_project_by_id(project_id)
-    if not db_project or db_project.user_id != user_id:
+    if not db_project or db_project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found or access denied"
@@ -168,13 +156,13 @@ def update_project(
 @router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(
     project_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Delete a project."""
     # Verify project exists and user has access
     db_project = crud.get_project_by_id(project_id)
-    if not db_project or db_project.user_id != user_id:
+    if not db_project or db_project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found or access denied"
@@ -193,13 +181,13 @@ def delete_project(
 def create_scenario(
     project_id: UUID,
     scenario_in: ScenarioCreate,
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Create a new scenario for a project."""
     # Verify project exists and user has access
     db_project = crud.get_project_by_id(project_id)
-    if not db_project or db_project.user_id != user_id:
+    if not db_project or db_project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found or access denied"
@@ -229,13 +217,13 @@ def create_scenario(
 @router.get("/projects/{project_id}/scenarios", response_model=List[ScenarioResponse])
 def get_project_scenarios(
     project_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Get all scenarios for a project."""
     # Verify project exists and user has access
     db_project = crud.get_project_by_id(project_id)
-    if not db_project or db_project.user_id != user_id:
+    if not db_project or db_project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found or access denied"
@@ -246,13 +234,13 @@ def get_project_scenarios(
 @router.get("/scenarios/{scenario_id}", response_model=ScenarioDetailResponse)
 def get_scenario(
     scenario_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Get a specific scenario with full details."""
     db_scenario = crud.get_scenario_by_id(scenario_id)
     
-    if not db_scenario or db_scenario.project.user_id != user_id:
+    if not db_scenario or db_scenario.project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Scenario not found or access denied"
@@ -264,13 +252,13 @@ def get_scenario(
 def update_scenario(
     scenario_id: UUID,
     scenario_update: ScenarioUpdate,
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Update a scenario."""
     # Verify scenario exists and user has access
     db_scenario = crud.get_scenario_by_id(scenario_id)
-    if not db_scenario or db_scenario.project.user_id != user_id:
+    if not db_scenario or db_scenario.project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Scenario not found or access denied"
@@ -295,13 +283,13 @@ def update_scenario(
 @router.delete("/scenarios/{scenario_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_scenario(
     scenario_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Delete a scenario."""
     # Verify scenario exists and user has access
     db_scenario = crud.get_scenario_by_id(scenario_id)
-    if not db_scenario or db_scenario.project.user_id != user_id:
+    if not db_scenario or db_scenario.project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Scenario not found or access denied"
@@ -319,14 +307,14 @@ def delete_scenario(
 @router.post("/scenarios/{scenario_id}/calculate", response_model=CalculationResponse)
 def calculate_scenario(
     scenario_id: UUID,
-    user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud),
     db: Session = Depends(get_db)
 ):
     """Run calculations for a scenario."""
     # Verify scenario exists and user has access
     db_scenario = crud.get_scenario_by_id(scenario_id)
-    if not db_scenario or db_scenario.project.user_id != user_id:
+    if not db_scenario or db_scenario.project.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Scenario not found or access denied"
@@ -417,10 +405,9 @@ def calculate_scenario(
 @router.post("/auth/login", response_model=LoginResponse)
 def login(
     login_data: LoginRequest,
-    db: Session = Depends(get_db),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    db: Session = Depends(get_db)
 ):
-    """User login endpoint with email/password authentication."""
+    """User login endpoint with JWT token generation."""
     try:
         # Find user by email
         stmt = select(User).where(User.email == login_data.email)
@@ -432,34 +419,35 @@ def login(
                 detail="Invalid email or password"
             )
         
-        # Verify password - handle both plain text (for testing) and hashed passwords
-        try:
-            # Try bcrypt verification first
-            password_valid = bcrypt.checkpw(
-                login_data.password.encode('utf-8'), 
-                user.password_hash.encode('utf-8')
-            )
-        except (ValueError, Exception):
-            # If bcrypt fails, check if it's plain text (for development)
-            password_valid = (user.password_hash == login_data.password)
+        # Ensure password length is within bcrypt limits
+        password_to_check = login_data.password
+        if len(password_to_check) > 72:
+            password_to_check = password_to_check[:72]
+            logger.warning(f"Password truncated for user {login_data.email}")
         
-        if not password_valid:
+        # Verify password
+        if not verify_password(password_to_check, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
         
-        # Create user schema using constructor instead of from_orm
+        # Create access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": str(user.id)}, expires_delta=access_token_expires
+        )
+        
+        # Create user schema
         user_schema = UserSchema(
             id=user.id,
             name=user.name,
             email=user.email
         )
         
-        # TODO: Generate proper JWT token
-        # For now, return a placeholder token
         return LoginResponse(
-            access_token=f"placeholder_token_{user.id}",
+            access_token=access_token,
+            token_type="bearer",
             user=user_schema
         )
         

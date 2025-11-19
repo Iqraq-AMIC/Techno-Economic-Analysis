@@ -20,6 +20,7 @@ from app.models.biofuel_model import (
     DefaultParameterSet, Product
 )
 from app.core.database import SessionLocal, create_tables
+from app.core.security import get_password_hash
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -413,10 +414,8 @@ def seed_p_f_references(db: Session, seed_data: Dict[str, Any], id_maps: Dict[st
 
 # Add this function to handle password hashing
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt"""
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
+    """Hash a password using the security module"""
+    return get_password_hash(password)
 
 # Replace the USERS section with CSV reading logic
 def load_users_from_csv() -> List[Dict[str, str]]:
@@ -426,7 +425,7 @@ def load_users_from_csv() -> List[Dict[str, str]]:
     if not csv_path.exists():
         logger.warning(f"CSV file not found at {csv_path}. Using default admin user.")
         return [{
-            "id": SEED_USER_UUID,
+            "id": "00000000-0000-0000-0000-000000000001",
             "name": "Admin User",
             "email": "admin@example.com", 
             "password": "adminsaf1234"
@@ -435,25 +434,45 @@ def load_users_from_csv() -> List[Dict[str, str]]:
     users = []
     try:
         with open(csv_path, 'r', encoding='utf-8') as file:
-            reader = csv.DictReader(file, delimiter='\t')  # Tab-delimited
-            for row in reader:
+            # Read the file content to detect delimiter
+            content = file.read()
+            file.seek(0)
+            
+            # Try different delimiters
+            if '\t' in content:
+                reader = csv.DictReader(file, delimiter='\t')
+            else:
+                reader = csv.DictReader(file, delimiter=',')
+            
+            for i, row in enumerate(reader):
+                # Handle potential missing columns
+                name = row.get("Staff Name", f"User {i+1}").strip()
+                email = row.get("Email Address", f"user{i+1}@example.com").strip()
+                password = row.get("Suggested Password", f"password{i+1}").strip()
+                
+                # Ensure password is not too long for bcrypt
+                if len(password) > 72:
+                    password = password[:72]
+                    logger.warning(f"Truncated password for user {email}")
+                
                 users.append({
-                    "name": row["Staff Name"],
-                    "email": row["Email Address"],
-                    "password": row["Suggested Password"]
+                    "name": name,
+                    "email": email,
+                    "password": password
                 })
+        
         logger.info(f"Loaded {len(users)} users from CSV")
+        return users
+        
     except Exception as e:
         logger.error(f"Error reading CSV file: {e}")
         # Fallback to default user
-        users = [{
-            "id": SEED_USER_UUID,
+        return [{
+            "id": "00000000-0000-0000-0000-000000000001",
             "name": "Admin User",
             "email": "admin@example.com",
             "password": "adminsaf1234"
         }]
-    
-    return users
 
 
 def seed_database(db: Session):
@@ -469,12 +488,19 @@ def seed_database(db: Session):
             users_data = load_users_from_csv()
             
             for i, data in enumerate(users_data):
+                # Generate UUID if not provided
                 user_id = UUID(data["id"]) if "id" in data else UUID(int=i+1)
+                
+                # Ensure password is properly handled
+                password = data["password"]
+                if len(password) > 72:
+                    password = password[:72]
+                
                 db.add(User(
                     id=user_id,
                     name=data["name"],
                     email=data["email"],
-                    password_hash=hash_password(data["password"]),
+                    password_hash=get_password_hash(password),
                     created_at=datetime.utcnow()
                 ))
             db.commit()
