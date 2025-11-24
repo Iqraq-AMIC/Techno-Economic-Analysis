@@ -1,3 +1,5 @@
+// src/views/Login.js
+
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import {
@@ -5,9 +7,6 @@ import {
   Form,
   FormGroup,
   FormInput,
-  Nav,
-  NavItem,
-  NavLink,
   Alert
 } from "shards-react";
 import { useAuth } from "../contexts/AuthContext";
@@ -28,15 +27,8 @@ const Login = ({ history }) => {
     };
   }, []);
 
-  const [activeTab, setActiveTab] = useState("signin"); // signin, signup, forgot
-  const [credentials, setCredentials] = useState({ username: "", password: "" });
-  const [signupData, setSignupData] = useState({
-    username: "",
-    email: "",
-    password: "",
-    confirmPassword: ""
-  });
-  const [forgotEmail, setForgotEmail] = useState("");
+  const [activeTab, setActiveTab] = useState("signin");
+  const [credentials, setCredentials] = useState({ email: "", password: "" }); // Changed from username to email
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,22 +41,30 @@ const Login = ({ history }) => {
     }));
   };
 
-  const handleSignupChange = (field) => ({ target }) => {
-    const { value = "" } = target || {};
-    setSignupData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
   const handleSignIn = async (event) => {
     event.preventDefault();
     setError("");
     setSuccess("");
     setIsSubmitting(true);
 
-    console.log("🔐 Login attempt with:", credentials.username);
-    const result = await login(credentials.username, credentials.password);
+    console.log("🔐 Login attempt with:", credentials.email);
+    
+    // Basic validation
+    if (!credentials.email || !credentials.password) {
+      setError("Please enter both email and password");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(credentials.email)) {
+      setError("Please enter a valid email address");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const result = await login(credentials.email, credentials.password);
     console.log("🔐 Login result:", result);
 
     if (result.success) {
@@ -83,48 +83,13 @@ const Login = ({ history }) => {
     }
   };
 
-  const handleSignUp = (event) => {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
-    setIsSubmitting(true);
-
-    // Validation
-    if (!signupData.username || !signupData.email || !signupData.password) {
-      setError("Please fill in all fields.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (signupData.password !== signupData.confirmPassword) {
-      setError("Passwords do not match.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (signupData.password.length < 8) {
-      setError("Password must be at least 8 characters long.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    // TODO: Replace with actual API call
-    // For now, simulate success
-    setTimeout(() => {
-      setSuccess("Account created successfully! Please sign in.");
-      setActiveTab("signin");
-      setSignupData({ username: "", email: "", password: "", confirmPassword: "" });
-      setIsSubmitting(false);
-    }, 1000);
-  };
-
   const handleForgotPassword = (event) => {
     event.preventDefault();
     setError("");
     setSuccess("");
     setIsSubmitting(true);
 
-    if (!forgotEmail) {
+    if (!credentials.email) {
       setError("Please enter your email address.");
       setIsSubmitting(false);
       return;
@@ -134,7 +99,6 @@ const Login = ({ history }) => {
     // For now, simulate success
     setTimeout(() => {
       setSuccess("If an account exists with this email, a password reset link has been sent.");
-      setForgotEmail("");
       setIsSubmitting(false);
     }, 1000);
   };
@@ -151,7 +115,7 @@ const Login = ({ history }) => {
           overflow: "hidden",
         }}
       >
-      {/* Blurred Background Image */}
+      {/* Background and overlay remain the same */}
       <div
         style={{
           position: "absolute",
@@ -167,7 +131,6 @@ const Login = ({ history }) => {
           pointerEvents: "none",
         }}
       />
-      {/* Gradient Overlay */}
       <div
         style={{
           position: "absolute",
@@ -180,6 +143,7 @@ const Login = ({ history }) => {
           pointerEvents: "none",
         }}
       />
+      
       {/* Card Container */}
       <div
         style={{
@@ -223,22 +187,8 @@ const Login = ({ history }) => {
                   >
                     Welcome Back
                   </h2>
-                </>
-              )}
-              {activeTab === "signup" && (
-                <>
-                  <h2
-                    style={{
-                      fontSize: "1.875rem",
-                      fontWeight: 700,
-                      color: "#1a1a1a",
-                      marginBottom: "0.5rem"
-                    }}
-                  >
-                    Create Account
-                  </h2>
                   <p style={{ color: "#6b7280", fontSize: "0.875rem", margin: 0, lineHeight: "1.4" }}>
-                    <strong>Sign up to get started with the platform</strong>
+                    Sign in to your account to continue
                   </p>
                 </>
               )}
@@ -261,8 +211,6 @@ const Login = ({ history }) => {
               )}
             </div>
 
-            {/* Tabs - Sign Up removed as per requirements */}
-
             {/* Success/Error Messages */}
             {error && (
               <Alert theme="danger" style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
@@ -280,13 +228,14 @@ const Login = ({ history }) => {
               <Form onSubmit={handleSignIn}>
                 <FormGroup>
                   <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
-                    Username
+                    Email Address
                   </label>
                   <FormInput
                     size="lg"
-                    placeholder="Enter your username"
-                    value={credentials.username}
-                    onChange={handleChange("username")}
+                    type="email"
+                    placeholder="Enter your email"
+                    value={credentials.email}
+                    onChange={handleChange("email")}
                     style={{
                       fontSize: "0.95rem",
                       backgroundColor: "#ffffff",
@@ -375,107 +324,6 @@ const Login = ({ history }) => {
               </Form>
             )}
 
-            {/* Sign Up Form */}
-            {activeTab === "signup" && (
-              <Form onSubmit={handleSignUp}>
-                <FormGroup>
-                  <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
-                    Username
-                  </label>
-                  <FormInput
-                    size="lg"
-                    placeholder="Choose a username"
-                    value={signupData.username}
-                    onChange={handleSignupChange("username")}
-                    style={{
-                      fontSize: "0.95rem",
-                      backgroundColor: "#ffffff",
-                      color: "#212529",
-                      border: "1px solid #d1d5db"
-                    }}
-                    required
-                  />
-                </FormGroup>
-
-                <FormGroup>
-                  <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
-                    Email
-                  </label>
-                  <FormInput
-                    size="lg"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={signupData.email}
-                    onChange={handleSignupChange("email")}
-                    style={{
-                      fontSize: "0.95rem",
-                      backgroundColor: "#ffffff",
-                      color: "#212529",
-                      border: "1px solid #d1d5db"
-                    }}
-                    required
-                  />
-                </FormGroup>
-
-                <FormGroup>
-                  <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
-                    Password
-                  </label>
-                  <FormInput
-                    size="lg"
-                    type="password"
-                    placeholder="Create a password (min 8 characters)"
-                    value={signupData.password}
-                    onChange={handleSignupChange("password")}
-                    style={{
-                      fontSize: "0.95rem",
-                      backgroundColor: "#ffffff",
-                      color: "#212529",
-                      border: "1px solid #d1d5db"
-                    }}
-                    required
-                  />
-                </FormGroup>
-
-                <FormGroup>
-                  <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
-                    Confirm Password
-                  </label>
-                  <FormInput
-                    size="lg"
-                    type="password"
-                    placeholder="Confirm your password"
-                    value={signupData.confirmPassword}
-                    onChange={handleSignupChange("confirmPassword")}
-                    style={{
-                      fontSize: "0.95rem",
-                      backgroundColor: "#ffffff",
-                      color: "#212529",
-                      border: "1px solid #d1d5db"
-                    }}
-                    required
-                  />
-                </FormGroup>
-
-                <Button
-                  block
-                  size="lg"
-                  disabled={isSubmitting}
-                  style={{
-                    fontWeight: 600,
-                    backgroundColor: "#006D7C",
-                    border: "none",
-                    padding: "0.75rem",
-                    fontSize: "1rem",
-                    marginBottom: "1.5rem"
-                  }}
-                  type="submit"
-                >
-                  {isSubmitting ? "Creating account..." : "Sign Up"}
-                </Button>
-              </Form>
-            )}
-
             {/* Forgot Password Form */}
             {activeTab === "forgot" && (
               <>
@@ -507,8 +355,8 @@ const Login = ({ history }) => {
                       size="lg"
                       type="email"
                       placeholder="Enter your email"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
+                      value={credentials.email}
+                      onChange={handleChange("email")}
                       style={{
                         fontSize: "0.95rem",
                         backgroundColor: "#ffffff",
@@ -539,7 +387,7 @@ const Login = ({ history }) => {
               </>
             )}
 
-            {/* Collaboration Logos - Only for Sign In */}
+            {/* Collaboration Logos */}
             {activeTab === "signin" && (
               <div style={{ marginTop: "auto", paddingTop: "2rem", textAlign: "center" }}>
                 <p style={{ fontSize: "0.75rem", color: "#9ca3af", marginBottom: "1rem", textTransform: "uppercase", letterSpacing: "1px" }}>
@@ -573,7 +421,6 @@ const Login = ({ history }) => {
             position: "relative",
           }}
         >
-          {/* Optional overlay for better contrast */}
           <div
             style={{
               position: "absolute",

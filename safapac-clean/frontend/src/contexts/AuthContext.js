@@ -1,18 +1,26 @@
+// src/contexts/AuthContext.js
+
 import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
 import axios from "axios";
 
 const AuthContext = createContext();
 
-const AUTH_STORAGE_KEY = "safapac-authenticated";
+const TOKEN_STORAGE_KEY = "safapac-token";
 const USER_STORAGE_KEY = "safapac-user";
 const LOGIN_HISTORY_KEY = "safapac-login-history";
+
+// Create axios instance with base URL
+const api = axios.create({
+  baseURL: "http://localhost:8000/api/v1",
+  timeout: 10000,
+});
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === "undefined") {
       return false;
     }
-    return window.localStorage.getItem(AUTH_STORAGE_KEY) === "true";
+    return !!window.localStorage.getItem(TOKEN_STORAGE_KEY);
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
@@ -23,27 +31,43 @@ export const AuthProvider = ({ children }) => {
     return storedUser ? JSON.parse(storedUser) : null;
   });
 
-  const persistAuthState = (nextState, user = null) => {
+  const [token, setToken] = useState(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  });
+
+  // Set up axios interceptor for authenticated requests
+  useEffect(() => {
+    if (token) {
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    } else {
+      delete api.defaults.headers.common["Authorization"];
+    }
+  }, [token]);
+
+  const persistAuthState = (newToken, user = null) => {
     if (typeof window === "undefined") {
       return;
     }
-    if (nextState) {
-      window.localStorage.setItem(AUTH_STORAGE_KEY, "true");
+    if (newToken) {
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
       if (user) {
         window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       }
     } else {
-      window.localStorage.removeItem(AUTH_STORAGE_KEY);
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
       window.localStorage.removeItem(USER_STORAGE_KEY);
     }
   };
 
-  const recordLoginHistory = (username, success) => {
+  const recordLoginHistory = (email, success) => {
     if (typeof window === "undefined") return;
 
     const history = JSON.parse(window.localStorage.getItem(LOGIN_HISTORY_KEY) || "[]");
     history.push({
-      username,
+      email,
       timestamp: new Date().toISOString(),
       success
     });
@@ -56,34 +80,55 @@ export const AuthProvider = ({ children }) => {
     window.localStorage.setItem(LOGIN_HISTORY_KEY, JSON.stringify(history));
   };
 
-  const login = async (username, password) => {
+  const login = async (email, password) => {
     try {
-      // Call backend to validate credentials against pw.csv
-      const response = await axios.post("http://localhost:8000/auth/login", {
-        username: username.trim(),
+      console.log("🔐 Attempting login with:", email);
+      
+      // Call backend login endpoint
+      const response = await api.post("/auth/login", {
+        email: email.trim(),
         password: password.trim()
       });
 
-      if (response.data.success) {
-        const userData = response.data.user;
+      console.log("🔐 Login response:", response.data);
 
-        // Set authenticated immediately to allow redirect to TEA
+      if (response.data.accessToken) {
+        const { accessToken, user } = response.data;
+
+        // Update state
+        setToken(accessToken);
         setIsAuthenticated(true);
-        setCurrentUser(userData);
-        persistAuthState(true, userData);
-        recordLoginHistory(username, true);
+        setCurrentUser(user);
+        persistAuthState(accessToken, user);
+        recordLoginHistory(email, true);
 
-        return { success: true, user: userData };
+        // Set authorization header for future requests
+        api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+
+        return { success: true, user };
       }
 
-      recordLoginHistory(username, false);
-      return { success: false, message: response.data.message || "Invalid credentials" };
+      recordLoginHistory(email, false);
+      return { success: false, message: "Invalid response from server" };
     } catch (error) {
       console.error("Login error:", error);
-      recordLoginHistory(username, false);
+      recordLoginHistory(email, false);
+      
+      let errorMessage = "Unable to connect to authentication server";
+      
+      if (error.response) {
+        // Server responded with error status
+        errorMessage = error.response.data?.detail || 
+                      error.response.data?.message || 
+                      `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // Request was made but no response received
+        errorMessage = "No response from server. Please check if the backend is running.";
+      }
+
       return {
         success: false,
-        message: error.response?.data?.detail || "Unable to connect to authentication server"
+        message: errorMessage
       };
     }
   };
@@ -94,66 +139,91 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    setToken(null);
     setIsAuthenticated(false);
     setCurrentUser(null);
-    persistAuthState(false);
+    persistAuthState(null);
+    delete api.defaults.headers.common["Authorization"];
   };
 
-  const signup = async (_username, _email, _password) => {
-    // TODO: Replace with actual API call to backend
-    // For now, return success to allow frontend testing
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: "Account created successfully. Please sign in."
-        });
-      }, 1000);
-    });
+  const signup = async (name, email, password) => {
+    try {
+      // Note: Backend doesn't have signup endpoint yet, using login as fallback
+      // For now, we'll simulate success
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            success: true,
+            message: "Account created successfully. Please sign in."
+          });
+        }, 1000);
+      });
+    } catch (error) {
+      console.error("Signup error:", error);
+      return {
+        success: false,
+        message: "Signup is not available at the moment."
+      };
+    }
   };
 
-  const forgotPassword = async (_email) => {
-    // TODO: Replace with actual API call to backend
-    // For now, return success to allow frontend testing
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: "If an account exists with this email, a password reset link has been sent."
-        });
-      }, 1000);
-    });
+  const forgotPassword = async (email) => {
+    try {
+      // Note: Backend doesn't have forgot password endpoint yet
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            success: true,
+            message: "If an account exists with this email, a password reset link has been sent."
+          });
+        }, 1000);
+      });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      return {
+        success: false,
+        message: "Password reset is not available at the moment."
+      };
+    }
   };
 
-  const resetPassword = async (_token, _newPassword) => {
-    // TODO: Replace with actual API call to backend
-    // For now, return success to allow frontend testing
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: "Password has been reset successfully. Please sign in."
-        });
-      }, 1000);
-    });
+  const resetPassword = async (token, newPassword) => {
+    try {
+      // Note: Backend doesn't have reset password endpoint yet
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            success: true,
+            message: "Password has been reset successfully. Please sign in."
+          });
+        }, 1000);
+      });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      return {
+        success: false,
+        message: "Password reset failed."
+      };
+    }
   };
 
   const value = useMemo(
     () => ({
       isAuthenticated,
       currentUser,
+      token,
       login,
       logout,
       completeLogin,
       signup,
       forgotPassword,
       resetPassword,
+      api, // Export the axios instance for other components to use
     }),
-    [isAuthenticated, currentUser]
+    [isAuthenticated, currentUser, token]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);
-
