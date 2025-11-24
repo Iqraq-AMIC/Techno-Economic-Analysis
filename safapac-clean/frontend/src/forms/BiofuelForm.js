@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
-import axios from "axios";
 import {
   Card,
   CardHeader,
@@ -23,6 +22,7 @@ import {
 } from "shards-react";
 import { useTheme } from "../contexts/ThemeContext";
 import ScenarioTabs from "../components/project/ScenarioTabs";
+import { useProject } from "../contexts/ProjectContext";
 // Heroicons via react-icons
 // Install: npm i react-icons
 // Fallback emoji icons (remove if using react-icons). If you want Heroicons,
@@ -175,9 +175,8 @@ const BiofuelForm = ({
   isCalculating,
 }) => {
   const { colors } = useTheme();
-  const [processes, setProcesses] = useState([]);
-  const [feedstocks, setFeedstocks] = useState([]);
-  const [selectedCountry, setSelectedCountry] = useState("Malaysia");
+  const { masterData, loadMasterData } = useProject();
+  const [selectedCountry, setSelectedCountry] = useState("USA");
   const [showDataNotAvailableModal, setShowDataNotAvailableModal] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState({
     conversionPlant: true,
@@ -187,7 +186,9 @@ const BiofuelForm = ({
   });
   const [collapsedProducts, setCollapsedProducts] = useState({});
 
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000";
+  // Use masterData from context instead of separate API calls
+  const processes = masterData?.processes || [];
+  const feedstocks = masterData?.feedstocks || [];
 
   // Initialize all products as collapsed by default
   useEffect(() => {
@@ -195,7 +196,6 @@ const BiofuelForm = ({
       setCollapsedProducts(prev => {
         const newState = { ...prev };
         inputs.products.forEach((_, index) => {
-          // Only set to collapsed if not already in state (preserves user interaction)
           if (newState[index] === undefined) {
             newState[index] = true;
           }
@@ -203,46 +203,21 @@ const BiofuelForm = ({
         return newState;
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputs.products]);
 
   useEffect(() => {
-    let isMounted = true;
-    axios
-      .get(`${API_URL}/processes`)
-      .then((res) => {
-        if (isMounted) {
-          setProcesses(res.data || []);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to fetch processes:", err);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [API_URL]);
+    console.log("🔍 BiofuelForm - Checking master data:", masterData);
 
-  useEffect(() => {
-    if (!selectedProcess) {
-      setFeedstocks([]);
-      return;
-    }
-    let isMounted = true;
-    axios
-      .get(`${API_URL}/feedstocks/${selectedProcess}`)
-      .then((res) => {
-        if (isMounted) {
-          setFeedstocks(res.data || []);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to fetch feedstocks:", err);
+    if (!masterData) {
+      console.log("🔄 BiofuelForm - No master data, loading...");
+      loadMasterData();
+    } else {
+      console.log("✅ BiofuelForm - Master data available:", {
+        processes: masterData.processes?.length,
+        feedstocks: masterData.feedstocks?.length
       });
-    return () => {
-      isMounted = false;
-    };
-  }, [API_URL, selectedProcess]);
+    }
+  }, [masterData, loadMasterData]);
 
   const totalMassFraction = useMemo(
     () =>
@@ -514,291 +489,291 @@ const BiofuelForm = ({
         {!isCollapsed && (
           <div style={{ marginTop: "8px" }}>
             <Row form>
-          <Col xs="12" className="mb-2">
-            <FormGroup className="mb-1">
-              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Product Name</label>
-              <FormInput
-                size="sm"
-                value={product.name}
-                onChange={(e) => handleProductInputChange(index, "name")(e)}
-                style={{ fontSize: "0.75rem" }}
-              />
-            </FormGroup>
-          </Col>
+              <Col xs="12" className="mb-2">
+                <FormGroup className="mb-1">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Product Name</label>
+                  <FormInput
+                    size="sm"
+                    value={product.name}
+                    onChange={(e) => handleProductInputChange(index, "name")(e)}
+                    style={{ fontSize: "0.75rem" }}
+                  />
+                </FormGroup>
+              </Col>
 
-          {/* Price slider with direct input */}
-          <Col xs="12" className="mb-2">
-            <FormGroup className="mb-1">
-              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price</label>
-              <Row form className="align-items-center mb-1">
-                <Col xs="6">
+              {/* Price slider with direct input */}
+              <Col xs="12" className="mb-2">
+                <FormGroup className="mb-1">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price</label>
+                  <Row form className="align-items-center mb-1">
+                    <Col xs="6">
+                      <FormInput
+                        size="sm"
+                        type="text"
+                        value={product.price}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          // Allow typing decimal numbers
+                          if (val === '' || val === '-' || !isNaN(val)) {
+                            handleProductInputChange(index, "price")(val === '' ? 0 : val);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const num = Number(e.target.value);
+                          if (!isNaN(num)) {
+                            handleProductInputChange(index, "price")(num);
+                          }
+                        }}
+                        style={{ fontSize: "0.75rem" }}
+                      />
+                    </Col>
+                    <Col xs="6">
+                      <FormSelect
+                        size="sm"
+                        value={product.priceUnit}
+                        onChange={(e) =>
+                          handleProductInputChange(index, "priceUnit")(e.target.value)
+                        }
+                        style={{ fontSize: "0.7rem", minWidth: 120 }}
+                      >
+                        {PRODUCT_UNIT_OPTIONS.priceUnit.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </FormSelect>
+                    </Col>
+                  </Row>
+                  <Slider
+                    connect={[true, false]}
+                    start={[Number(product.price) || 0]}
+                    range={{ min: 0, max: 10000 }}
+                    step={5}
+                    onSlide={handleProductSliderChange(index, "price")}
+                    className="slider-product"
+                  />
+                </FormGroup>
+              </Col>
+
+              {/* Mass Fraction slider with direct input - RIGHT UNDER PRICE */}
+              <Col xs="12" className="mb-2">
+                <FormGroup className="mb-1">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Mass Fraction (%)</label>
+                  <Row form className="align-items-center mb-1">
+                    <Col xs="12">
+                      <FormInput
+                        size="sm"
+                        type="text"
+                        value={product.massFraction}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          // Allow typing decimal numbers
+                          if (val === '' || val === '-' || !isNaN(val)) {
+                            handleProductInputChange(index, "massFraction")(val === '' ? 0 : val);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const num = Number(e.target.value);
+                          if (!isNaN(num)) {
+                            handleProductInputChange(index, "massFraction")(num);
+                          }
+                        }}
+                        style={{ fontSize: "0.75rem" }}
+                      />
+                    </Col>
+                  </Row>
+                  <Slider
+                    connect={[true, false]}
+                    start={[Number(product.massFraction) || 0]}
+                    range={{ min: 0, max: 100 }}
+                    step={0.5}
+                    onSlide={handleProductSliderChange(index, "massFraction")}
+                    className="slider-product"
+                  />
+                </FormGroup>
+              </Col>
+
+              <Col sm="6" className="mb-2">
+                <FormGroup className="mb-1">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price Sensitivity</label>
+                  <Row form>
+                    <Col xs="6">
+                      <FormInput
+                        size="sm"
+                        type="text"
+                        value={product.priceSensitivity}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || val === '-' || !isNaN(val)) {
+                            handleProductInputChange(index, "priceSensitivity")(val === '' ? 0 : val);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const num = Number(e.target.value);
+                          if (!isNaN(num)) {
+                            handleProductInputChange(index, "priceSensitivity")(num);
+                          }
+                        }}
+                        style={{ fontSize: "0.75rem" }}
+                      />
+                    </Col>
+                    <Col xs="6">
+                      <FormSelect
+                        size="sm"
+                        value={product.priceSensitivityUnit}
+                        onChange={(e) =>
+                          handleProductInputChange(index, "priceSensitivityUnit")(e.target.value)
+                        }
+                        style={{ fontSize: "0.7rem", minWidth: 120 }}
+                      >
+                        {PRODUCT_UNIT_OPTIONS.priceSensitivityUnit.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </FormSelect>
+                    </Col>
+                  </Row>
+                </FormGroup>
+              </Col>
+              <Col sm="6" className="mb-2">
+                <FormGroup className="mb-1">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Carbon Content (fraction)</label>
                   <FormInput
                     size="sm"
                     type="text"
-                    value={product.price}
+                    value={product.carbonContent}
                     onChange={(e) => {
                       const val = e.target.value;
-                      // Allow typing decimal numbers
                       if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "price")(val === '' ? 0 : val);
+                        handleProductInputChange(index, "carbonContent")(val === '' ? 0 : val);
                       }
                     }}
                     onBlur={(e) => {
                       const num = Number(e.target.value);
                       if (!isNaN(num)) {
-                        handleProductInputChange(index, "price")(num);
+                        handleProductInputChange(index, "carbonContent")(num);
                       }
                     }}
                     style={{ fontSize: "0.75rem" }}
                   />
-                </Col>
-                <Col xs="6">
-                  <FormSelect
-                    size="sm"
-                    value={product.priceUnit}
-                    onChange={(e) =>
-                      handleProductInputChange(index, "priceUnit")(e.target.value)
-                    }
-                    style={{ fontSize: "0.7rem", minWidth: 120 }}
-                  >
-                    {PRODUCT_UNIT_OPTIONS.priceUnit.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </FormSelect>
-                </Col>
-              </Row>
-              <Slider
-                connect={[true, false]}
-                start={[Number(product.price) || 0]}
-                range={{ min: 0, max: 10000 }}
-                step={5}
-                onSlide={handleProductSliderChange(index, "price")}
-                className="slider-product"
-              />
-            </FormGroup>
-          </Col>
+                </FormGroup>
+              </Col>
 
-          {/* Mass Fraction slider with direct input - RIGHT UNDER PRICE */}
-          <Col xs="12" className="mb-2">
-            <FormGroup className="mb-1">
-              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Mass Fraction (%)</label>
-              <Row form className="align-items-center mb-1">
-                <Col xs="12">
+              <Col sm="6" className="mb-2">
+                <FormGroup className="mb-1">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Product Density (kg/m3)</label>
                   <FormInput
                     size="sm"
                     type="text"
-                    value={product.massFraction}
+                    value={product.density ?? ""}
                     onChange={(e) => {
                       const val = e.target.value;
-                      // Allow typing decimal numbers
                       if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "massFraction")(val === '' ? 0 : val);
+                        handleProductInputChange(index, "density")(val === '' ? '' : val);
                       }
                     }}
                     onBlur={(e) => {
                       const num = Number(e.target.value);
                       if (!isNaN(num)) {
-                        handleProductInputChange(index, "massFraction")(num);
+                        handleProductInputChange(index, "density")(num);
                       }
                     }}
                     style={{ fontSize: "0.75rem" }}
                   />
-                </Col>
-              </Row>
-              <Slider
-                connect={[true, false]}
-                start={[Number(product.massFraction) || 0]}
-                range={{ min: 0, max: 100 }}
-                step={0.5}
-                onSlide={handleProductSliderChange(index, "massFraction")}
-                className="slider-product"
-              />
-            </FormGroup>
-          </Col>
+                </FormGroup>
+              </Col>
 
-          <Col sm="6" className="mb-2">
-            <FormGroup className="mb-1">
-              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price Sensitivity</label>
-              <Row form>
-                <Col xs="6">
-                  <FormInput
-                    size="sm"
-                    type="text"
-                    value={product.priceSensitivity}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "priceSensitivity")(val === '' ? 0 : val);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const num = Number(e.target.value);
-                      if (!isNaN(num)) {
-                        handleProductInputChange(index, "priceSensitivity")(num);
-                      }
-                    }}
-                    style={{ fontSize: "0.75rem" }}
-                  />
-                </Col>
-                <Col xs="6">
-                  <FormSelect
-                    size="sm"
-                    value={product.priceSensitivityUnit}
-                    onChange={(e) =>
-                      handleProductInputChange(index, "priceSensitivityUnit")(e.target.value)
-                    }
-                    style={{ fontSize: "0.7rem", minWidth: 120 }}
-                  >
-                    {PRODUCT_UNIT_OPTIONS.priceSensitivityUnit.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </FormSelect>
-                </Col>
-              </Row>
-            </FormGroup>
-          </Col>
-          <Col sm="6" className="mb-2">
-            <FormGroup className="mb-1">
-              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Carbon Content (fraction)</label>
-              <FormInput
-                size="sm"
-                type="text"
-                value={product.carbonContent}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || val === '-' || !isNaN(val)) {
-                    handleProductInputChange(index, "carbonContent")(val === '' ? 0 : val);
-                  }
-                }}
-                onBlur={(e) => {
-                  const num = Number(e.target.value);
-                  if (!isNaN(num)) {
-                    handleProductInputChange(index, "carbonContent")(num);
-                  }
-                }}
-                style={{ fontSize: "0.75rem" }}
-              />
-            </FormGroup>
-          </Col>
+              {/* Energy Content with direct input */}
+              <Col sm="6" className="mb-2">
+                <FormGroup className="mb-1">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Energy Content</label>
+                  <Row form>
+                    <Col xs="6">
+                      <FormInput
+                        size="sm"
+                        type="text"
+                        value={product.energyContent}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || val === '-' || !isNaN(val)) {
+                            handleProductInputChange(index, "energyContent")(val === '' ? 0 : val);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const num = Number(e.target.value);
+                          if (!isNaN(num)) {
+                            handleProductInputChange(index, "energyContent")(num);
+                          }
+                        }}
+                        style={{ fontSize: "0.75rem" }}
+                      />
+                    </Col>
+                    <Col xs="6">
+                      <FormSelect
+                        size="sm"
+                        value={product.energyUnit}
+                        onChange={(e) =>
+                          handleProductInputChange(index, "energyUnit")(e.target.value)
+                        }
+                        style={{ fontSize: "0.7rem", minWidth: 120 }}
+                      >
+                        {PRODUCT_UNIT_OPTIONS.energyUnit.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </FormSelect>
+                    </Col>
+                  </Row>
+                </FormGroup>
+              </Col>
 
-          <Col sm="6" className="mb-2">
-            <FormGroup className="mb-1">
-              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Product Density (kg/m3)</label>
-              <FormInput
-                size="sm"
-                type="text"
-                value={product.density ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || val === '-' || !isNaN(val)) {
-                    handleProductInputChange(index, "density")(val === '' ? '' : val);
-                  }
-                }}
-                onBlur={(e) => {
-                  const num = Number(e.target.value);
-                  if (!isNaN(num)) {
-                    handleProductInputChange(index, "density")(num);
-                  }
-                }}
-                style={{ fontSize: "0.75rem" }}
-              />
-            </FormGroup>
-          </Col>
-
-          {/* Energy Content with direct input */}
-          <Col sm="6" className="mb-2">
-            <FormGroup className="mb-1">
-              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Energy Content</label>
-              <Row form>
-                <Col xs="6">
-                  <FormInput
-                    size="sm"
-                    type="text"
-                    value={product.energyContent}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "energyContent")(val === '' ? 0 : val);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const num = Number(e.target.value);
-                      if (!isNaN(num)) {
-                        handleProductInputChange(index, "energyContent")(num);
-                      }
-                    }}
-                    style={{ fontSize: "0.75rem" }}
-                  />
-                </Col>
-                <Col xs="6">
-                  <FormSelect
-                    size="sm"
-                    value={product.energyUnit}
-                    onChange={(e) =>
-                      handleProductInputChange(index, "energyUnit")(e.target.value)
-                    }
-                    style={{ fontSize: "0.7rem", minWidth: 120 }}
-                  >
-                    {PRODUCT_UNIT_OPTIONS.energyUnit.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </FormSelect>
-                </Col>
-              </Row>
-            </FormGroup>
-          </Col>
-
-          {/* Yield with direct input */}
-          <Col sm="6" className="mb-2">
-            <FormGroup className="mb-1">
-              <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Yield</label>
-              <Row form>
-                <Col xs="6">
-                  <FormInput
-                    size="sm"
-                    type="text"
-                    value={product.yield}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "yield")(val === '' ? 0 : val);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const num = Number(e.target.value);
-                      if (!isNaN(num)) {
-                        handleProductInputChange(index, "yield")(num);
-                      }
-                    }}
-                    style={{ fontSize: "0.75rem" }}
-                  />
-                </Col>
-                <Col xs="6">
-                  <FormSelect
-                    size="sm"
-                    value={product.yieldUnit}
-                    onChange={(e) =>
-                      handleProductInputChange(index, "yieldUnit")(e.target.value)
-                    }
-                    style={{ fontSize: "0.7rem", minWidth: 120 }}
-                  >
-                    {PRODUCT_UNIT_OPTIONS.yieldUnit.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </FormSelect>
-                </Col>
-              </Row>
-            </FormGroup>
-          </Col>
-        </Row>
+              {/* Yield with direct input */}
+              <Col sm="6" className="mb-2">
+                <FormGroup className="mb-1">
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Yield</label>
+                  <Row form>
+                    <Col xs="6">
+                      <FormInput
+                        size="sm"
+                        type="text"
+                        value={product.yield}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || val === '-' || !isNaN(val)) {
+                            handleProductInputChange(index, "yield")(val === '' ? 0 : val);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const num = Number(e.target.value);
+                          if (!isNaN(num)) {
+                            handleProductInputChange(index, "yield")(num);
+                          }
+                        }}
+                        style={{ fontSize: "0.75rem" }}
+                      />
+                    </Col>
+                    <Col xs="6">
+                      <FormSelect
+                        size="sm"
+                        value={product.yieldUnit}
+                        onChange={(e) =>
+                          handleProductInputChange(index, "yieldUnit")(e.target.value)
+                        }
+                        style={{ fontSize: "0.7rem", minWidth: 120 }}
+                      >
+                        {PRODUCT_UNIT_OPTIONS.yieldUnit.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </FormSelect>
+                    </Col>
+                  </Row>
+                </FormGroup>
+              </Col>
+            </Row>
           </div>
         )}
       </div>
@@ -1030,10 +1005,48 @@ const BiofuelForm = ({
     </div>
   );
 
+  // Add this useEffect to debug the data flow
+  useEffect(() => {
+    console.log("🔍 BiofuelForm Debug:", {
+      hasMasterData: !!masterData,
+      processesCount: processes.length,
+      feedstocksCount: feedstocks.length,
+      selectedProcess,
+      selectedFeedstock
+    });
+
+    if (masterData) {
+      console.log("📋 Available processes:", processes.map(p => p.name));
+      console.log("📋 Available feedstocks:", feedstocks.map(f => f.name));
+    }
+  }, [masterData, processes, feedstocks, selectedProcess, selectedFeedstock]);
+
   const feedstockUtilitiesSubtitle = "Describe the primary feedstock and supporting utilities.";
 
   const feedstockUtilitiesContent = feedstockUtilitiesForm;
 
+  const DebugInfo = () => (
+    <div style={{
+      position: 'fixed',
+      top: '10px',
+      right: '10px',
+      background: 'rgba(0,0,0,0.8)',
+      color: 'white',
+      padding: '10px',
+      fontSize: '12px',
+      zIndex: 1000,
+      maxWidth: '300px'
+    }}>
+      <strong>Debug Info:</strong><br />
+      Master Data: {masterData ? '✅ Loaded' : '❌ Loading...'}<br />
+      Processes: {processes.length}<br />
+      Feedstocks: {feedstocks.length}<br />
+      <pre>{JSON.stringify({
+        processes: processes.map(p => p.name),
+        feedstocks: feedstocks.map(f => f.name)
+      }, null, 2)}</pre>
+    </div>
+  );
   return (
     <Card small className="d-flex flex-column" style={{ height: "100%" }}>
       <CardHeader className="p-1" style={{ flexShrink: 0 }}>
@@ -1063,14 +1076,20 @@ const BiofuelForm = ({
                     value={selectedProcess}
                     onChange={handleProcessSelect}
                     style={{ fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
+                    disabled={!masterData} // Disable while loading
                   >
                     <option value="">-- Select Process --</option>
                     {processes.map((process) => (
-                      <option key={process} value={process}>
-                        {process}
+                      <option key={process.id} value={process.name}> {/* Use process.name instead of just process */}
+                        {process.name}
                       </option>
                     ))}
                   </FormSelect>
+                  {!masterData && (
+                    <small style={{ color: 'orange', fontSize: '0.6rem' }}>
+                      Loading process technologies...
+                    </small>
+                  )}
                 </FormGroup>
               </Col>
               <Col md="4" className="mb-1">
@@ -1082,11 +1101,12 @@ const BiofuelForm = ({
                       value={selectedFeedstock}
                       onChange={handleFeedstockSelect}
                       style={{ fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
+                      disabled={!masterData} // Disable while loading
                     >
                       <option value="">-- Select Feedstock --</option>
                       {feedstocks.map((feedstock) => (
-                        <option key={feedstock} value={feedstock}>
-                          {feedstock}
+                        <option key={feedstock.id} value={feedstock.name}> {/* Use feedstock.name */}
+                          {feedstock.name}
                         </option>
                       ))}
                     </FormSelect>
@@ -1171,7 +1191,7 @@ const BiofuelForm = ({
                   "slider-conversion"
                 )}
               </>,
-              
+
             )}
 
             {renderSection(
@@ -1329,7 +1349,7 @@ const BiofuelForm = ({
                   "slider-economic"
                 )}
               </>,
-            
+
             )}
           </div>
 

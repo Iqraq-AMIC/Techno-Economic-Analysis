@@ -20,7 +20,7 @@ const SCENARIO_STORAGE_KEY = "safapac-current-scenario";
 
 export const ProjectProvider = ({ children }) => {
   const { currentUser } = useAuth();
-  
+
   // Current project - DON'T load from localStorage automatically
   // User must select project via modal after each login
   const [currentProject, setCurrentProject] = useState(null);
@@ -62,33 +62,35 @@ export const ProjectProvider = ({ children }) => {
 
   // Load master data for dropdowns
   const loadMasterData = useCallback(async () => {
-    if (masterData) return masterData; // Already loaded
-    
+    // Remove the early return to allow refreshing
     try {
+      console.log("📥 Loading master data...");
       const result = await getMasterData();
       if (result.success) {
+        console.log("✅ Master data loaded:", result.data);
         setMasterData(result.data);
         return result.data;
+      } else {
+        console.error("❌ Failed to load master data:", result.error);
+        return null;
       }
-      console.error("Failed to load master data:", result.error);
-      return null;
     } catch (error) {
-      console.error("Error loading master data:", error);
+      console.error("❌ Error loading master data:", error);
       return null;
     }
-  }, [masterData]);
+  }, []);
 
   // Create a new project (auto-creates Scenario 1)
   const createProject = useCallback(async (projectName, initialProcessId = null, initialFeedstockId = null, initialCountryId = null) => {
     setLoading(true);
     try {
       const result = await apiCreateProject(
-        projectName, 
-        initialProcessId, 
-        initialFeedstockId, 
+        projectName,
+        initialProcessId,
+        initialFeedstockId,
         initialCountryId
       );
-      
+
       if (result.success) {
         const project = {
           id: result.data.id, // UUID format
@@ -119,9 +121,9 @@ export const ProjectProvider = ({ children }) => {
       return { success: false, error: result.error };
     } catch (error) {
       console.error("Error creating project:", error);
-      return { 
-        success: false, 
-        error: error.message || "Failed to create project" 
+      return {
+        success: false,
+        error: error.message || "Failed to create project"
       };
     } finally {
       setLoading(false);
@@ -153,15 +155,16 @@ export const ProjectProvider = ({ children }) => {
         const scenariosList = scenariosResult.data;
         const firstScenario = scenariosList[0];
 
-        const project = { 
+        // Normalize project data structure
+        const project = {
           id: projectData.id,
-          projectName: projectData.projectName,
-          userId: projectData.userId,
+          projectName: projectData.projectName || projectData.project_name, // Handle both cases
+          userId: projectData.userId || projectData.user_id,
           initialProcess: projectData.initialProcess,
           initialFeedstock: projectData.initialFeedstock,
           initialCountry: projectData.initialCountry,
-          createdAt: projectData.createdAt,
-          updatedAt: projectData.updatedAt
+          createdAt: projectData.createdAt || projectData.created_at,
+          updatedAt: projectData.updatedAt || projectData.updated_at
         };
 
         console.log("🔵 ProjectContext - Setting project:", project);
@@ -174,19 +177,19 @@ export const ProjectProvider = ({ children }) => {
         persistProject(project);
         persistScenario(firstScenario);
 
-        return { 
-          success: true, 
-          project, 
-          scenario: firstScenario, 
-          scenarios: scenariosList 
+        return {
+          success: true,
+          project,
+          scenario: firstScenario,
+          scenarios: scenariosList
         };
       }
       return { success: false, error: "No scenarios found for this project" };
     } catch (error) {
       console.error("Error loading project:", error);
-      return { 
-        success: false, 
-        error: error.message || "Failed to load project" 
+      return {
+        success: false,
+        error: error.message || "Failed to load project"
       };
     } finally {
       setLoading(false);
@@ -200,9 +203,9 @@ export const ProjectProvider = ({ children }) => {
       return result;
     } catch (error) {
       console.error("Error listing user projects:", error);
-      return { 
-        success: false, 
-        error: error.message || "Failed to load projects" 
+      return {
+        success: false,
+        error: error.message || "Failed to load projects"
       };
     }
   }, []);
@@ -244,19 +247,19 @@ export const ProjectProvider = ({ children }) => {
       if (result.success) {
         const newScenario = result.data;
         setScenarios((prev) => [...prev, newScenario]);
-        
+
         // Auto-switch to new scenario
         setCurrentScenario(newScenario);
         persistScenario(newScenario);
-        
+
         return { success: true, scenario: newScenario };
       }
       return result;
     } catch (error) {
       console.error("Error adding scenario:", error);
-      return { 
-        success: false, 
-        error: error.message || "Failed to create scenario" 
+      return {
+        success: false,
+        error: error.message || "Failed to create scenario"
       };
     } finally {
       setLoading(false);
@@ -276,9 +279,9 @@ export const ProjectProvider = ({ children }) => {
       return result;
     } catch (error) {
       console.error("Error switching scenario:", error);
-      return { 
-        success: false, 
-        error: error.message || "Failed to switch scenario" 
+      return {
+        success: false,
+        error: error.message || "Failed to switch scenario"
       };
     } finally {
       setLoading(false);
@@ -309,9 +312,9 @@ export const ProjectProvider = ({ children }) => {
       return result;
     } catch (error) {
       console.error("Error updating scenario:", error);
-      return { 
-        success: false, 
-        error: error.message || "Failed to update scenario" 
+      return {
+        success: false,
+        error: error.message || "Failed to update scenario"
       };
     }
   }, [currentScenario, persistScenario]);
@@ -340,9 +343,9 @@ export const ProjectProvider = ({ children }) => {
       return result;
     } catch (error) {
       console.error("Error refreshing scenarios:", error);
-      return { 
-        success: false, 
-        error: error.message || "Failed to refresh scenarios" 
+      return {
+        success: false,
+        error: error.message || "Failed to refresh scenarios"
       };
     } finally {
       setLoading(false);
@@ -396,9 +399,9 @@ export const ProjectProvider = ({ children }) => {
       return result;
     } catch (error) {
       console.error("Error deleting scenario:", error);
-      return { 
-        success: false, 
-        error: error.message || "Failed to delete scenario" 
+      return {
+        success: false,
+        error: error.message || "Failed to delete scenario"
       };
     } finally {
       setLoading(false);
@@ -437,7 +440,7 @@ export const ProjectProvider = ({ children }) => {
       loading,
       comparisonScenarios,
       masterData,
-      
+
       // Actions
       createProject,
       loadProject,

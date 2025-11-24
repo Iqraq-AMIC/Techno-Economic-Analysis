@@ -1,3 +1,5 @@
+// src/views/AnalysisDashboard.js
+
 import React, { useState, useEffect } from "react";
 import {
   Container,
@@ -18,6 +20,8 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAccess } from "../contexts/AccessContext";
 import { useProject } from "../contexts/ProjectContext";
 import ProjectStartupModal from "../components/project/ProjectStartupModal";
+import { calculateScenario } from "../api/projectApi";
+
 
 // ✅ Mock data for fallback
 const mockCashFlowTable = [
@@ -34,17 +38,21 @@ const mockCashFlowTable = [
   { year: 10, cashInflow: 550000, cashOutflow: 150000, netCashFlow: 400000, presentValue: 1880000 },
 ];
 
-const buildChartData = (tableData = []) =>
-  tableData.map((row, i) => ({
-    Year: row.Year ?? row.year ?? i,
-    "Cumulative DCF (USD)": Number.isFinite(row["Cumulative DCF (USD)"])
-      ? row["Cumulative DCF (USD)"]
-      : Number.isFinite(row.presentValue ?? row["Present Value"])
-      ? row.presentValue ?? row["Present Value"]
-      : Number.isFinite(row.netCashFlow ?? row["Net Cash Flow"])
-      ? row.netCashFlow ?? row["Net Cash Flow"]
-      : 0,
-  }));
+const buildChartData = (tableData = []) => {
+  if (!tableData || tableData.length === 0) return [];
+  
+  let cumulative = 0;
+  return tableData.map((row, i) => {
+    // Handle both old and new data structures
+    const cashFlow = row.after_tax_cash_flow || row.netCashFlow || 0;
+    cumulative += cashFlow;
+    
+    return {
+      Year: row.year || row.Year || i,
+      "Cumulative DCF (USD)": cumulative,
+    };
+  });
+};
 
 const toNumericOrZero = (value) => {
   const num = Number(value);
@@ -131,7 +139,15 @@ const normalizeCarbonIntensity = (value, unit, baseUnit) => {
 const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const { colors } = useTheme();
   const { selectedAccess } = useAccess();
-  const { currentProject, currentScenario, updateCurrentScenario, scenarios, comparisonScenarios } = useProject();
+  const { 
+    currentProject, 
+    currentScenario, 
+    updateCurrentScenario, 
+    scenarios, 
+    comparisonScenarios,
+    loadMasterData,
+    masterData
+  } = useProject();
 
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -150,8 +166,12 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       setShowProjectModal(true);
     } else {
       console.log("✅ Project already selected:", currentProject);
+      // Load master data if not already loaded
+      if (!masterData) {
+        loadMasterData();
+      }
     }
-  }, [currentProject]);
+  }, [currentProject, masterData, loadMasterData]);
 
   useEffect(() => {
     console.log("🎭 showProjectModal changed to:", showProjectModal);
@@ -160,33 +180,46 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   // Load inputs and outputs from current scenario when it changes
   useEffect(() => {
     if (currentScenario) {
-      console.log("🔄 Loading data from scenario:", currentScenario.scenario_name);
+      console.log("🔄 Loading data from scenario:", currentScenario.scenarioName || currentScenario.scenario_name);
 
-      // Load inputs if they exist in scenario
-      if (currentScenario.inputs && Object.keys(currentScenario.inputs).length > 0) {
+      // Load inputs if they exist in scenario (new structure: user_inputs)
+      const userInputs = currentScenario.user_inputs || currentScenario.inputs;
+      if (userInputs && Object.keys(userInputs).length > 0) {
         console.log("📥 Loading inputs from scenario");
-        setInputs(currentScenario.inputs);
-        setSelectedProcess(currentScenario.inputs.selected_process || "");
-        setSelectedFeedstock(currentScenario.inputs.selected_feedstock || "");
+        setInputs(userInputs);
+        setSelectedProcess(userInputs.selected_process || "");
+        setSelectedFeedstock(userInputs.selected_feedstock || "");
       }
 
-      // Load outputs if they exist in scenario
-      if (currentScenario.outputs && Object.keys(currentScenario.outputs).length > 0) {
+      // Load outputs if they exist in scenario (new structure: techno_economics + financial_analysis)
+      const technoEconomics = currentScenario.techno_economics || (currentScenario.outputs && currentScenario.outputs.apiData);
+      const financialAnalysis = currentScenario.financial_analysis || (currentScenario.outputs && currentScenario.outputs.financials);
+      
+      if (technoEconomics || financialAnalysis) {
         console.log("📥 Loading outputs from scenario");
-        if (currentScenario.outputs.apiData) {
-          setApiData(currentScenario.outputs.apiData);
-        }
-        if (currentScenario.outputs.table) {
-          setTable(currentScenario.outputs.table);
-          setChartData(buildChartData(currentScenario.outputs.table));
+        
+        const apiData = {
+          techno_economics: technoEconomics,
+          financials: financialAnalysis
+        };
+        
+        setApiData(apiData);
+
+        // Set chart data from financial analysis
+        if (financialAnalysis && financialAnalysis.cash_flow_schedule) {
+          setTable(financialAnalysis.cash_flow_schedule);
+          setChartData(buildChartData(financialAnalysis.cash_flow_schedule));
+        } else if (financialAnalysis && financialAnalysis.cashFlowTable) {
+          setTable(financialAnalysis.cashFlowTable);
+          setChartData(buildChartData(financialAnalysis.cashFlowTable));
         }
       }
     }
-  }, [currentScenario?.scenario_id]);
+  }, [currentScenario?.id]); // Use id instead of scenario_id
 
   const [inputs, setInputs] = useState({
-    production_capacity: 5000,
-    plant_capacity_unit: "t/yr",
+    production_capacity: 500,
+    plant_capacity_unit: "kta",
     average_liquid_density: 820,
     average_liquid_density_unit: "kg/m3",
     annual_load_hours: 8000,
@@ -271,21 +304,34 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   // Start with empty strings - will be populated by BiofuelForm when it loads from API
   const [selectedProcess, setSelectedProcess] = useState("");
   const [selectedFeedstock, setSelectedFeedstock] = useState("");
-
   const [apiData, setApiData] = useState(null);
-  const [table, setTable] = useState(mockCashFlowTable);
-  const [chartData, setChartData] = useState(buildChartData(mockCashFlowTable));
+  const [table, setTable] = useState([]);
+  const [chartData, setChartData] = useState([]);
   const [comparisonChartData, setComparisonChartData] = useState([]);
   const [openTable, setOpenTable] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [expandedStatDetails, setExpandedStatDetails] = useState({});
-  const [maximizedKPI, setMaximizedKPI] = useState('processOutputs'); // 'processOutputs' or 'economicOutputs'
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000";
+  const [maximizedKPI, setMaximizedKPI] = useState('processOutputs');
 
   // Update ref when table changes (after table is declared)
   useEffect(() => {
     tableRef.current = table;
   }, [table]);
+
+  useEffect(() => {
+    console.log("📊 AnalysisDashboard mounted - Loading master data");
+    
+    const loadData = async () => {
+      if (!masterData) {
+        console.log("🔄 Master data not loaded, fetching...");
+        await loadMasterData();
+      } else {
+        console.log("✅ Master data already loaded");
+      }
+    };
+
+    loadData();
+  }, [loadMasterData, masterData]);
 
   // Auto-save inputs to current scenario whenever they change
   useEffect(() => {
@@ -297,15 +343,17 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           selected_feedstock: selectedFeedstock,
         };
 
-        console.log("💾 Auto-saving inputs to scenario:", currentScenario.scenario_name);
-        await updateCurrentScenario({ inputs: inputsToSave });
+        console.log("💾 Auto-saving inputs to scenario:", currentScenario.scenarioName || currentScenario.scenario_name);
+        
+        // Use new field name: user_inputs
+        await updateCurrentScenario({ user_inputs: inputsToSave });
       };
 
       // Debounce the save to avoid too many API calls
       const timeoutId = setTimeout(saveInputs, 1000);
       return () => clearTimeout(timeoutId);
     }
-  }, [inputs, selectedProcess, selectedFeedstock, currentScenario?.scenario_id]);
+  }, [inputs, selectedProcess, selectedFeedstock, currentScenario?.id, updateCurrentScenario]);
 
   // Fetch comparison data when scenarios are selected for comparison
   useEffect(() => {
@@ -321,7 +369,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       try {
         const comparisonData = await Promise.all(
           comparisonScenarios.map(async (scenarioId) => {
-            const scenario = scenarios.find(s => s.scenario_id === scenarioId);
+            const scenario = scenarios.find(s => s.id === scenarioId); // Use id instead of scenario_id
             console.log(`📊 Found scenario ${scenarioId}:`, scenario);
 
             if (!scenario) {
@@ -329,39 +377,41 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
               return null;
             }
 
-            // Get outputs from scenario
-            const outputs = scenario.outputs;
-            console.log(`📊 Outputs for ${scenario.scenario_name}:`, outputs);
+            // Get outputs from scenario (new structure)
+            const technoEconomics = scenario.techno_economics;
+            const financialAnalysis = scenario.financial_analysis;
+            
+            console.log(`📊 Outputs for ${scenario.scenarioName || scenario.scenario_name}:`, { technoEconomics, financialAnalysis });
 
             // Try different possible locations for the cash flow table
             let cashFlowData = null;
 
-            if (outputs) {
-              // Try cash_flow_table first
-              if (outputs.cash_flow_table && outputs.cash_flow_table.length > 0) {
-                cashFlowData = outputs.cash_flow_table;
-                console.log(`✅ Found cash_flow_table for ${scenario.scenario_name}`);
+            if (financialAnalysis) {
+              // Try cash_flow_schedule first (new structure)
+              if (financialAnalysis.cash_flow_schedule && financialAnalysis.cash_flow_schedule.length > 0) {
+                cashFlowData = financialAnalysis.cash_flow_schedule;
+                console.log(`✅ Found cash_flow_schedule for ${scenario.scenarioName || scenario.scenario_name}`);
               }
-              // Try table property
-              else if (outputs.table && outputs.table.length > 0) {
-                cashFlowData = outputs.table;
-                console.log(`✅ Found table for ${scenario.scenario_name}`);
+              // Try cashFlowTable property (old structure)
+              else if (financialAnalysis.cashFlowTable && financialAnalysis.cashFlowTable.length > 0) {
+                cashFlowData = financialAnalysis.cashFlowTable;
+                console.log(`✅ Found cashFlowTable for ${scenario.scenarioName || scenario.scenario_name}`);
               }
             }
 
             // If still no data and this is the current scenario, use current table
-            if (!cashFlowData && scenarioId === currentScenario?.scenario_id && tableRef.current && tableRef.current.length > 0) {
+            if (!cashFlowData && scenarioId === currentScenario?.id && tableRef.current && tableRef.current.length > 0) {
               cashFlowData = tableRef.current;
-              console.log(`✅ Using current table for ${scenario.scenario_name}`);
+              console.log(`✅ Using current table for ${scenario.scenarioName || scenario.scenario_name}`);
             }
 
             if (!cashFlowData) {
-              console.log(`❌ No cash flow data found for ${scenario.scenario_name}`);
+              console.log(`❌ No cash flow data found for ${scenario.scenarioName || scenario.scenario_name}`);
               return null;
             }
 
             return {
-              name: scenario.scenario_name,
+              name: scenario.scenarioName || scenario.scenario_name,
               data: cashFlowData,
             };
           })
@@ -378,7 +428,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     };
 
     fetchComparisonData();
-  }, [comparisonScenarios, scenarios, currentScenario?.scenario_id]);
+  }, [comparisonScenarios, scenarios, currentScenario?.id]);
 
   const toggleStatDetail = (statKey) => {
     setExpandedStatDetails((prev) => ({
@@ -735,6 +785,11 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       return;
     }
 
+    if (!currentScenario) {
+      console.warn("No scenario selected.");
+      return;
+    }
+
     const totalMassFraction = (inputs.products || []).reduce(
       (acc, product) => acc + (Number(product.massFraction) || 0),
       0
@@ -746,56 +801,43 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
     setIsCalculating(true);
     try {
-        const structuredInputs = buildStructuredInputs();
-        const payload = {
-          inputs: structuredInputs,
-          process_technology: selectedProcess,
-          feedstock: selectedFeedstock,
-          product_key: "jet",
-        };
-      console.log("=== API Request ===");
-      console.log("API_URL:", API_URL);
-      console.log("Payload:", payload);
+      console.log("🔬 Starting calculation for scenario:", currentScenario.id);
 
-      const res = await axios.post(`${API_URL}/calculate`, payload);
+      // Use the new calculateScenario function from projectApi
+      const result = await calculateScenario(currentScenario.id);
+      
+      if (result.success) {
+        console.log("✅ Calculation successful:", result.data);
+        
+        const calculationResults = result.data;
+        setApiData(calculationResults);
 
-      console.log("=== API Response ===");
-      console.log("Status:", res.status);
-      console.log("Full response data:", res.data);
-      console.log("Has financials?", res.data?.financials);
-      console.log("Has error?", res.data?.error);
-      console.log("Cash Flow Table length:", res.data?.financials?.cashFlowTable?.length);
-      console.log("First 3 rows:", res.data?.financials?.cashFlowTable?.slice(0, 3));
-
-      setApiData(res.data);
-
-      if (res.data?.error) {
-        console.error("Backend returned error:", res.data.error);
-        applyTableData(mockCashFlowTable);
-      } else if (res.data?.financials?.cashFlowTable?.length) {
-        applyTableData(res.data.financials.cashFlowTable);
-        console.log("Table updated with", res.data.financials.cashFlowTable.length, "rows of API data");
-
-        // Save outputs to current scenario
-        if (currentScenario) {
-          console.log("💾 Saving calculation outputs to scenario:", currentScenario.scenario_name);
-          await updateCurrentScenario({
-            outputs: {
-              apiData: res.data,
-              table: res.data.financials.cashFlowTable,
-            }
-          });
+        // Update table and chart data
+        if (calculationResults.financials?.cash_flow_schedule) {
+          setTable(calculationResults.financials.cash_flow_schedule);
+          setChartData(buildChartData(calculationResults.financials.cash_flow_schedule));
+          console.log("📊 Updated with cash flow schedule:", calculationResults.financials.cash_flow_schedule.length, "rows");
         }
+
+        // Save outputs to current scenario using new field names
+        console.log("💾 Saving calculation outputs to scenario:", currentScenario.scenarioName || currentScenario.scenario_name);
+        await updateCurrentScenario({
+          techno_economics: calculationResults.techno_economics,
+          financial_analysis: calculationResults.financials
+        });
+
       } else {
-        console.warn("No cash flow table in response, using mock data");
-        console.warn("Response structure:", Object.keys(res.data));
-        applyTableData(mockCashFlowTable);
+        console.error("❌ Calculation failed:", result.error);
+        // Fallback to mock data
+        setTable(mockCashFlowTable);
+        setChartData(buildChartData(mockCashFlowTable));
       }
     } catch (error) {
-      console.error("=== API Error ===");
+      console.error("=== Calculation Error ===");
       console.error("Error:", error.message);
       console.warn("Using mock cash flow table");
-      applyTableData(mockCashFlowTable);
+      setTable(mockCashFlowTable);
+      setChartData(buildChartData(mockCashFlowTable));
       setApiData(null);
     } finally {
       setIsCalculating(false);
@@ -1131,6 +1173,44 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     },
   };
 
+  const projectHeader = currentProject && (
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "0.5rem 0.75rem",
+      backgroundColor: colors.cardBackground,
+      borderBottom: `1px solid ${colors.border}`,
+      marginBottom: "0.5rem"
+    }}>
+      <div>
+        <h6 style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: colors.text }}>
+          {currentProject.projectName || currentProject.project_name}
+        </h6>
+      </div>
+      <button
+        onClick={() => setShowProjectModal(true)}
+        style={{
+          background: "#006D7C",
+          border: "none",
+          color: "white",
+          cursor: "pointer",
+          fontSize: "0.8rem",
+          padding: "0.4rem 0.8rem",
+          borderRadius: "4px",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.4rem",
+          fontWeight: 500
+        }}
+        title="Switch to another project"
+      >
+        <i className="material-icons" style={{ fontSize: "1rem" }}>swap_horiz</i>
+        Switch Project
+      </button>
+    </div>
+  );
+
   const handleProjectSelected = (project, scenario) => {
     console.log("📁 Project selected in TEA:", project);
     console.log("📋 Scenario selected in TEA:", scenario);
@@ -1163,175 +1243,112 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         onProjectSelected={handleProjectSelected}
       />
 
-      <Container fluid className="main-content-container px-2" style={{ filter: showProjectModal ? "blur(4px)" : "none", transition: "filter 0.3s ease", display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Project Header with Switch Button */}
-      {currentProject && (
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "0.5rem 0.75rem",
-          backgroundColor: colors.cardBackground,
-          borderBottom: `1px solid ${colors.border}`,
-          marginBottom: "0.5rem"
-        }}>
-          <div>
-            <h6 style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: colors.text }}>
-              {currentProject.project_name}
-            </h6>
-          </div>
-          <button
-            onClick={() => setShowProjectModal(true)}
-            style={{
-              background: "#006D7C",
-              border: "none",
-              color: "white",
-              cursor: "pointer",
-              fontSize: "0.8rem",
-              padding: "0.4rem 0.8rem",
-              borderRadius: "4px",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              fontWeight: 500
-            }}
-            title="Switch to another project"
-          >
-            <i className="material-icons" style={{ fontSize: "1rem" }}>swap_horiz</i>
-            Switch Project
-          </button>
-        </div>
-      )}
-
-      {/* Main Layout */}
-      {/* Tighten gap between scenario inputs (left) and chart (right) */}
-      <div style={{ display: "flex", flexDirection: "row", gap: "12px", width: "100%", flex: 1, minHeight: 0, paddingBottom: "8px" }}>
-        {/* Left Form - always show but with different width */}
-        <div
-          style={{
-            width: isLeftPanelCollapsed ? "50px" : "25%",
-            minWidth: isLeftPanelCollapsed ? "50px" : "25%",
-            maxWidth: isLeftPanelCollapsed ? "50px" : "25%",
-            height: "100%",
-            minHeight: 0,
-            position: "relative",
-            transition: "all 0.3s ease"
-          }}
-        >
-          {/* Toggle Button - always visible */}
-          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "36px", height: "36px" }}>
-            <button
-              onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
-              style={{
-                background: colors.oxfordBlue,
-                border: "none",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "1.2rem",
-                padding: "0.5rem",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "4px",
-                width: "100%",
-                height: "100%",
-                transition: "all 0.2s ease",
-                boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#0a2454";
-                e.currentTarget.style.transform = "scale(1.1)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = colors.oxfordBlue;
-                e.currentTarget.style.transform = "scale(1)";
-              }}
-              title={isLeftPanelCollapsed ? "Show Input Panel" : "Hide Input Panel"}
-            >
-              {isLeftPanelCollapsed ? "►" : "◄"}
-            </button>
-          </div>
-
-          {/* Form - only show when not collapsed */}
-          {!isLeftPanelCollapsed && (
-            <div style={{ height: "100%", overflowY: "auto", paddingRight: "4px", minHeight: 0 }}>
-              <BiofuelForm
-                inputs={inputs}
-                selectedProcess={selectedProcess}
-                selectedFeedstock={selectedFeedstock}
-                handleSliderChange={handleSliderChange}
-                handleInputChange={handleInputChange}
-                handleProductSliderChange={handleProductSliderChange}
-                handleProductInputChange={handleProductInputChange}
-                onAddProduct={addProduct}
-                onRemoveProduct={removeProduct}
-                onProcessChange={setSelectedProcess}
-                onFeedstockChange={setSelectedFeedstock}
-                onCalculate={calculateOutputs}
-                onReset={handleReset}
-                onSave={handleSave}
-                isCalculating={isCalculating}
-              />
+      <Container fluid className="main-content-container px-2" style={{ 
+        filter: showProjectModal ? "blur(4px)" : "none", 
+        transition: "filter 0.3s ease", 
+        display: "flex", 
+        flexDirection: "column", 
+        height: "100%" 
+      }}>
+        {projectHeader}
+        
+        {/* Main Layout - keep existing structure */}
+        <div style={{ display: "flex", flexDirection: "row", gap: "12px", width: "100%", flex: 1, minHeight: 0, paddingBottom: "8px" }}>
+          {/* Left Form */}
+          <div style={{ width: isLeftPanelCollapsed ? "50px" : "25%", minWidth: isLeftPanelCollapsed ? "50px" : "25%", maxWidth: isLeftPanelCollapsed ? "50px" : "25%", height: "100%", minHeight: 0, position: "relative", transition: "all 0.3s ease" }}>
+            {/* Toggle Button */}
+            <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "36px", height: "36px" }}>
+              <button
+                onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
+                style={{
+                  background: colors.oxfordBlue,
+                  border: "none",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: "1.2rem",
+                  padding: "0.5rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "4px",
+                  width: "100%",
+                  height: "100%",
+                  transition: "all 0.2s ease",
+                  boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)"
+                }}
+                title={isLeftPanelCollapsed ? "Show Input Panel" : "Hide Input Panel"}
+              >
+                {isLeftPanelCollapsed ? "►" : "◄"}
+              </button>
             </div>
-          )}
-        </div>
 
-        {/* Chart area - expands when sidebar collapses */}
-        <div className="d-flex flex-column" style={{ flex: 1, height: "100%", minWidth: 0, minHeight: 0, transition: "all 0.3s ease" }}>
-              <Card small className="flex-fill d-flex flex-column">
-                <CardHeader className="border-bottom d-flex justify-content-between align-items-center p-2">
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>Breakeven Analysis</h6>
-                    <small style={{ fontSize: '0.7rem', color: colors.textSecondary }}>
-                      Cumulative discounted cash flow across project lifetime; breakeven occurs
-                      where the curve first crosses zero.
-                    </small>
-                  </div>
-                  <Button
-                    size="sm"
-                    className="table-icon-btn"
-                    style={{
-                      backgroundColor: colors.oxfordBlue,
-                      borderColor: colors.oxfordBlue,
-                      color: "#fff",
-                      padding: "0.25rem 0.5rem",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transition: "all 0.2s ease",
-                      position: "relative"
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#0a2454";
-                      e.currentTarget.style.borderColor = "#0a2454";
-                      e.currentTarget.style.transform = "scale(1.1)";
-                      e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = colors.oxfordBlue;
-                      e.currentTarget.style.borderColor = colors.oxfordBlue;
-                      e.currentTarget.style.transform = "scale(1)";
-                      e.currentTarget.style.boxShadow = "none";
-                    }}
-                    onClick={() => setOpenTable(true)}
-                    title="Cash Flow Table"
+            {/* Form */}
+            {!isLeftPanelCollapsed && (
+              <div style={{ height: "100%", overflowY: "auto", paddingRight: "4px", minHeight: 0 }}>
+                <BiofuelForm
+                  inputs={inputs}
+                  selectedProcess={selectedProcess}
+                  selectedFeedstock={selectedFeedstock}
+                  handleSliderChange={handleSliderChange}
+                  handleInputChange={handleInputChange}
+                  handleProductSliderChange={handleProductSliderChange}
+                  handleProductInputChange={handleProductInputChange}
+                  onAddProduct={addProduct}
+                  onRemoveProduct={removeProduct}
+                  onProcessChange={setSelectedProcess}
+                  onFeedstockChange={setSelectedFeedstock}
+                  onCalculate={calculateOutputs}
+                  onReset={handleReset}
+                  onSave={handleSave}
+                  isCalculating={isCalculating}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Chart area */}
+          <div className="d-flex flex-column" style={{ flex: 1, height: "100%", minWidth: 0, minHeight: 0, transition: "all 0.3s ease" }}>
+            <Card small className="flex-fill d-flex flex-column">
+              <CardHeader className="border-bottom d-flex justify-content-between align-items-center p-2">
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>Breakeven Analysis</h6>
+                  <small style={{ fontSize: '0.7rem', color: colors.textSecondary }}>
+                    Cumulative discounted cash flow across project lifetime; breakeven occurs
+                    where the curve first crosses zero.
+                  </small>
+                </div>
+                <Button
+                  size="sm"
+                  className="table-icon-btn"
+                  style={{
+                    backgroundColor: colors.oxfordBlue,
+                    borderColor: colors.oxfordBlue,
+                    color: "#fff",
+                    padding: "0.25rem 0.5rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={() => setOpenTable(true)}
+                  title="Cash Flow Table"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    style={{ display: "block" }}
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="currentColor"
-                      style={{ display: "block" }}
-                    >
-                      <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
-                    </svg>
-                  </Button>
-                </CardHeader>
-                <CardBody className="flex-fill" style={{ padding: "10px", minHeight: 0, flex: 1 }}>
-                  <BreakevenBarChart data={chartData} comparisonData={comparisonChartData} />
-                </CardBody>
-              </Card>
-        </div>
+                    <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
+                  </svg>
+                </Button>
+              </CardHeader>
+              <CardBody className="flex-fill" style={{ padding: "10px", minHeight: 0, flex: 1 }}>
+                <BreakevenBarChart data={chartData} comparisonData={comparisonChartData} />
+              </CardBody>
+            </Card>
+          </div>
 
         {/* KPI Cards - narrower width, stays in place */}
         <div style={{ width: "300px", minWidth: "300px", maxWidth: "300px", height: "calc(100% - 8px)", minHeight: 0, display: "flex", flexDirection: "column", gap: "12px", marginBottom: "8px" }}>
@@ -1507,11 +1524,11 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
       {/* Cash Flow Modal */}
       <Modal open={openTable} toggle={() => setOpenTable(!openTable)} size="lg">
-        <ModalBody>
-          <CashFlowTable tableData={table} />
-        </ModalBody>
-      </Modal>
-    </Container>
+          <ModalBody>
+            <CashFlowTable tableData={table} />
+          </ModalBody>
+        </Modal>
+      </Container>
     </>
   );
 };

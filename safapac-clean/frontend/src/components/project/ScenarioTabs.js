@@ -1,8 +1,4 @@
-/**
- * ScenarioTabs - Vertical tab navigation for scenarios
- * Shows in sidebar, allows switching between scenarios
- * Includes "Add Scenario" button (max 3 scenarios)
- */
+// src/components/project/ScenarioTabs.js
 
 import React from "react";
 import { Button, Badge } from "shards-react";
@@ -26,7 +22,6 @@ const ScenarioTabs = () => {
 
   console.log("🎯 ScenarioTabs rendering - currentProject:", currentProject);
   console.log("🎯 ScenarioTabs - scenarios:", scenarios);
-  console.log("🎯 ScenarioTabs - scenarios.length:", scenarios?.length);
   console.log("🎯 ScenarioTabs - currentScenario:", currentScenario);
 
   // Don't render if no project is selected
@@ -35,10 +30,11 @@ const ScenarioTabs = () => {
     return null;
   }
 
-  console.log("✅ ScenarioTabs - Rendering with project:", currentProject.project_name);
+  console.log("✅ ScenarioTabs - Rendering with project:", currentProject.projectName || currentProject.project_name);
 
+  // FIX: Use 'id' instead of 'scenario_id'
   const handleTabClick = async (scenarioId) => {
-    if (scenarioId === currentScenario?.scenario_id || loading) return;
+    if (scenarioId === currentScenario?.id || loading) return; // Changed scenario_id to id
     await switchScenario(scenarioId);
   };
 
@@ -47,8 +43,8 @@ const ScenarioTabs = () => {
 
     const result = await addScenario();
     if (result.success) {
-      // Automatically switch to the new scenario
-      await switchScenario(result.scenario.scenario_id);
+      // FIX: Use 'id' instead of 'scenario_id'
+      await switchScenario(result.scenario.id); // Changed scenario_id to id
     }
   };
 
@@ -130,14 +126,37 @@ const ScenarioTabs = () => {
       {/* Scenario Tabs */}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
         {scenarios.map((scenario, index) => {
-          const isActive = currentScenario?.scenario_id === scenario.scenario_id;
-          const isCompared = comparisonScenarios.includes(scenario.scenario_id);
+          // FIX: Use 'id' instead of 'scenario_id'
+          const isActive = currentScenario?.id === scenario.id; // Changed scenario_id to id
+          const isCompared = comparisonScenarios.includes(scenario.id); // Changed scenario_id to id
           const canDelete = index > 0; // Can delete Scenario 2 and 3 (index 1 and 2)
 
+          const DebugScenarioData = () => (
+            <div style={{
+              position: 'fixed',
+              bottom: '10px',
+              right: '10px',
+              background: 'rgba(0,0,0,0.9)',
+              color: 'white',
+              padding: '10px',
+              fontSize: '10px',
+              zIndex: 1000,
+              maxWidth: '400px',
+              maxHeight: '300px',
+              overflow: 'auto'
+            }}>
+              <strong>🔧 Scenario Data Debug:</strong><br />
+              <strong>Project:</strong> {JSON.stringify(currentProject, null, 2)}<br />
+              <strong>Current Scenario:</strong> {JSON.stringify(currentScenario, null, 2)}<br />
+              <strong>All Scenarios:</strong> {JSON.stringify(scenarios, null, 2)}
+            </div>
+          );
+
           return (
+
             <div
-              key={scenario.scenario_id}
-              onClick={() => handleTabClick(scenario.scenario_id)}
+              key={scenario.id} // Changed scenario_id to id
+              onClick={() => handleTabClick(scenario.id)} // Changed scenario_id to id
               style={{
                 padding: "0.5rem 0.75rem",
                 borderRadius: "4px",
@@ -158,7 +177,7 @@ const ScenarioTabs = () => {
                 <input
                   type="checkbox"
                   checked={isCompared}
-                  onChange={(e) => handleCompareToggle(e, scenario.scenario_id)}
+                  onChange={(e) => handleCompareToggle(e, scenario.id)} // Changed scenario_id to id
                   onClick={(e) => e.stopPropagation()}
                   style={{
                     width: "14px",
@@ -168,13 +187,14 @@ const ScenarioTabs = () => {
                   }}
                   title="Select for comparison"
                 />
+                {/* FIX: Use scenario_name (snake_case from backend) */}
                 <span>{scenario.scenario_name}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                 {canDelete && (
                   <i
                     className="material-icons"
-                    onClick={(e) => handleDeleteScenario(e, scenario.scenario_id, index)}
+                    onClick={(e) => handleDeleteScenario(e, scenario.id, index)} // Changed scenario_id to id
                     style={{
                       fontSize: "0.9rem",
                       cursor: "pointer",
