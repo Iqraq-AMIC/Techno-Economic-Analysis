@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -49,6 +49,101 @@ def get_current_user_obj(current_user: User = Depends(get_current_active_user)) 
 def get_biofuel_crud(db: Session = Depends(get_db)) -> BiofuelCRUD:
     return BiofuelCRUD(db)
 
+def get_default_user_inputs(process_id: int, feedstock_id: int, country_id: int) -> Dict:
+        """Generate default user inputs for a new scenario."""
+        return {
+            "conversion_plant": {
+                "plant_capacity": {"value": 500, "unit_id": 3},  # 500 kta
+                "annual_load_hours": 8000,
+                "ci_process_default": 20.0
+            },
+            "economic_parameters": {
+                "project_lifetime_years": 20,
+                "discount_rate_percent": 7.0,
+                "tci_ref_musd": 400,
+                "reference_capacity_ktpa": 500, 
+                "tci_scaling_exponent": 0.6,
+                "working_capital_tci_ratio": 0.15,
+                "indirect_opex_tci_ratio": 0.077
+            },
+            "feedstock_data": [
+                {
+                    "name": "UCO",
+                    "price": {
+                    "value": 930.0,
+                    "unit_id": 7
+                    },
+                    "carbon_content": 0.77,
+                    "carbon_intensity": {
+                    "value": 20.0,
+                    "unit_id": 11
+                    },
+                    "energy_content": 37.0,
+                    "yield_percent": 121.0
+                }
+
+            ],
+            "utility_data": [
+                {
+                    "name": "Hydrogen",
+                    "price": {
+                    "value": 5.4,
+                    "unit_id": 6
+                    },
+                    "carbon_content": 0.0,
+                    "carbon_intensity": {
+                    "value": 0.0,
+                    "unit_id": 11
+                    },
+                    "energy_content": 120.0,
+                    "yield_percent": 4.2
+                },
+                {
+                    "name": "electricity",
+                    "price": {
+                    "value": 55.0,
+                    "unit_id": 10
+                    },
+                    "carbon_content": 0.0,
+                    "carbon_intensity": {
+                    "value": 20.0,
+                    "unit_id": 13
+                    },
+                    "energy_content": 0.0,
+                    "yield_percent": 12.0
+                }
+            ],
+            "product_data": [
+                {
+                    "name": "JET",
+                    "price": {"value": 3000, "unit_id": 7},  # USD/t
+                    "price_sensitivity_to_ci": 0.5,
+                    "carbon_content": 0.847,
+                    "energy_content": 43.8,
+                    "yield_percent": 64.0,
+                    "product_density": 0.81
+                },
+                {
+                    "name": "DIESEL", 
+                    "price": {"value": 1500, "unit_id": 7},
+                    "price_sensitivity_to_ci": 0.5,
+                    "carbon_content": 0.85,
+                    "energy_content": 42.6,
+                    "yield_percent": 15.0,
+                    "product_density": 0.83
+                },
+                {
+                    "name": "Naphtha",
+                    "price": {"value": 1000, "unit_id": 7},
+                    "price_sensitivity_to_ci": 0.5, 
+                    "carbon_content": 0.84,
+                    "energy_content": 43.4,
+                    "yield_percent": 21.0,
+                    "product_density": 0.7
+                }
+            ]
+        }
+
 # ==================== MASTER DATA ENDPOINTS ====================
 
 @router.get("/master-data", response_model=MasterDataResponse)
@@ -61,10 +156,12 @@ def get_master_data(crud: BiofuelCRUD = Depends(get_biofuel_crud)):
 @router.post("/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(
     project_in: ProjectCreate,
-    current_user: User = Depends(get_current_active_user),    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    current_user: User = Depends(get_current_active_user),
+    crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
-    """Create a new project."""
+    """Create a new project with auto-created Scenario 1."""
     try:
+        # Create the project first
         db_project = crud.create_project(
             project_name=project_in.project_name,
             user_id=current_user.id,
@@ -72,6 +169,30 @@ def create_project(
             initial_feedstock_id=project_in.initial_feedstock_id,
             initial_country_id=project_in.initial_country_id,
         )
+        
+        # AUTO-CREATE SCENARIO 1
+        if db_project:
+            # Get default user inputs based on initial selections
+            default_inputs = get_default_user_inputs(
+                process_id=project_in.initial_process_id,
+                feedstock_id=project_in.initial_feedstock_id, 
+                country_id=project_in.initial_country_id
+            )
+            
+            # Create Scenario 1
+            scenario_data = {
+                "project_id": db_project.id,
+                "scenario_name": "Scenario 1",
+                "process_id": project_in.initial_process_id,
+                "feedstock_id": project_in.initial_feedstock_id,
+                "country_id": project_in.initial_country_id,
+                "user_inputs": default_inputs,
+                "scenario_order": 1
+            }
+            
+            db_scenario = crud.create_scenario(scenario_data)
+            print(f"✅ Auto-created Scenario 1 for project: {db_project.id}")
+        
         return db_project
     except Exception as e:
         logger.error(f"Error creating project: {e}")
