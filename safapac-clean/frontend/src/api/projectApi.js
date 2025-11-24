@@ -41,19 +41,35 @@ const api = createApiInstance();
  * @param {number} initialCountryId - Initial country ID (optional)
  * @returns {Promise} Project data
  */
+
 export const createProject = async (projectName, initialProcessId = null, initialFeedstockId = null, initialCountryId = null) => {
   try {
     const payload = {
-      project_name: projectName,
+      project_name: projectName, // Backend expects snake_case
     };
 
     // Only include if provided
     if (initialProcessId !== null) payload.initial_process_id = initialProcessId;
     if (initialFeedstockId !== null) payload.initial_feedstock_id = initialFeedstockId;
     if (initialCountryId !== null) payload.initial_country_id = initialCountryId;
-
+    
+    console.log("📤 Creating project with payload:", payload);
     const response = await api.post("/projects", payload);
-    return { success: true, data: response.data };
+
+    // Map backend response to frontend expected format
+    const mappedResponse = {
+      id: response.data.id,
+      projectName: response.data.project_name,
+      userId: response.data.user_id,
+      initialProcess: response.data.initial_process,
+      initialFeedstock: response.data.initial_feedstock,
+      initialCountry: response.data.initial_country,
+      scenarioCount: response.data.scenario_count || 1, // Backend auto-creates Scenario 1
+      createdAt: response.data.created_at,
+      updatedAt: response.data.updated_at
+    };
+    console.log("✅ Project created successfully:", mappedResponse);
+    return { success: true, data: mappedResponse };
   } catch (error) {
     console.error("Error creating project:", error);
     return {
@@ -148,6 +164,7 @@ export const deleteProject = async (projectId) => {
  * @param {number} scenarioOrder - Display order (optional)
  * @returns {Promise} Scenario data
  */
+
 export const createScenario = async (
   projectId,
   scenarioName,
@@ -159,11 +176,11 @@ export const createScenario = async (
 ) => {
   try {
     const payload = {
-      scenario_name: scenarioName,
+      scenario_name: scenarioName, // snake_case for backend
       process_id: processId,
       feedstock_id: feedstockId,
       country_id: countryId,
-      user_inputs: userInputs,
+      user_inputs: userInputs, // Make sure this matches backend schema
     };
 
     if (scenarioOrder !== null) {
@@ -171,7 +188,22 @@ export const createScenario = async (
     }
 
     const response = await api.post(`/projects/${projectId}/scenarios`, payload);
-    return { success: true, data: response.data };
+
+    // Map backend response to frontend format
+    const mappedScenario = {
+      id: response.data.id,
+      projectId: response.data.project_id,
+      scenarioName: response.data.scenario_name,
+      scenarioOrder: response.data.scenario_order,
+      process: response.data.process,
+      feedstock: response.data.feedstock,
+      country: response.data.country,
+      userInputs: response.data.user_inputs,
+      createdAt: response.data.created_at,
+      updatedAt: response.data.updated_at
+    };
+
+    return { success: true, data: mappedScenario };
   } catch (error) {
     console.error("Error creating scenario:", error);
     return {
@@ -189,7 +221,24 @@ export const createScenario = async (
 export const listScenarios = async (projectId) => {
   try {
     const response = await api.get(`/projects/${projectId}/scenarios`);
-    return { success: true, data: response.data };
+    
+    // Map backend scenarios to frontend format
+    const mappedScenarios = response.data.map(scenario => ({
+      id: scenario.id,
+      projectId: scenario.project_id,
+      scenarioName: scenario.scenario_name,
+      scenarioOrder: scenario.scenario_order,
+      process: scenario.process,
+      feedstock: scenario.feedstock,
+      country: scenario.country,
+      userInputs: scenario.user_inputs,
+      technoEconomics: scenario.techno_economics,
+      financialAnalysis: scenario.financial_analysis,
+      createdAt: scenario.created_at,
+      updatedAt: scenario.updated_at
+    }));
+    
+    return { success: true, data: mappedScenarios };
   } catch (error) {
     console.error("Error listing scenarios:", error);
     return {
@@ -230,14 +279,56 @@ export const updateScenario = async (scenarioId, updates) => {
       updates,
       updateKeys: Object.keys(updates)
     });
-    
-    const response = await api.put(`/scenarios/${scenarioId}`, updates);
-    return { success: true, data: response.data };
+
+    // Convert frontend field names to backend expected names
+    const backendUpdates = {};
+
+    if (updates.scenarioName !== undefined) {
+      backendUpdates.scenario_name = updates.scenarioName;
+    }
+
+    if (updates.userInputs !== undefined) {
+      backendUpdates.user_inputs = updates.userInputs;
+    }
+
+    if (updates.technoEconomics !== undefined) {
+      backendUpdates.techno_economics = updates.technoEconomics;
+    }
+
+    if (updates.financialAnalysis !== undefined) {
+      backendUpdates.financial_analysis = updates.financialAnalysis;
+    }
+
+    if (updates.scenarioOrder !== undefined) {
+      backendUpdates.scenario_order = updates.scenarioOrder;
+    }
+
+    console.log("🔧 Converted updates for backend:", backendUpdates);
+
+    const response = await api.put(`/scenarios/${scenarioId}`, backendUpdates);
+
+    // Map response back to frontend format
+    const mappedResponse = {
+      id: response.data.id,
+      projectId: response.data.project_id,
+      scenarioName: response.data.scenario_name,
+      scenarioOrder: response.data.scenario_order,
+      process: response.data.process,
+      feedstock: response.data.feedstock,
+      country: response.data.country,
+      userInputs: response.data.user_inputs,
+      technoEconomics: response.data.techno_economics,
+      financialAnalysis: response.data.financial_analysis,
+      createdAt: response.data.created_at,
+      updatedAt: response.data.updated_at
+    };
+
+    return { success: true, data: mappedResponse };
   } catch (error) {
     console.error("❌ Error updating scenario - Full error:", error);
     console.error("❌ Error response data:", error.response?.data);
     console.error("❌ Error response status:", error.response?.status);
-    
+
     return {
       success: false,
       error: error.response?.data?.detail || error.message,
@@ -282,27 +373,15 @@ export const calculateScenario = async (scenarioId) => {
   }
 };
 
-/**
- * Save scenario inputs (convenience wrapper for updateScenario)
- * @param {string} scenarioId - Scenario ID (UUID)
- * @param {object} userInputs - User inputs object
- * @returns {Promise} Updated scenario data
- */
+// In projectApi.js - UPDATE these convenience functions:
 export const saveScenarioInputs = async (scenarioId, userInputs) => {
-  return updateScenario(scenarioId, { user_inputs: userInputs });
+  return updateScenario(scenarioId, { user_inputs: userInputs }); // Use snake_case
 };
 
-/**
- * Save scenario outputs (convenience wrapper for updateScenario)
- * @param {string} scenarioId - Scenario ID (UUID)
- * @param {object} technoEconomics - Techno-economic results
- * @param {object} financialAnalysis - Financial analysis results
- * @returns {Promise} Updated scenario data
- */
 export const saveScenarioOutputs = async (scenarioId, technoEconomics, financialAnalysis) => {
   return updateScenario(scenarioId, {
-    techno_economics: technoEconomics,
-    financial_analysis: financialAnalysis
+    techno_economics: technoEconomics, // Use snake_case
+    financial_analysis: financialAnalysis // Use snake_case
   });
 };
 

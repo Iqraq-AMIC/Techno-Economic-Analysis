@@ -81,54 +81,47 @@ export const ProjectProvider = ({ children }) => {
   }, []);
 
   // Create a new project (auto-creates Scenario 1)
-  const createProject = useCallback(async (projectName, initialProcessId = null, initialFeedstockId = null, initialCountryId = null) => {
-    setLoading(true);
+  // Create a new project (auto-creates Scenario 1)
+  const createProject = async (projectData) => {
     try {
+      // Use the imported apiCreateProject function
       const result = await apiCreateProject(
-        projectName,
-        initialProcessId,
-        initialFeedstockId,
-        initialCountryId
+        projectData.projectName,
+        projectData.initialProcessId,
+        projectData.initialFeedstockId,
+        projectData.initialCountryId
       );
 
       if (result.success) {
-        const project = {
-          id: result.data.id, // UUID format
-          projectName: result.data.projectName,
-          userId: result.data.userId,
-          initialProcess: result.data.initialProcess,
-          initialFeedstock: result.data.initialFeedstock,
-          initialCountry: result.data.initialCountry,
-          createdAt: result.data.createdAt,
-          updatedAt: result.data.updatedAt
-        };
+        const newProject = result.data;
 
-        setCurrentProject(project);
-        persistProject(project);
+        // Backend automatically creates Scenario 1, so we need to load it
+        const scenariosResult = await listScenarios(newProject.id);
 
-        // Load scenarios for the new project
-        const scenariosResult = await listScenarios(project.id);
         if (scenariosResult.success && scenariosResult.data.length > 0) {
-          const firstScenario = scenariosResult.data[0];
-          setCurrentScenario(firstScenario);
+          const autoCreatedScenario = scenariosResult.data[0];
+
+          // Update state with new project and auto-created scenario
+          // Remove setProjects line since we don't have that state
+          setCurrentProject(newProject);
+          setCurrentScenario(autoCreatedScenario);
           setScenarios(scenariosResult.data);
-          persistScenario(firstScenario);
+
+          // Persist to localStorage
+          persistProject(newProject);
+          persistScenario(autoCreatedScenario);
+
+          console.log("✅ Project created with auto-generated Scenario 1:", autoCreatedScenario);
         }
 
-        return { success: true, project };
+        return { success: true, project: newProject };
       }
-
-      return { success: false, error: result.error };
+      return result;
     } catch (error) {
-      console.error("Error creating project:", error);
-      return {
-        success: false,
-        error: error.message || "Failed to create project"
-      };
-    } finally {
-      setLoading(false);
+      console.error("Error in createProject context:", error);
+      return { success: false, error: error.message };
     }
-  }, [persistProject, persistScenario]);
+  };
 
   // Load an existing project
   const loadProject = useCallback(async (projectId, projectName) => {
@@ -462,7 +455,6 @@ export const ProjectProvider = ({ children }) => {
       loading,
       comparisonScenarios,
       masterData,
-      createProject,
       loadProject,
       listUserProjects,
       addScenario,
@@ -470,7 +462,11 @@ export const ProjectProvider = ({ children }) => {
       updateCurrentScenario,
       clearProjectState,
       refreshScenarios,
+      toggleComparisonScenario,
+      clearComparison,
       deleteScenario,
+      loadMasterData,
+      createProject, // ADD THIS if missing
     ]
   );
 
