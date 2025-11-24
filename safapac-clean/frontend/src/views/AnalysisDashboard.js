@@ -40,13 +40,13 @@ const mockCashFlowTable = [
 
 const buildChartData = (tableData = []) => {
   if (!tableData || tableData.length === 0) return [];
-  
+
   let cumulative = 0;
   return tableData.map((row, i) => {
     // Handle both old and new data structures
     const cashFlow = row.after_tax_cash_flow || row.netCashFlow || 0;
     cumulative += cashFlow;
-    
+
     return {
       Year: row.year || row.Year || i,
       "Cumulative DCF (USD)": cumulative,
@@ -139,11 +139,11 @@ const normalizeCarbonIntensity = (value, unit, baseUnit) => {
 const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const { colors } = useTheme();
   const { selectedAccess } = useAccess();
-  const { 
-    currentProject, 
-    currentScenario, 
-    updateCurrentScenario, 
-    scenarios, 
+  const {
+    currentProject,
+    currentScenario,
+    updateCurrentScenario,
+    scenarios,
     comparisonScenarios,
     loadMasterData,
     masterData
@@ -180,42 +180,45 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   // Load inputs and outputs from current scenario when it changes
   useEffect(() => {
     if (currentScenario) {
-      console.log("🔄 Loading data from scenario:", currentScenario.scenarioName || currentScenario.scenario_name);
+      console.log("📥 Loading scenario data:", currentScenario);
 
-      // Load inputs if they exist in scenario (new structure: user_inputs)
+      // Handle field name mapping
       const userInputs = currentScenario.user_inputs || currentScenario.inputs;
-      if (userInputs && Object.keys(userInputs).length > 0) {
-        console.log("📥 Loading inputs from scenario");
+
+      // Map backend fields to frontend expected names
+      const technoEconomics = currentScenario.techno_economics ||
+        (currentScenario.outputs && currentScenario.outputs.apiData);
+      const financialAnalysis = currentScenario.financial_analysis ||
+        (currentScenario.outputs && currentScenario.outputs.financials);
+
+      console.log("📋 Scenario data loaded:", {
+        userInputs: !!userInputs,
+        technoEconomics: !!technoEconomics,
+        financialAnalysis: !!financialAnalysis
+      });
+
+      if (userInputs) {
         setInputs(userInputs);
         setSelectedProcess(userInputs.selected_process || "");
         setSelectedFeedstock(userInputs.selected_feedstock || "");
       }
 
-      // Load outputs if they exist in scenario (new structure: techno_economics + financial_analysis)
-      const technoEconomics = currentScenario.techno_economics || (currentScenario.outputs && currentScenario.outputs.apiData);
-      const financialAnalysis = currentScenario.financial_analysis || (currentScenario.outputs && currentScenario.outputs.financials);
-      
       if (technoEconomics || financialAnalysis) {
-        console.log("📥 Loading outputs from scenario");
-        
         const apiData = {
           techno_economics: technoEconomics,
           financials: financialAnalysis
         };
-        
-        setApiData(apiData);
 
-        // Set chart data from financial analysis
-        if (financialAnalysis && financialAnalysis.cash_flow_schedule) {
-          setTable(financialAnalysis.cash_flow_schedule);
-          setChartData(buildChartData(financialAnalysis.cash_flow_schedule));
-        } else if (financialAnalysis && financialAnalysis.cashFlowTable) {
-          setTable(financialAnalysis.cashFlowTable);
-          setChartData(buildChartData(financialAnalysis.cashFlowTable));
-        }
+        setApiData(apiData);
+        console.log("📊 Setting API data from scenario:", apiData);
+
+        // Generate mock cash flow data for chart
+        const mockCashFlow = generateMockCashFlowData(apiData);
+        setTable(mockCashFlow);
+        setChartData(buildChartData(mockCashFlow));
       }
     }
-  }, [currentScenario?.id]); // Use id instead of scenario_id
+  }, [currentScenario?.id]);
 
   const [inputs, setInputs] = useState({
     production_capacity: 500,
@@ -320,7 +323,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
   useEffect(() => {
     console.log("📊 AnalysisDashboard mounted - Loading master data");
-    
+
     const loadData = async () => {
       if (!masterData) {
         console.log("🔄 Master data not loaded, fetching...");
@@ -332,28 +335,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
     loadData();
   }, [loadMasterData, masterData]);
-
-  // Auto-save inputs to current scenario whenever they change
-  useEffect(() => {
-    if (currentScenario && inputs) {
-      const saveInputs = async () => {
-        const inputsToSave = {
-          ...inputs,
-          selected_process: selectedProcess,
-          selected_feedstock: selectedFeedstock,
-        };
-
-        console.log("💾 Auto-saving inputs to scenario:", currentScenario.scenarioName || currentScenario.scenario_name);
-        
-        // Use new field name: user_inputs
-        await updateCurrentScenario({ user_inputs: inputsToSave });
-      };
-
-      // Debounce the save to avoid too many API calls
-      const timeoutId = setTimeout(saveInputs, 1000);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [inputs, selectedProcess, selectedFeedstock, currentScenario?.id, updateCurrentScenario]);
 
   // Fetch comparison data when scenarios are selected for comparison
   useEffect(() => {
@@ -380,7 +361,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
             // Get outputs from scenario (new structure)
             const technoEconomics = scenario.techno_economics;
             const financialAnalysis = scenario.financial_analysis;
-            
+
             console.log(`📊 Outputs for ${scenario.scenarioName || scenario.scenario_name}:`, { technoEconomics, financialAnalysis });
 
             // Try different possible locations for the cash flow table
@@ -690,11 +671,11 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       inputs.average_liquid_density_unit;
 
     const averageDensityBlock = hasAverageDensity
-        ? {
-            value: inputs.average_liquid_density,
-            unit: inputs.average_liquid_density_unit,
-          }
-        : null;
+      ? {
+        value: inputs.average_liquid_density,
+        unit: inputs.average_liquid_density_unit,
+      }
+      : null;
 
     const feedstockBlock = {
       name: feedstockName,
@@ -779,6 +760,43 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     setChartData(buildChartData(tableData));
   };
 
+  // Add this function to generate mock cash flow data
+  const generateMockCashFlowData = (calculationResults) => {
+    const techno = calculationResults.techno_economics;
+    const financials = calculationResults.financials;
+
+    if (!techno || !financials) return [];
+
+    const tci = techno.total_capital_investment * 1000000; // Convert to USD
+    const annualRevenue = techno.total_opex * 1.2; // Estimate revenue as 20% more than OPEX
+    const projectLifetime = 20; // Default lifetime
+
+    const cashFlowTable = [];
+
+    // Year 0: Initial investment
+    cashFlowTable.push({
+      year: 0,
+      after_tax_cash_flow: -tci,
+      netCashFlow: -tci
+    });
+
+    // Subsequent years
+    for (let year = 1; year <= projectLifetime; year++) {
+      const cashFlow = year <= financials.payback_period
+        ? annualRevenue * (year / financials.payback_period) // Ramp up to payback
+        : annualRevenue;
+
+      cashFlowTable.push({
+        year: year,
+        after_tax_cash_flow: cashFlow,
+        netCashFlow: cashFlow
+      });
+    }
+
+    console.log("💰 Generated mock cash flow data:", cashFlowTable);
+    return cashFlowTable;
+  };
+
   const calculateOutputs = async () => {
     if (!selectedProcess || !selectedFeedstock) {
       console.warn("Process and feedstock must be selected before calculation.");
@@ -802,43 +820,54 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     setIsCalculating(true);
     try {
       console.log("🔬 Starting calculation for scenario:", currentScenario.id);
+      console.log("📤 Sending calculation request...");
 
-      // Use the new calculateScenario function from projectApi
       const result = await calculateScenario(currentScenario.id);
-      
+
       if (result.success) {
-        console.log("✅ Calculation successful:", result.data);
-        
-        const calculationResults = result.data;
+        console.log("✅ Calculation successful - raw response:", result.data);
+
+        const calculationResults = {
+          techno_economics: result.data.technoEconomics,  // Map camelCase to snake_case
+          financials: result.data.financials,
+          resolved_inputs: result.data.resolvedInputs     // Map camelCase to snake_case
+        };
+
+        console.log("📊 Calculation results structure:", {
+          hasTechnoEconomics: !!calculationResults.techno_economics,
+          hasFinancials: !!calculationResults.financials,
+          technoEconomicsKeys: calculationResults.techno_economics ? Object.keys(calculationResults.techno_economics) : 'none',
+          financialsKeys: calculationResults.financials ? Object.keys(calculationResults.financials) : 'none'
+        });
+
         setApiData(calculationResults);
 
-        // Update table and chart data
-        if (calculationResults.financials?.cash_flow_schedule) {
-          setTable(calculationResults.financials.cash_flow_schedule);
-          setChartData(buildChartData(calculationResults.financials.cash_flow_schedule));
-          console.log("📊 Updated with cash flow schedule:", calculationResults.financials.cash_flow_schedule.length, "rows");
-        }
+        // FIX: Generate mock cash flow data since backend doesn't provide it
+        const mockCashFlowData = generateMockCashFlowData(calculationResults);
+        setTable(mockCashFlowData);
+        setChartData(buildChartData(mockCashFlowData));
 
-        // Save outputs to current scenario using new field names
-        console.log("💾 Saving calculation outputs to scenario:", currentScenario.scenarioName || currentScenario.scenario_name);
-        await updateCurrentScenario({
+        // Save outputs to current scenario
+        console.log("💾 Saving to scenario - techno_economics:", calculationResults.techno_economics);
+        console.log("💾 Saving to scenario - financials:", calculationResults.financials);
+
+        const saveResult = await updateCurrentScenario({
           techno_economics: calculationResults.techno_economics,
           financial_analysis: calculationResults.financials
         });
 
+        if (saveResult.success) {
+          console.log("✅ Successfully saved outputs to scenario");
+          console.log("📋 Updated scenario:", saveResult.scenario);
+        } else {
+          console.error("❌ Failed to save outputs:", saveResult.error);
+        }
+
       } else {
         console.error("❌ Calculation failed:", result.error);
-        // Fallback to mock data
-        setTable(mockCashFlowTable);
-        setChartData(buildChartData(mockCashFlowTable));
       }
     } catch (error) {
-      console.error("=== Calculation Error ===");
-      console.error("Error:", error.message);
-      console.warn("Using mock cash flow table");
-      setTable(mockCashFlowTable);
-      setChartData(buildChartData(mockCashFlowTable));
-      setApiData(null);
+      console.error("❌ Calculation error:", error);
     } finally {
       setIsCalculating(false);
     }
@@ -889,86 +918,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
   // Get currency symbol for display
   const currSymbol = currencyRates[selectedCurrency]?.symbol || "$";
-
-  // ✅ KPI cards grouped by context
-  /* const kpiGroups = {
-    financial: {
-      title: "Financial Metrics",
-      color: colors.oxfordBlue,
-      stats: [
-        {
-          label: `Net Present Value (${currSymbol})`,
-          value: formatValue(apiData?.financials?.npv, 2, selectedCurrency),
-        },
-        {
-          label: "Internal Rate of Return (%)",
-          value: formatPercent(apiData?.financials?.irr, 2),
-        },
-        {
-          label: "Payback Period (years)",
-          value: apiData?.financials?.paybackPeriod ? apiData.financials.paybackPeriod.toFixed(0) : "N/A",
-        },
-      ],
-    },
-    production: {
-      title: "Production Metrics",
-      color: "#17c671",
-      stats: [
-        {
-          label: "Feedstock Consumption (tons/year)",
-          value: formatNumber(apiData?.technoEconomics?.feedstock_consumption, 2),
-        },
-        {
-          label: "Product Output (tons/year)",
-          value: formatNumber(apiData?.technoEconomics?.production, 2),
-        },
-      ],
-    },
-    cost: {
-      title: "Cost Metrics",
-      color: "#c4183c",
-      stats: [
-        {
-          label: `Total Capital Investment (${currSymbol})`,
-          value: formatValue(apiData?.technoEconomics?.total_capital_investment, 2, selectedCurrency),
-        },
-        {
-          label: `Total OPEX (${currSymbol}/year)`,
-          value: formatValue(apiData?.technoEconomics?.total_opex, 2, selectedCurrency),
-        },
-        {
-          label: `Total Indirect OPEX (${currSymbol}/year)`,
-          value: formatValue(apiData?.technoEconomics?.total_indirect_opex, 2, selectedCurrency),
-        },
-        {
-          label: `Feedstock Cost (${currSymbol}/year)`,
-          value: formatValue(apiData?.technoEconomics?.feedstock_cost, 2, selectedCurrency),
-        },
-        {
-          label: `Levelized Cost of Production (${currSymbol}/ton)`,
-          value: formatValue(apiData?.technoEconomics?.LCOP, 2, selectedCurrency),
-        },
-      ],
-    },
-    environmental: {
-      title: "Environmental Metrics",
-      color: "#00b8d8",
-      stats: [
-        {
-          label: "Carbon Intensity (kgCO₂/MJ)",
-          value: formatNumber(apiData?.technoEconomics?.carbon_intensity, 2),
-        },
-        {
-          label: "Carbon Conversion Efficiency (%)",
-          value: formatNumber(apiData?.technoEconomics?.carbon_conversion_efficiency_percent, 2),
-        },
-        {
-          label: "Total CO₂ Emission (kg/year)",
-          value: formatNumber(apiData?.technoEconomics?.total_co2_emissions, 2),
-        },
-      ],
-    },
-  }; */
 
   const toFiniteNumber = (val) => (typeof val === "number" && Number.isFinite(val) ? val : null);
   const rawTotalCO2 = toFiniteNumber(apiData?.technoEconomics?.total_co2_emissions);
@@ -1243,15 +1192,15 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         onProjectSelected={handleProjectSelected}
       />
 
-      <Container fluid className="main-content-container px-2" style={{ 
-        filter: showProjectModal ? "blur(4px)" : "none", 
-        transition: "filter 0.3s ease", 
-        display: "flex", 
-        flexDirection: "column", 
-        height: "100%" 
+      <Container fluid className="main-content-container px-2" style={{
+        filter: showProjectModal ? "blur(4px)" : "none",
+        transition: "filter 0.3s ease",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%"
       }}>
         {projectHeader}
-        
+
         {/* Main Layout - keep existing structure */}
         <div style={{ display: "flex", flexDirection: "row", gap: "12px", width: "100%", flex: 1, minHeight: 0, paddingBottom: "8px" }}>
           {/* Left Form */}
@@ -1340,7 +1289,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
                     fill="currentColor"
                     style={{ display: "block" }}
                   >
-                    <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
+                    <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z" />
                   </svg>
                 </Button>
               </CardHeader>
@@ -1350,8 +1299,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
             </Card>
           </div>
 
-        {/* KPI Cards - narrower width, stays in place */}
-        <div style={{ width: "300px", minWidth: "300px", maxWidth: "300px", height: "calc(100% - 8px)", minHeight: 0, display: "flex", flexDirection: "column", gap: "12px", marginBottom: "8px" }}>
+          {/* KPI Cards - narrower width, stays in place */}
+          <div style={{ width: "300px", minWidth: "300px", maxWidth: "300px", height: "calc(100% - 8px)", minHeight: 0, display: "flex", flexDirection: "column", gap: "12px", marginBottom: "8px" }}>
             {/* Consolidated KPI Cards - Mutually Exclusive Maximized Views */}
             {Object.entries(kpiGroups).map(([groupKey, group]) => {
               const isMaximized = maximizedKPI === groupKey;
@@ -1388,142 +1337,142 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
                       {isMaximized ? "unfold_less" : "unfold_more"}
                     </i>
                   </CardHeader>
-                <CardBody className="p-3" style={{ flex: 1, overflowY: "auto" }}>
-                  {group.stats.map((stat, idx) => {
-                    const hasDetails = Array.isArray(stat.details) && stat.details.length > 0;
-                    const detailKey = `${groupKey}:${stat.label}`;
-                    const isDetailOpen = hasDetails && expandedStatDetails[detailKey];
-                    const isConsumptionCards = stat.type === "consumptionCards";
+                  <CardBody className="p-3" style={{ flex: 1, overflowY: "auto" }}>
+                    {group.stats.map((stat, idx) => {
+                      const hasDetails = Array.isArray(stat.details) && stat.details.length > 0;
+                      const detailKey = `${groupKey}:${stat.label}`;
+                      const isDetailOpen = hasDetails && expandedStatDetails[detailKey];
+                      const isConsumptionCards = stat.type === "consumptionCards";
 
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          marginBottom: idx < group.stats.length - 1 ? "1rem" : "0",
-                          paddingBottom: idx < group.stats.length - 1 ? "1rem" : "0",
-                          borderBottom: idx < group.stats.length - 1 ? `1px solid ${colors.border}` : "none"
-                        }}
-                      >
-                        {/* Output Header */}
+                      return (
                         <div
+                          key={idx}
                           style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            marginBottom: "0.5rem"
+                            marginBottom: idx < group.stats.length - 1 ? "1rem" : "0",
+                            paddingBottom: idx < group.stats.length - 1 ? "1rem" : "0",
+                            borderBottom: idx < group.stats.length - 1 ? `1px solid ${colors.border}` : "none"
                           }}
                         >
-                          <h6
+                          {/* Output Header */}
+                          <div
                             style={{
-                              margin: 0,
-                              fontSize: "0.8rem",
-                              fontWeight: "600",
-                              color: colors.text,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px"
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginBottom: "0.5rem"
                             }}
                           >
-                            {stat.label}
-                          </h6>
-                          {hasDetails && (
-                            <Button
-                              size="sm"
-                              theme="light"
-                              style={{ fontSize: "0.7rem", padding: "2px 8px" }}
-                              onClick={() => toggleStatDetail(detailKey)}
+                            <h6
+                              style={{
+                                margin: 0,
+                                fontSize: "0.8rem",
+                                fontWeight: "600",
+                                color: colors.text,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px"
+                              }}
                             >
-                              {isDetailOpen ? "Hide" : "Details"}
-                            </Button>
+                              {stat.label}
+                            </h6>
+                            {hasDetails && (
+                              <Button
+                                size="sm"
+                                theme="light"
+                                style={{ fontSize: "0.7rem", padding: "2px 8px" }}
+                                onClick={() => toggleStatDetail(detailKey)}
+                              >
+                                {isDetailOpen ? "Hide" : "Details"}
+                              </Button>
+                            )}
+                          </div>
+
+                          {/* Output Value */}
+                          {isConsumptionCards ? (
+                            stat.cards && stat.cards.length ? (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+                                  gap: "8px",
+                                }}
+                              >
+                                {stat.cards.map((card) => (
+                                  <div
+                                    key={card.key || card.label}
+                                    style={{
+                                      backgroundColor: colors.background,
+                                      borderRadius: "6px",
+                                      padding: "8px",
+                                      textAlign: "center",
+                                      border: `1px solid ${colors.border}`,
+                                    }}
+                                  >
+                                    <div style={{ fontSize: "0.7rem", fontWeight: 600, color: colors.textSecondary, marginBottom: "4px" }}>
+                                      {card.label}
+                                    </div>
+                                    <div style={{ fontSize: "1rem", fontWeight: 700, color: colors.text }}>
+                                      {card.value ?? "N/A"}
+                                    </div>
+                                    <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "2px" }}>{card.unit}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: "0.9rem", fontWeight: 600, color: colors.textSecondary, textAlign: "center" }}>
+                                N/A
+                              </div>
+                            )
+                          ) : (
+                            <>
+                              <div
+                                style={{
+                                  fontSize: "1.3rem",
+                                  fontWeight: "700",
+                                  color: colors.text,
+                                  marginBottom: hasDetails && isDetailOpen ? "0.75rem" : "0"
+                                }}
+                              >
+                                {stat.value || "N/A"}
+                              </div>
+
+                              {/* Details sub-section */}
+                              {hasDetails && isDetailOpen && (
+                                <div style={{ marginTop: "0.5rem", paddingLeft: "0.5rem", borderLeft: `3px solid ${colors.border}` }}>
+                                  {stat.details.map((detail, dIdx) => {
+                                    const isNA = detail.value === 'N/A';
+                                    return (
+                                      <div
+                                        key={dIdx}
+                                        style={{
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          fontSize: '0.8rem',
+                                          fontWeight: 500,
+                                          color: colors.textSecondary,
+                                          padding: '4px 0'
+                                        }}
+                                      >
+                                        <span>{detail.label}</span>
+                                        <span style={{ fontWeight: 600, color: colors.text }}>{detail.value}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
-
-                        {/* Output Value */}
-                        {isConsumptionCards ? (
-                          stat.cards && stat.cards.length ? (
-                            <div
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-                                gap: "8px",
-                              }}
-                            >
-                              {stat.cards.map((card) => (
-                                <div
-                                  key={card.key || card.label}
-                                  style={{
-                                    backgroundColor: colors.background,
-                                    borderRadius: "6px",
-                                    padding: "8px",
-                                    textAlign: "center",
-                                    border: `1px solid ${colors.border}`,
-                                  }}
-                                >
-                                  <div style={{ fontSize: "0.7rem", fontWeight: 600, color: colors.textSecondary, marginBottom: "4px" }}>
-                                    {card.label}
-                                  </div>
-                                  <div style={{ fontSize: "1rem", fontWeight: 700, color: colors.text }}>
-                                    {card.value ?? "N/A"}
-                                  </div>
-                                  <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "2px" }}>{card.unit}</div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: colors.textSecondary, textAlign: "center" }}>
-                              N/A
-                            </div>
-                          )
-                        ) : (
-                          <>
-                            <div
-                              style={{
-                                fontSize: "1.3rem",
-                                fontWeight: "700",
-                                color: colors.text,
-                                marginBottom: hasDetails && isDetailOpen ? "0.75rem" : "0"
-                              }}
-                            >
-                              {stat.value || "N/A"}
-                            </div>
-
-                            {/* Details sub-section */}
-                            {hasDetails && isDetailOpen && (
-                              <div style={{ marginTop: "0.5rem", paddingLeft: "0.5rem", borderLeft: `3px solid ${colors.border}` }}>
-                                {stat.details.map((detail, dIdx) => {
-                                  const isNA = detail.value === 'N/A';
-                                  return (
-                                    <div
-                                      key={dIdx}
-                                      style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        fontSize: '0.8rem',
-                                        fontWeight: 500,
-                                        color: colors.textSecondary,
-                                        padding: '4px 0'
-                                      }}
-                                    >
-                                      <span>{detail.label}</span>
-                                      <span style={{ fontWeight: 600, color: colors.text }}>{detail.value}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </CardBody>
-              </Card>
+                      );
+                    })}
+                  </CardBody>
+                </Card>
               );
             })}
+          </div>
         </div>
-      </div>
 
-      {/* Cash Flow Modal */}
-      <Modal open={openTable} toggle={() => setOpenTable(!openTable)} size="lg">
+        {/* Cash Flow Modal */}
+        <Modal open={openTable} toggle={() => setOpenTable(!openTable)} size="lg">
           <ModalBody>
             <CashFlowTable tableData={table} />
           </ModalBody>

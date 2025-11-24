@@ -1047,6 +1047,20 @@ const BiofuelForm = ({
       }, null, 2)}</pre>
     </div>
   );
+
+  const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
+
+useEffect(() => {
+  const loadData = async () => {
+    if (!masterData) {
+      setIsLoadingMasterData(true);
+      await loadMasterData();
+      setIsLoadingMasterData(false);
+    }
+  };
+  loadData();
+}, [masterData, loadMasterData]);
+
   return (
     <Card small className="d-flex flex-column" style={{ height: "100%" }}>
       <CardHeader className="p-1" style={{ flexShrink: 0 }}>

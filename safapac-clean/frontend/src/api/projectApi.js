@@ -225,13 +225,23 @@ export const getScenario = async (scenarioId) => {
  */
 export const updateScenario = async (scenarioId, updates) => {
   try {
+    console.log("📤 Sending scenario update:", {
+      scenarioId,
+      updates,
+      updateKeys: Object.keys(updates)
+    });
+    
     const response = await api.put(`/scenarios/${scenarioId}`, updates);
     return { success: true, data: response.data };
   } catch (error) {
-    console.error("Error updating scenario:", error);
+    console.error("❌ Error updating scenario - Full error:", error);
+    console.error("❌ Error response data:", error.response?.data);
+    console.error("❌ Error response status:", error.response?.status);
+    
     return {
       success: false,
       error: error.response?.data?.detail || error.message,
+      status: error.response?.status
     };
   }
 };

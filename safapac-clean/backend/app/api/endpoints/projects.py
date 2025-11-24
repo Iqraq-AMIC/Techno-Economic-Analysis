@@ -387,10 +387,6 @@ def update_scenario(
     
     update_data = scenario_update.dict(exclude_unset=True)
     
-    # Handle user_inputs separately to maintain structure
-    if 'user_inputs' in update_data:
-        update_data['user_inputs'] = update_data.pop('user_inputs').dict()
-    
     updated_scenario = crud.update_scenario(scenario_id, update_data)
     
     if not updated_scenario:

@@ -328,7 +328,9 @@ class ScenarioCreate(ScenarioBase):
 
 class ScenarioUpdate(ScenarioBase):
     scenario_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    user_inputs: Optional[UserInputsSchema] = None
+    user_inputs: Optional[Dict[str, Any]] = None  # Changed from UserInputsSchema to Dict
+    techno_economics: Optional[Dict[str, Any]] = None  # ADD THIS
+    financial_analysis: Optional[Dict[str, Any]] = None  # ADD THIS
     scenario_order: Optional[int] = None
 
 class ScenarioResponse(ScenarioBase):
