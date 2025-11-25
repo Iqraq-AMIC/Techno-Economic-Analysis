@@ -128,14 +128,16 @@ class BiofuelEconomics:
             annual_manufacturing_cost = layer4_results.get("total_opex", 0)
             plant_lifetime = self.inputs_flat.get("project_lifetime_years", 20)
 
-            # Calculate financial metrics using the corrected method
-            financial_results = fa.calculate_financial_metrics(
+            # 1. Generate the Table first
+            cash_flow_table = fa.generate_cash_flow_table(
                 tci_usd, annual_revenue, annual_manufacturing_cost, plant_lifetime
             )
+            # Calculate financial metrics using the corrected method
+            metrics = fa.calculate_metrics(cash_flow_table)
             
-            npv = financial_results['npv']
-            irr = financial_results['irr'] 
-            payback = financial_results['payback_period']
+            npv = metrics['npv']
+            irr = metrics['irr']
+            payback = metrics['payback_period']
             
             print(f"DEBUG: Corrected Financial Results:")
             print(f"  - NPV: ${npv:,.0f}")
@@ -145,6 +147,7 @@ class BiofuelEconomics:
         except Exception as e:
             print(f"DEBUG: Financial Analysis Error: {e}")
             npv, irr, payback = 0, 0, 0
+            cash_flow_table = [] # Return empty list on failure to prevent frontend crash
 
        # Restructure the output to match API expectations
         final_result = {
@@ -180,6 +183,7 @@ class BiofuelEconomics:
                 "npv": npv,
                 "irr": irr if irr else 0,
                 "payback_period": payback if payback else 0,
+                "cash_flow_schedule": cash_flow_table
             },
             "resolved_inputs": {
                 "process_technology": process_technology,
