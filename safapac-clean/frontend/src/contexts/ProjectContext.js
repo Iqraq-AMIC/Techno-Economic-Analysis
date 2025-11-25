@@ -100,36 +100,29 @@ export const ProjectProvider = ({ children }) => {
 
       if (result.success) {
         const newProject = result.project;
-        console.log("✅ Project created:", newProject);
 
-        // Backend automatically creates Scenario 1, so we need to load it
+        // 1. Get the list of scenarios
         const scenariosResult = await listScenarios(newProject.id);
 
         if (scenariosResult.success && scenariosResult.data.length > 0) {
-          const autoCreatedScenario = scenariosResult.data[0];
+          const summaryScenario = scenariosResult.data[0];
 
-          // Update state with new project and auto-created scenario
-          setCurrentProject(newProject);
-          setCurrentScenario(autoCreatedScenario);
-          setScenarios(scenariosResult.data);
+          // 2. [NEW] Fetch FULL details (Inputs + Calculations) for Scenario 1
+          // The list endpoint might not return the full JSON blobs, so we fetch specific
+          const detailResult = await getScenario(summaryScenario.id);
 
-          // Persist to localStorage
-          persistProject(newProject);
-          persistScenario(autoCreatedScenario);
+          if (detailResult.success) {
+            const fullScenario = detailResult.data;
 
-          console.log("✅ Project created with auto-generated Scenario 1:", autoCreatedScenario);
+            setCurrentProject(newProject);
+            setCurrentScenario(fullScenario); // Set the FULL scenario
+            setScenarios(scenariosResult.data);
 
-          return {
-            success: true,
-            project: newProject,
-            scenario: autoCreatedScenario
-          };
-        } else {
-          console.error("❌ No scenarios created for new project");
-          return {
-            success: false,
-            error: "No scenarios were created for the new project"
-          };
+            persistProject(newProject);
+            persistScenario(fullScenario);
+
+            return { success: true, project: newProject, scenario: fullScenario };
+          }
         }
       } else {
         console.error("❌ Project creation failed:", result.error);
@@ -167,27 +160,23 @@ export const ProjectProvider = ({ children }) => {
 
       if (scenariosResult.success && scenariosResult.data.length > 0) {
         const scenariosList = scenariosResult.data;
-        const firstScenario = scenariosList[0];
 
-        // FIX: Use the project data as-is since it's already mapped in projectApi
-        const project = projectData; // Already mapped in listProjectsByUser
+        // [NEW] Fetch full details for the first scenario
+        const firstScenarioId = scenariosList[0].id;
+        const detailResult = await getScenario(firstScenarioId);
 
-        console.log("🔵 ProjectContext - Setting project:", project);
-        console.log("🔵 ProjectContext - Setting scenarios:", scenariosList);
+        if (detailResult.success) {
+          const fullScenario = detailResult.data;
 
-        setCurrentProject(project);
-        setCurrentScenario(firstScenario);
-        setScenarios(scenariosList);
+          setCurrentProject(projectData);
+          setCurrentScenario(fullScenario); // Set FULL scenario
+          setScenarios(scenariosList);
 
-        persistProject(project);
-        persistScenario(firstScenario);
+          persistProject(projectData);
+          persistScenario(fullScenario);
 
-        return {
-          success: true,
-          project,
-          scenario: firstScenario,
-          scenarios: scenariosList
-        };
+          return { success: true, project: projectData, scenario: fullScenario };
+        }
       }
       return { success: false, error: "No scenarios found for this project" };
     } catch (error) {

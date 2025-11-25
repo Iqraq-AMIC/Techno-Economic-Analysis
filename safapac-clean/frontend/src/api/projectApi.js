@@ -299,12 +299,34 @@ export const saveScenarioOutputs = async (scenarioId, technoEconomics, financial
   });
 };
 
+// In projectApi.js - Update getMasterData function
 export const getMasterData = async () => {
   try {
     const response = await api.get("/master-data");
-    // Backend sends camelCase
-    return { success: true, data: response.data };
+    console.log("📦 Raw master data from backend:", response.data);
+    
+    // Transform camelCase to snake_case for frontend compatibility
+    const mappedData = {
+      processes: response.data.processes || [],
+      feedstocks: (response.data.feedstocks || []).map(feedstock => ({
+        id: feedstock.id,
+        name: feedstock.name,
+        carbon_content_kg_c_per_kg: feedstock.carbonContentKgCPerKg,
+        energy_content_mj_per_kg: feedstock.energyContentMjPerKg,
+        ci_ref_gco2e_per_mj: feedstock.ciRefGco2ePerMj,
+        price_ref_usd_per_unit: feedstock.priceRefUsdPerUnit,
+        yield_ref: feedstock.yieldRef
+      })),
+      utilities: response.data.utilities || [],
+      products: response.data.products || [],
+      countries: response.data.countries || [],
+      units: response.data.units || []
+    };
+    
+    console.log("🔄 Mapped master data for frontend:", mappedData);
+    return { success: true, data: mappedData };
   } catch (error) {
+    console.error("❌ Error fetching master data:", error);
     return { success: false, error: error.response?.data?.detail || error.message };
   }
 };

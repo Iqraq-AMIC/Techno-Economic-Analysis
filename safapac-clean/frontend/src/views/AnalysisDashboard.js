@@ -180,66 +180,48 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   // Load inputs and outputs from current scenario when it changes
   useEffect(() => {
     if (currentScenario) {
-      console.log("📥 Loading scenario data...", currentScenario.scenarioName);
+      console.log("🔄 Hydrating Dashboard from Scenario:", currentScenario.scenarioName);
 
-      // 1. Get raw inputs from backend response
-      const rawBackendInputs = currentScenario.userInputs || currentScenario.user_inputs;
+      // 1. Hydrate Dropdowns (Process/Feedstock)
+      if (currentScenario.process?.name) {
+        setSelectedProcess(currentScenario.process.name);
+      }
+      if (currentScenario.feedstock?.name) {
+        setSelectedFeedstock(currentScenario.feedstock.name);
+      }
 
-      // 2. Get Outputs
-      const technoEconomics = currentScenario.technoEconomics || currentScenario.techno_economics;
-      const financialAnalysis = currentScenario.financialAnalysis || currentScenario.financial_analysis;
+      // 2. Hydrate Form Inputs
+      // We use the mapper to convert Backend Nested JSON -> Frontend Flat State
+      if (currentScenario.userInputs) {
+        console.log("📥 Found saved inputs, mapping to form...");
+        const mappedInputs = mapBackendToUiState(currentScenario.userInputs);
 
-      if (rawBackendInputs) {
-        // CHECK: Look for either snake_case OR camelCase keys
-        const hasConversionPlant = rawBackendInputs.conversion_plant || rawBackendInputs.conversionPlant;
-
-        if (hasConversionPlant) {
-            console.log("🔄 Mapping Backend Nested Data -> UI Form");
-            const uiState = mapBackendToUiState(rawBackendInputs);
-            
-            if (uiState) {
-                // Update state with mapped values
-                setInputs(prev => ({ ...prev, ...uiState }));
-                
-                // Update dropdowns (P-F-C)
-                // Note: mapBackendToUiState returns keys: selected_process, selected_feedstock
-                if (uiState.selected_process) {
-                    console.log("✅ Setting Process:", uiState.selected_process);
-                    setSelectedProcess(uiState.selected_process);
-                }
-                if (uiState.selected_feedstock) {
-                    console.log("✅ Setting Feedstock:", uiState.selected_feedstock);
-                    setSelectedFeedstock(uiState.selected_feedstock);
-                }
-                if (uiState.selectedCountry) {
-                    // If you have a state for country, set it here too
-                    // setSelectedCountry(uiState.selectedCountry);
-                }
-            } else {
-                console.warn("⚠️ Mapping failed despite detecting conversion plant data");
-            }
-        } else {
-            // CASE B: New Scenario or Legacy (No valid data structure found)
-            console.log("🆕 New Scenario or Empty Data - Applying Defaults");
-            handleReset(); 
+        if (mappedInputs) {
+          // Update the form state with the saved values
+          setInputs(prev => ({
+            ...prev,
+            ...mappedInputs
+          }));
         }
       }
-      
-      // 3. Load Results (Table/Charts)
-      if (technoEconomics || financialAnalysis) {
-        const apiData = {
-          technoEconomics: technoEconomics,
-          financials: financialAnalysis
+
+      // 3. Hydrate Charts & Tables (Outputs)
+      // Since you Auto-Calculated on creation, these should exist!
+      if (currentScenario.technoEconomics && currentScenario.financialAnalysis) {
+        console.log("📈 Found saved calculation results, updating charts...");
+
+        const results = {
+          techno_economics: currentScenario.technoEconomics,
+          financials: currentScenario.financialAnalysis,
+          resolved_inputs: currentScenario.userInputs // or whatever structure needed
         };
-        setApiData(apiData);
-        const mockCashFlow = generateMockCashFlowData(apiData);
-        setTable(mockCashFlow);
-        setChartData(buildChartData(mockCashFlow));
-      } else {
-        // Clear results for new scenarios
-        setApiData(null);
-        setTable([]);
-        setChartData([]);
+
+        setApiData(results);
+
+        // Regenerate Chart Data
+        const mockCashFlowData = generateMockCashFlowData(results);
+        setTable(mockCashFlowData);
+        setChartData(buildChartData(mockCashFlowData));
       }
     }
   }, [currentScenario]);
@@ -786,8 +768,24 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
   // Add this function to generate mock cash flow data
   const generateMockCashFlowData = (calculationResults) => {
-    const techno = calculationResults.techno_economics;
+
     const financials = calculationResults.financials;
+
+    // 1. Check if Backend provided the real schedule (New Flow)
+    if (financials && financials.cashFlowTable && Array.isArray(financials.cashFlowTable)) {
+      console.log("✅ Using Backend Cash Flow Data");
+      return financials.cashFlowTable; // Use real data directly
+    }
+
+    // Fallback for old data structure
+    if (financials && financials.cash_flow_schedule && Array.isArray(financials.cash_flow_schedule)) {
+      console.log("✅ Using Backend Cash Flow Schedule");
+      return financials.cash_flow_schedule;
+    }
+
+    console.warn("⚠️ No cash flow table found in backend response, using fallback generator");
+
+    const techno = calculationResults.techno_economics;
 
     if (!techno || !financials) return [];
 
