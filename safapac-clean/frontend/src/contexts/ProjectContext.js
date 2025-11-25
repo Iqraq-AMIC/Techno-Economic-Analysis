@@ -81,19 +81,26 @@ export const ProjectProvider = ({ children }) => {
   }, []);
 
   // Create a new project (auto-creates Scenario 1)
-  // Create a new project (auto-creates Scenario 1)
-  const createProject = async (projectData) => {
+  const createProject = async (projectName, initialProcessId, initialFeedstockId, initialCountryId) => {
     try {
-      // Use the imported apiCreateProject function
+      console.log("🔵 ProjectContext - Creating project with:", {
+        projectName,
+        initialProcessId,
+        initialFeedstockId,
+        initialCountryId
+      });
+
+      // Use the imported apiCreateProject function with proper parameters
       const result = await apiCreateProject(
-        projectData.projectName,
-        projectData.initialProcessId,
-        projectData.initialFeedstockId,
-        projectData.initialCountryId
+        projectName,
+        initialProcessId,
+        initialFeedstockId,
+        initialCountryId
       );
 
       if (result.success) {
-        const newProject = result.data;
+        const newProject = result.project;
+        console.log("✅ Project created:", newProject);
 
         // Backend automatically creates Scenario 1, so we need to load it
         const scenariosResult = await listScenarios(newProject.id);
@@ -102,7 +109,6 @@ export const ProjectProvider = ({ children }) => {
           const autoCreatedScenario = scenariosResult.data[0];
 
           // Update state with new project and auto-created scenario
-          // Remove setProjects line since we don't have that state
           setCurrentProject(newProject);
           setCurrentScenario(autoCreatedScenario);
           setScenarios(scenariosResult.data);
@@ -112,18 +118,33 @@ export const ProjectProvider = ({ children }) => {
           persistScenario(autoCreatedScenario);
 
           console.log("✅ Project created with auto-generated Scenario 1:", autoCreatedScenario);
-        }
 
-        return { success: true, project: newProject };
+          return {
+            success: true,
+            project: newProject,
+            scenario: autoCreatedScenario
+          };
+        } else {
+          console.error("❌ No scenarios created for new project");
+          return {
+            success: false,
+            error: "No scenarios were created for the new project"
+          };
+        }
+      } else {
+        console.error("❌ Project creation failed:", result.error);
+        return result;
       }
-      return result;
     } catch (error) {
       console.error("Error in createProject context:", error);
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message || "Failed to create project"
+      };
     }
   };
 
-  // Load an existing project
+  // In the loadProject function, update the project normalization:
   const loadProject = useCallback(async (projectId, projectName) => {
     console.log("🔵 ProjectContext - loadProject called:", projectId, projectName);
     setLoading(true);
@@ -148,17 +169,8 @@ export const ProjectProvider = ({ children }) => {
         const scenariosList = scenariosResult.data;
         const firstScenario = scenariosList[0];
 
-        // Normalize project data structure
-        const project = {
-          id: projectData.id,
-          projectName: projectData.projectName || projectData.project_name, // Handle both cases
-          userId: projectData.userId || projectData.user_id,
-          initialProcess: projectData.initialProcess,
-          initialFeedstock: projectData.initialFeedstock,
-          initialCountry: projectData.initialCountry,
-          createdAt: projectData.createdAt || projectData.created_at,
-          updatedAt: projectData.updatedAt || projectData.updated_at
-        };
+        // FIX: Use the project data as-is since it's already mapped in projectApi
+        const project = projectData; // Already mapped in listProjectsByUser
 
         console.log("🔵 ProjectContext - Setting project:", project);
         console.log("🔵 ProjectContext - Setting scenarios:", scenariosList);
@@ -205,27 +217,24 @@ export const ProjectProvider = ({ children }) => {
 
   // Add a new scenario to current project (max 3)
   const addScenario = useCallback(async (scenarioData) => {
-    if (!currentProject) {
-      return { success: false, error: "No project selected" };
-    }
-
-    if (scenarios.length >= 3) {
-      return { success: false, error: "Maximum 3 scenarios per project" };
-    }
+    if (!currentProject) return { success: false, error: "No project selected" };
+    if (scenarios.length >= 3) return { success: false, error: "Maximum 3 scenarios per project" };
 
     setLoading(true);
     try {
-      // Use provided data or create default scenario
-      const defaultScenarioData = {
+      // 1. Get Standard Defaults (Nested Structure)
+      const defaultInputs = getDefaultUserInputs();
+
+      const payload = {
         scenarioName: `Scenario ${scenarios.length + 1}`,
         processId: currentProject.initialProcess?.id || 1,
         feedstockId: currentProject.initialFeedstock?.id || 1,
         countryId: currentProject.initialCountry?.id || 1,
-        userInputs: getDefaultUserInputs(),
+        userInputs: defaultInputs, // Send NESTED defaults
         scenarioOrder: scenarios.length + 1
       };
 
-      const scenarioParams = { ...defaultScenarioData, ...scenarioData };
+      const scenarioParams = { ...payload, ...scenarioData };
 
       const result = await apiCreateScenario(
         currentProject.id,
@@ -404,23 +413,25 @@ export const ProjectProvider = ({ children }) => {
   // Default user inputs for new scenarios
   const getDefaultUserInputs = useCallback(() => {
     return {
-      conversionPlant: {
-        plantCapacity: { value: 500, unitId: 1 }, // kta
-        annualLoadHours: 8000,
-        ciProcessDefault: 20.0
+      conversion_plant: {
+        plant_capacity: { value: 500, unit_id: 3 }, // 500 kta default
+        annual_load_hours: 8000,
+        ci_process_default: 20.0
       },
-      economicParameters: {
-        projectLifetimeYears: 25,
-        discountRatePercent: 10.0,
-        tciRefMusd: null,
-        referenceCapacityKtpa: null,
-        tciScalingExponent: 0.6,
-        workingCapitalTciRatio: 0.10,
-        indirectOpexTciRatio: 0.03
+      economic_parameters: {
+        project_lifetime_years: 25,
+        discount_rate_percent: 10.0,
+        tci_ref_musd: 250, // Standard default
+        reference_capacity_ktpa: 50,
+        tci_scaling_exponent: 0.6,
+        working_capital_tci_ratio: 0.10,
+        indirect_opex_tci_ratio: 0.03
       },
-      feedstockData: [],
-      utilityData: [],
-      productData: []
+      // Empty lists trigger backend to use its own defaults if needed, 
+      // or you can provide standard placeholders here
+      feedstock_data: [],
+      utility_data: [],
+      product_data: []
     };
   }, []);
 

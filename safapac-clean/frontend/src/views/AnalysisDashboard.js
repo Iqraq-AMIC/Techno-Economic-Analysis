@@ -21,7 +21,7 @@ import { useAccess } from "../contexts/AccessContext";
 import { useProject } from "../contexts/ProjectContext";
 import ProjectStartupModal from "../components/project/ProjectStartupModal";
 import { calculateScenario } from "../api/projectApi";
-
+import { mapUiStateToBackend, mapBackendToUiState } from "../utils/payloadMapper";
 
 // ✅ Mock data for fallback
 const mockCashFlowTable = [
@@ -180,45 +180,69 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   // Load inputs and outputs from current scenario when it changes
   useEffect(() => {
     if (currentScenario) {
-      console.log("📥 Loading scenario data:", currentScenario);
+      console.log("📥 Loading scenario data...", currentScenario.scenarioName);
 
-      // Handle field name mapping
-      const userInputs = currentScenario.user_inputs || currentScenario.inputs;
+      // 1. Get raw inputs from backend response
+      const rawBackendInputs = currentScenario.userInputs || currentScenario.user_inputs;
 
-      // Map backend fields to frontend expected names
-      const technoEconomics = currentScenario.techno_economics ||
-        (currentScenario.outputs && currentScenario.outputs.apiData);
-      const financialAnalysis = currentScenario.financial_analysis ||
-        (currentScenario.outputs && currentScenario.outputs.financials);
+      // 2. Get Outputs
+      const technoEconomics = currentScenario.technoEconomics || currentScenario.techno_economics;
+      const financialAnalysis = currentScenario.financialAnalysis || currentScenario.financial_analysis;
 
-      console.log("📋 Scenario data loaded:", {
-        userInputs: !!userInputs,
-        technoEconomics: !!technoEconomics,
-        financialAnalysis: !!financialAnalysis
-      });
+      if (rawBackendInputs) {
+        // CHECK: Look for either snake_case OR camelCase keys
+        const hasConversionPlant = rawBackendInputs.conversion_plant || rawBackendInputs.conversionPlant;
 
-      if (userInputs) {
-        setInputs(userInputs);
-        setSelectedProcess(userInputs.selected_process || "");
-        setSelectedFeedstock(userInputs.selected_feedstock || "");
+        if (hasConversionPlant) {
+            console.log("🔄 Mapping Backend Nested Data -> UI Form");
+            const uiState = mapBackendToUiState(rawBackendInputs);
+            
+            if (uiState) {
+                // Update state with mapped values
+                setInputs(prev => ({ ...prev, ...uiState }));
+                
+                // Update dropdowns (P-F-C)
+                // Note: mapBackendToUiState returns keys: selected_process, selected_feedstock
+                if (uiState.selected_process) {
+                    console.log("✅ Setting Process:", uiState.selected_process);
+                    setSelectedProcess(uiState.selected_process);
+                }
+                if (uiState.selected_feedstock) {
+                    console.log("✅ Setting Feedstock:", uiState.selected_feedstock);
+                    setSelectedFeedstock(uiState.selected_feedstock);
+                }
+                if (uiState.selectedCountry) {
+                    // If you have a state for country, set it here too
+                    // setSelectedCountry(uiState.selectedCountry);
+                }
+            } else {
+                console.warn("⚠️ Mapping failed despite detecting conversion plant data");
+            }
+        } else {
+            // CASE B: New Scenario or Legacy (No valid data structure found)
+            console.log("🆕 New Scenario or Empty Data - Applying Defaults");
+            handleReset(); 
+        }
       }
-
+      
+      // 3. Load Results (Table/Charts)
       if (technoEconomics || financialAnalysis) {
         const apiData = {
-          techno_economics: technoEconomics,
+          technoEconomics: technoEconomics,
           financials: financialAnalysis
         };
-
         setApiData(apiData);
-        console.log("📊 Setting API data from scenario:", apiData);
-
-        // Generate mock cash flow data for chart
         const mockCashFlow = generateMockCashFlowData(apiData);
         setTable(mockCashFlow);
         setChartData(buildChartData(mockCashFlow));
+      } else {
+        // Clear results for new scenarios
+        setApiData(null);
+        setTable([]);
+        setChartData([]);
       }
     }
-  }, [currentScenario?.id]);
+  }, [currentScenario]);
 
   const [inputs, setInputs] = useState({
     production_capacity: 500,
@@ -819,55 +843,60 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
     setIsCalculating(true);
     try {
-      console.log("🔬 Starting calculation for scenario:", currentScenario.id);
-      console.log("📤 Sending calculation request...");
+      console.log("🚀 Preparing calculation payload...");
 
+      // PHASE 2 CHANGE: MAP DATA BEFORE SENDING
+      const formattedInputs = mapUiStateToBackend(
+        inputs,
+        selectedProcess,
+        selectedFeedstock,
+        // assuming selectedCountry is available in state, defaulting to USA if not
+        inputs.selectedCountry || "USA"
+      );
+
+      console.log("📤 Saving formatted inputs to backend:", formattedInputs);
+
+      // 1. Save Inputs to DB First (Critical step for backend reconstruction)
+      const saveInputResult = await updateCurrentScenario({
+        userInputs: formattedInputs // Send the nested Pydantic structure
+      });
+
+      if (!saveInputResult.success) {
+        throw new Error("Failed to save inputs before calculation: " + saveInputResult.error);
+      }
+
+      // 2. Trigger Calculation (Backend reads from DB)
+      console.log("🔬 Triggering calculation...");
       const result = await calculateScenario(currentScenario.id);
 
       if (result.success) {
-        console.log("✅ Calculation successful - raw response:", result.data);
-
+        // ... Handle success (same as before) ...
         const calculationResults = {
-          techno_economics: result.data.technoEconomics,  // Map camelCase to snake_case
+          techno_economics: result.data.technoEconomics,
           financials: result.data.financials,
-          resolved_inputs: result.data.resolvedInputs     // Map camelCase to snake_case
+          resolved_inputs: result.data.resolvedInputs
         };
-
-        console.log("📊 Calculation results structure:", {
-          hasTechnoEconomics: !!calculationResults.techno_economics,
-          hasFinancials: !!calculationResults.financials,
-          technoEconomicsKeys: calculationResults.techno_economics ? Object.keys(calculationResults.techno_economics) : 'none',
-          financialsKeys: calculationResults.financials ? Object.keys(calculationResults.financials) : 'none'
-        });
 
         setApiData(calculationResults);
 
-        // FIX: Generate mock cash flow data since backend doesn't provide it
+        // Generate charts, etc.
         const mockCashFlowData = generateMockCashFlowData(calculationResults);
         setTable(mockCashFlowData);
         setChartData(buildChartData(mockCashFlowData));
 
-        // Save outputs to current scenario
-        console.log("💾 Saving to scenario - techno_economics:", calculationResults.techno_economics);
-        console.log("💾 Saving to scenario - financials:", calculationResults.financials);
-
-        const saveResult = await updateCurrentScenario({
-          techno_economics: calculationResults.techno_economics,
-          financial_analysis: calculationResults.financials
+        // 3. Save OUTPUTS to DB
+        await updateCurrentScenario({
+          technoEconomics: calculationResults.techno_economics,
+          financialAnalysis: calculationResults.financials
         });
 
-        if (saveResult.success) {
-          console.log("✅ Successfully saved outputs to scenario");
-          console.log("📋 Updated scenario:", saveResult.scenario);
-        } else {
-          console.error("❌ Failed to save outputs:", saveResult.error);
-        }
-
       } else {
-        console.error("❌ Calculation failed:", result.error);
+        console.error("❌ Backend Calculation Error:", result.error);
+        alert(`Calculation Failed: ${result.error}`);
       }
     } catch (error) {
-      console.error("❌ Calculation error:", error);
+      console.error("❌ Process Error:", error);
+      alert(`Error: ${error.message}`);
     } finally {
       setIsCalculating(false);
     }

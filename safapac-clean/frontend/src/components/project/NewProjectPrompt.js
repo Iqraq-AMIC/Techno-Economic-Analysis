@@ -58,12 +58,7 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
       return;
     }
 
-    if (projectName.trim().length > 100) {
-      setError("Project name must be 100 characters or less");
-      return;
-    }
-
-    // Validate required selections
+    // Add validation for required fields
     if (!initialProcessId || !initialFeedstockId || !initialCountryId) {
       setError("Please select initial process, feedstock, and country");
       return;
@@ -73,6 +68,7 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
     setError(null);
 
     try {
+      // FIX: Pass the parameters in the correct order expected by createProject
       const result = await createProject(
         projectName.trim(),
         parseInt(initialProcessId),
@@ -82,14 +78,16 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
 
       if (result.success) {
         console.log("✅ Project created successfully:", result.project);
-        // Project created successfully with auto-generated Scenario 1
         onProjectCreated(result.project, result.scenario);
       } else {
-        setError(result.error || "Failed to create project");
+        // FIX: Handle error properly - don't pass the entire error object
+        setError(result.error?.message || result.error || "Failed to create project");
       }
     } catch (err) {
       console.error("Error creating project:", err);
-      setError(err.message || "Failed to create project");
+      // FIX: Extract meaningful error message
+      const errorMessage = err.response?.data?.detail || err.message || "Failed to create project";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -111,7 +109,7 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
   };
 
   return (
-    <Modal open={isOpen} centered backdrop="static" toggle={() => {}} style={{ zIndex: 1050 }} size="lg">
+    <Modal open={isOpen} centered backdrop="static" toggle={() => { }} style={{ zIndex: 1050 }} size="lg">
       <ModalHeader style={{ backgroundColor: "#006D7C", color: "white" }}>
         Create New Project
       </ModalHeader>
@@ -119,13 +117,14 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
         <ModalBody>
           <div style={{ padding: "1rem" }}>
             <p style={{ color: "#666", marginBottom: "1.5rem" }}>
-              Enter a name for your new project and select initial technology, feedstock, and country. 
+              Enter a name for your new project and select initial technology, feedstock, and country.
               A default scenario (Scenario 1) will be automatically created.
             </p>
 
             {error && (
               <Alert theme="danger" style={{ marginBottom: "1rem" }}>
-                {error}
+                {/* FIX: Ensure error is a string, not an object */}
+                {typeof error === 'string' ? error : JSON.stringify(error)}
               </Alert>
             )}
 
@@ -216,10 +215,10 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
             {/* Loading state for master data */}
             {!masterDataLoaded && (
               <div style={{ textAlign: "center", padding: "1rem", color: "#666" }}>
-                <i 
-                  className="material-icons" 
-                  style={{ 
-                    fontSize: "1.5rem", 
+                <i
+                  className="material-icons"
+                  style={{
+                    fontSize: "1.5rem",
                     animation: "spin 1s linear infinite",
                     display: "inline-block"
                   }}
@@ -238,16 +237,16 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
 
             {/* Information about initial selections */}
             {masterDataLoaded && (
-              <div style={{ 
-                backgroundColor: "#f8f9fa", 
-                padding: "1rem", 
-                borderRadius: "4px", 
+              <div style={{
+                backgroundColor: "#f8f9fa",
+                padding: "1rem",
+                borderRadius: "4px",
                 marginTop: "1rem",
                 fontSize: "0.875rem",
                 color: "#666"
               }}>
                 <p style={{ margin: 0 }}>
-                  <strong>Note:</strong> These initial selections will be used for the first scenario. 
+                  <strong>Note:</strong> These initial selections will be used for the first scenario.
                   You can change them later and create additional scenarios with different configurations.
                 </p>
               </div>
@@ -273,11 +272,11 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
           >
             {loading ? (
               <>
-                <i 
-                  className="material-icons" 
-                  style={{ 
-                    fontSize: "1rem", 
-                    verticalAlign: "middle", 
+                <i
+                  className="material-icons"
+                  style={{
+                    fontSize: "1rem",
+                    verticalAlign: "middle",
                     marginRight: "0.5rem",
                     animation: "spin 1s linear infinite"
                   }}
