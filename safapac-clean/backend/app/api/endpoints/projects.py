@@ -381,6 +381,7 @@ def create_scenario(
         )
     
     try:
+        # 1. Prepare Data
         scenario_data = {
             "project_id": project_id,
             "scenario_name": scenario_in.scenario_name,
@@ -391,18 +392,27 @@ def create_scenario(
             "scenario_order": scenario_in.scenario_order,
         }
         
+        # 2. Create Scenario (THIS COMMITS TO DB)
         db_scenario = crud.create_scenario(scenario_data)
-        # 2. [NEW] Auto-Calculate
-        full_scenario = crud.get_scenario_by_id(db_scenario.id)
-        updated_scenario = _run_calculation_internal(full_scenario, crud)
         
-        return updated_scenario
+        # 3. [Safe] Auto-Calculate
+        try:
+            full_scenario = crud.get_scenario_by_id(db_scenario.id)
+            updated_scenario = _run_calculation_internal(full_scenario, crud)
+            return updated_scenario
+            
+        except Exception as calc_error:
+            # 🚨 CATCH CALCULATION ERRORS SEPARATELY
+            # If calc fails, we log it but STILL RETURN THE SCENARIO so frontend doesn't crash.
+            logger.error(f"⚠️ Scenario created, but auto-calculation failed: {calc_error}")
+            # Return the scenario without calculation results
+            return crud.get_scenario_by_id(db_scenario.id)
         
     except Exception as e:
         logger.error(f"Error creating scenario: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to create scenario"
+            detail=f"Failed to create scenario: {str(e)}"
         )
 
 @router.get("/projects/{project_id}/scenarios", response_model=List[ScenarioResponse])

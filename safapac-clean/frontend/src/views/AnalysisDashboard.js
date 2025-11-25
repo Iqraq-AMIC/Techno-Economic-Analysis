@@ -20,7 +20,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAccess } from "../contexts/AccessContext";
 import { useProject } from "../contexts/ProjectContext";
 import ProjectStartupModal from "../components/project/ProjectStartupModal";
-import { calculateScenario } from "../api/projectApi";
+import { getScenario, calculateScenario } from "../api/projectApi";
 import { mapUiStateToBackend, mapBackendToUiState } from "../utils/payloadMapper";
 
 // ✅ Mock data for fallback
@@ -359,64 +359,70 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         return;
       }
 
-      console.log("📊 Fetching comparison data for scenarios:", comparisonScenarios);
-      console.log("📊 Available scenarios:", scenarios);
+      console.log("📊 Fetching comparison data for:", comparisonScenarios);
 
       try {
         const comparisonData = await Promise.all(
           comparisonScenarios.map(async (scenarioId) => {
-            const scenario = scenarios.find(s => s.id === scenarioId); // Use id instead of scenario_id
-            console.log(`📊 Found scenario ${scenarioId}:`, scenario);
+            // 1. Try to get it from the local state list first
+            let scenario = scenarios.find(s => s.id === scenarioId);
 
-            if (!scenario) {
-              console.log(`❌ Scenario ${scenarioId} not found`);
-              return null;
+            // Helper to safely access properties (handles snake_case vs camelCase)
+            const getProp = (obj, snake, camel) => obj?.[snake] || obj?.[camel];
+
+            let techno = getProp(scenario, 'techno_economics', 'technoEconomics');
+            let financials = getProp(scenario, 'financial_analysis', 'financialAnalysis');
+
+            // 2. If missing, FETCH full details from API
+            if (!techno || !financials) {
+              console.log(`🔄 Data missing for ${scenarioId}, fetching full details...`);
+              const apiResult = await getScenario(scenarioId);
+              if (apiResult.success) {
+                scenario = apiResult.data;
+                techno = scenario.technoEconomics; // API returns camelCase
+                financials = scenario.financialAnalysis;
+              } else {
+                console.error(`❌ Failed to fetch details for ${scenarioId}`);
+                return null;
+              }
             }
 
-            // Get outputs from scenario (new structure)
-            const technoEconomics = scenario.techno_economics;
-            const financialAnalysis = scenario.financial_analysis;
+            const scenarioName = scenario.scenarioName || scenario.scenario_name || "Unknown Scenario";
 
-            console.log(`📊 Outputs for ${scenario.scenarioName || scenario.scenario_name}:`, { technoEconomics, financialAnalysis });
-
-            // Try different possible locations for the cash flow table
+            // 3. Extract Cash Flow Table
             let cashFlowData = null;
 
-            if (financialAnalysis) {
-              // Try cash_flow_schedule first (new structure)
-              if (financialAnalysis.cash_flow_schedule && financialAnalysis.cash_flow_schedule.length > 0) {
-                cashFlowData = financialAnalysis.cash_flow_schedule;
-                console.log(`✅ Found cash_flow_schedule for ${scenario.scenarioName || scenario.scenario_name}`);
-              }
-              // Try cashFlowTable property (old structure)
-              else if (financialAnalysis.cashFlowTable && financialAnalysis.cashFlowTable.length > 0) {
-                cashFlowData = financialAnalysis.cashFlowTable;
-                console.log(`✅ Found cashFlowTable for ${scenario.scenarioName || scenario.scenario_name}`);
+            if (financials) {
+              // Check for new structure (cashFlowTable) or old structure (cash_flow_schedule)
+              // OR the raw snake_case from backend (cash_flow_schedule)
+              const table = financials.cashFlowTable || financials.cash_flow_schedule;
+              if (Array.isArray(table) && table.length > 0) {
+                cashFlowData = table;
               }
             }
 
-            // If still no data and this is the current scenario, use current table
-            if (!cashFlowData && scenarioId === currentScenario?.id && tableRef.current && tableRef.current.length > 0) {
+            // 4. Fallback: If this is the CURRENT scenario, use the live tableRef
+            if (!cashFlowData && scenarioId === currentScenario?.id && tableRef.current?.length > 0) {
+              console.log(`✅ Using live table for Current Scenario: ${scenarioName}`);
               cashFlowData = tableRef.current;
-              console.log(`✅ Using current table for ${scenario.scenarioName || scenario.scenario_name}`);
             }
 
             if (!cashFlowData) {
-              console.log(`❌ No cash flow data found for ${scenario.scenarioName || scenario.scenario_name}`);
+              console.warn(`⚠️ No cash flow data available for ${scenarioName}`);
               return null;
             }
 
             return {
-              name: scenario.scenarioName || scenario.scenario_name,
+              name: scenarioName,
               data: cashFlowData,
             };
           })
         );
 
-        // Filter out null values
+        // Filter out nulls (failed fetches)
         const validComparisons = comparisonData.filter(d => d !== null);
-        console.log("📊 Valid comparison data:", validComparisons);
         setComparisonChartData(validComparisons);
+
       } catch (error) {
         console.error("Error fetching comparison data:", error);
         setComparisonChartData([]);
@@ -868,8 +874,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         // backend calculate endpoint already saved the inputs to the DB, 
         // but updating the context ensures the UI is in sync)
         if (updateCurrentScenario) {
-             // We can just refetch the scenario to be 100% sure we are synced
-             // or just rely on the result.data 
+          // We can just refetch the scenario to be 100% sure we are synced
+          // or just rely on the result.data 
         }
 
       } else {

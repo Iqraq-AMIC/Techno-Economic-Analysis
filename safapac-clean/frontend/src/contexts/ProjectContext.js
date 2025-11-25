@@ -211,51 +211,60 @@ export const ProjectProvider = ({ children }) => {
 
     setLoading(true);
     try {
-      // 1. Get Standard Defaults (Nested Structure)
-      const defaultInputs = getDefaultUserInputs();
+      // 1. PREPARE PAYLOAD (Your existing logic is fine here)
+      let userInputsPayload;
+
+      if (currentScenario && currentScenario.userInputs) {
+        userInputsPayload = JSON.parse(JSON.stringify(currentScenario.userInputs));
+      } else {
+        // ... (Keep your existing fallback default inputs logic here) ...
+        userInputsPayload = {
+           conversion_plant: { plant_capacity: { value: 500, unit_id: 3 }, annual_load_hours: 8000, ci_process_default: 20.0 },
+           economic_parameters: { project_lifetime_years: 25, discount_rate_percent: 10.0, tci_ref_musd: 250, reference_capacity_ktpa: 50, tci_scaling_exponent: 0.6, working_capital_tci_ratio: 0.10, indirect_opex_tci_ratio: 0.03 },
+           feedstock_data: [], utility_data: [], product_data: []
+        };
+      }
 
       const payload = {
         scenarioName: `Scenario ${scenarios.length + 1}`,
-        processId: currentProject.initialProcess?.id || 1,
-        feedstockId: currentProject.initialFeedstock?.id || 1,
-        countryId: currentProject.initialCountry?.id || 1,
-        userInputs: defaultInputs, // Send NESTED defaults
-        scenarioOrder: scenarios.length + 1
+        processId: currentScenario?.process?.id || currentProject.initialProcess?.id || 1,
+        feedstockId: currentScenario?.feedstock?.id || currentProject.initialFeedstock?.id || 1,
+        countryId: currentScenario?.country?.id || currentProject.initialCountry?.id || 1,
+        userInputs: userInputsPayload,
+        scenarioOrder: scenarios.length + 1,
+        ...scenarioData
       };
 
-      const scenarioParams = { ...payload, ...scenarioData };
-
+      // 2. CALL API
       const result = await apiCreateScenario(
         currentProject.id,
-        scenarioParams.scenarioName,
-        scenarioParams.processId,
-        scenarioParams.feedstockId,
-        scenarioParams.countryId,
-        scenarioParams.userInputs,
-        scenarioParams.scenarioOrder
+        payload.scenarioName,
+        payload.processId,
+        payload.feedstockId,
+        payload.countryId,
+        payload.userInputs,
+        payload.scenarioOrder
       );
 
       if (result.success) {
-        const newScenario = result.data;
+        const newScenario = result.data; // API returns 'data'
+
+        // 3. UPDATE STATE IMMEDIATELY (Fixes the UI needing refresh)
         setScenarios((prev) => [...prev, newScenario]);
-
-        // Auto-switch to new scenario
-        setCurrentScenario(newScenario);
-        persistScenario(newScenario);
-
+        
+        // 4. NORMALIZE RETURN (Fixes the ScenarioTabs crash)
+        // We return 'scenario' key because ScenarioTabs.js expects result.scenario.id
         return { success: true, scenario: newScenario };
       }
+      
       return result;
     } catch (error) {
       console.error("Error adding scenario:", error);
-      return {
-        success: false,
-        error: error.message || "Failed to create scenario"
-      };
+      return { success: false, error: error.message };
     } finally {
       setLoading(false);
     }
-  }, [currentProject, scenarios, persistScenario]);
+  }, [currentProject, scenarios, currentScenario, persistScenario]);
 
   // Switch to a different scenario
   const switchScenario = useCallback(async (scenarioId) => {

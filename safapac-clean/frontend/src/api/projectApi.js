@@ -163,6 +163,8 @@ export const createScenario = async (
       feedstock: response.data.feedstock,
       country: response.data.country,
       userInputs: response.data.userInputs,
+      technoEconomics: response.data.technoEconomics, 
+      financialAnalysis: response.data.financialAnalysis, 
       createdAt: response.data.createdAt,
       updatedAt: response.data.updatedAt
     };

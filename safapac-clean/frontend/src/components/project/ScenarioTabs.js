@@ -187,8 +187,7 @@ const ScenarioTabs = () => {
                   }}
                   title="Select for comparison"
                 />
-                {/* FIX: Use scenario_name (snake_case from backend) */}
-                <span>{scenario.scenario_name}</span>
+                <span>{scenario.scenarioName}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                 {canDelete && (
