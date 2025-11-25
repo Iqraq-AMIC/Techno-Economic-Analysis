@@ -77,12 +77,15 @@ class BiofuelEconomics:
         # Layer 3: Carbon Intensity and Emissions
         layer3_results = self.layer3.compute([layer2_results])
 
+        # Use .get() with default to avoid errors if keys missing
+        discount_rate = self.inputs_flat.get("discount_rate", 0.07)
+        lifetime = self.inputs_flat.get("project_lifetime_years", 20)
+
         # Layer 4: Final Metrics (LCOP, Total OPEX, Total CO2)
         layer4_results = self.layer4.compute(
-        layer2_results, layer3_results, layer1_results,
-        self.inputs_flat.get("discount_rate", 0.07), 
-        self.inputs_flat.get("project_lifetime_years", 20)
-    )
+            layer2_results, layer3_results, layer1_results,
+            discount_rate, lifetime
+        )
         
         print("🔍 DEBUG YIELD CHECK:")
         print(f"   User feedstock yield: {self.inputs_flat.get('feedstock_yield')}")
@@ -117,39 +120,28 @@ class BiofuelEconomics:
 
         # INTEGRATE FINANCIAL ANALYSIS
         try:
-            # Create financial analysis instance with correct discount rate
-            fa = FinancialAnalysis(
-                discount_rate=self.inputs_flat.get("discount_rate", 0.07)
-            )
+            fa = FinancialAnalysis(discount_rate=discount_rate)
             
-            # Convert inputs to USD
-            tci_usd = layer1_results.get("total_capital_investment", 0) * 1_000_000  # Convert MUSD to USD
+            tci_usd = layer1_results.get("total_capital_investment", 0) * 1_000_000
             annual_revenue = layer2_results.get("revenue", 0)
             annual_manufacturing_cost = layer4_results.get("total_opex", 0)
-            plant_lifetime = self.inputs_flat.get("project_lifetime_years", 20)
-
-            # 1. Generate the Table first
-            cash_flow_table = fa.generate_cash_flow_table(
-                tci_usd, annual_revenue, annual_manufacturing_cost, plant_lifetime
+            
+            # This now returns the SAFE table + your metrics
+            financial_results = fa.calculate_financial_metrics(
+                tci_usd, annual_revenue, annual_manufacturing_cost, int(lifetime)
             )
-            # Calculate financial metrics using the corrected method
-            metrics = fa.calculate_metrics(cash_flow_table)
             
-            npv = metrics['npv']
-            irr = metrics['irr']
-            payback = metrics['payback_period']
-            
-            print(f"DEBUG: Corrected Financial Results:")
-            print(f"  - NPV: ${npv:,.0f}")
-            print(f"  - IRR: {irr:.1%}")
-            print(f"  - Payback: {payback} years")
+            npv = financial_results['npv']
+            irr = financial_results['irr'] 
+            payback = financial_results['payback_period']
+            cash_flow_table = financial_results['cash_flow_schedule']
             
         except Exception as e:
             print(f"DEBUG: Financial Analysis Error: {e}")
             npv, irr, payback = 0, 0, 0
-            cash_flow_table = [] # Return empty list on failure to prevent frontend crash
+            cash_flow_table = []
 
-       # Restructure the output to match API expectations
+        # Restructure output
         final_result = {
             "techno_economics": {
                 "process_technology": process_technology,
@@ -161,7 +153,6 @@ class BiofuelEconomics:
                 "total_opex": layer4_results.get("total_opex", 0),
                 "total_co2_emissions": layer4_results.get("total_co2_emissions", 0),
                 "carbon_intensity": layer4_results.get("carbon_intensity", 0),
-
                 "utility_consumption": {
                     "hydrogen": layer1_results.get("hydrogen_consumption", 0),
                     "electricity": layer1_results.get("electricity_consumption", 0)
@@ -181,9 +172,9 @@ class BiofuelEconomics:
             },
             "financials": {
                 "npv": npv,
-                "irr": irr if irr else 0,
-                "payback_period": payback if payback else 0,
-                "cash_flow_schedule": cash_flow_table
+                "irr": irr,
+                "payback_period": payback,
+                "cashFlowTable": cash_flow_table # <--- Passed safely here
             },
             "resolved_inputs": {
                 "process_technology": process_technology,
@@ -192,8 +183,5 @@ class BiofuelEconomics:
                 "conversion_plant": self.inputs_flat,
             }
         }
-        
-        # DEBUG: Final check
-        print("DEBUG: Final result structure keys:", list(final_result.keys()))
         
         return final_result
