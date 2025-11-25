@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 import logging
+import math
 from typing import Dict, List, Optional
 from uuid import UUID
 
@@ -48,6 +49,18 @@ def get_current_user_obj(current_user: User = Depends(get_current_active_user)) 
 # --- Dependency Injection ---
 def get_biofuel_crud(db: Session = Depends(get_db)) -> BiofuelCRUD:
     return BiofuelCRUD(db)
+
+# 1. Add this Helper Function at the top level
+def sanitize_for_json(obj):
+    """Recursively replace NaN and Infinity with None for valid JSON serialization."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0  # Or None, depending on frontend preference
+    elif isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(i) for i in obj]
+    return obj
 
 def get_default_user_inputs(process_id: int, feedstock_id: int, country_id: int) -> Dict:
         """Generate default user inputs for a new scenario."""
@@ -144,6 +157,56 @@ def get_default_user_inputs(process_id: int, feedstock_id: int, country_id: int)
             ]
         }
 
+def _run_calculation_internal(db_scenario, crud: BiofuelCRUD):
+    """
+    Helper to run calculation on a scenario object and save results.
+    Used by create_project, create_scenario, and calculate_scenario.
+    """
+    # 1. Reconstruct UserInputs from the scenario data
+    from app.schemas.biofuel_schema import (
+        UserInputs, ConversionPlant, EconomicParameters, 
+        FeedstockData, UtilityData, ProductData, Quantity
+    )
+    
+    user_inputs_data = db_scenario.user_inputs
+    
+    # (Parsing logic to convert JSON dict to UserInputs object)
+    conversion_plant = ConversionPlant(
+        plant_capacity=Quantity(**user_inputs_data["conversion_plant"]["plant_capacity"]),
+        annual_load_hours=user_inputs_data["conversion_plant"]["annual_load_hours"],
+        ci_process_default=user_inputs_data["conversion_plant"]["ci_process_default"]
+    )
+    
+    economic_parameters = EconomicParameters(**user_inputs_data["economic_parameters"])
+    
+    feedstock_data = [FeedstockData.from_schema(**d) for d in user_inputs_data["feedstock_data"]]
+    utility_data = [UtilityData.from_schema(**d) for d in user_inputs_data["utility_data"]]
+    product_data = [ProductData.from_schema(**d) for d in user_inputs_data["product_data"]]
+
+    user_inputs = UserInputs(
+        process_technology=db_scenario.process.name,
+        feedstock=db_scenario.feedstock.name,
+        country=db_scenario.country.name,
+        conversion_plant=conversion_plant,
+        economic_parameters=economic_parameters,
+        feedstock_data=feedstock_data,
+        utility_data=utility_data,
+        product_data=product_data
+    )
+
+    # 2. Run Economics Service
+    economics = BiofuelEconomics(user_inputs, crud)
+    results = economics.run(
+        process_technology=db_scenario.process.name,
+        feedstock=db_scenario.feedstock.name,
+        country=db_scenario.country.name
+    )
+
+    clean_results = sanitize_for_json(results)
+
+    # 3. Save to DB
+    return crud.run_scenario_calculation(db_scenario.id, clean_results)
+
 # ==================== MASTER DATA ENDPOINTS ====================
 
 @router.get("/master-data", response_model=MasterDataResponse)
@@ -159,9 +222,8 @@ def create_project(
     current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
-    """Create a new project with auto-created Scenario 1."""
     try:
-        # Create the project first
+        # 1. Create Project
         db_project = crud.create_project(
             project_name=project_in.project_name,
             user_id=current_user.id,
@@ -170,16 +232,15 @@ def create_project(
             initial_country_id=project_in.initial_country_id,
         )
         
-        # AUTO-CREATE SCENARIO 1
         if db_project:
-            # Get default user inputs based on initial selections
+            # 2. Get Defaults
             default_inputs = get_default_user_inputs(
                 process_id=project_in.initial_process_id,
                 feedstock_id=project_in.initial_feedstock_id, 
                 country_id=project_in.initial_country_id
             )
             
-            # Create Scenario 1
+            # 3. Create Scenario 1
             scenario_data = {
                 "project_id": db_project.id,
                 "scenario_name": "Scenario 1",
@@ -191,15 +252,19 @@ def create_project(
             }
             
             db_scenario = crud.create_scenario(scenario_data)
-            print(f"✅ Auto-created Scenario 1 for project: {db_project.id}")
+            
+            # 4. [NEW] AUTO-CALCULATE IMMEDIATELY
+            # Fetch full object to get relationships (Process name, Country name etc)
+            full_scenario = crud.get_scenario_by_id(db_scenario.id)
+            _run_calculation_internal(full_scenario, crud)
+            
+            print(f"✅ Project created & Scenario 1 Auto-Calculated")
         
         return db_project
+
     except Exception as e:
         logger.error(f"Error creating project: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to create project"
-        )
+        raise HTTPException(status_code=400, detail="Failed to create project")
 
 @router.get("/projects", response_model=List[ProjectResponse])
 def read_projects(
@@ -326,7 +391,11 @@ def create_scenario(
         }
         
         db_scenario = crud.create_scenario(scenario_data)
-        return db_scenario
+        # 2. [NEW] Auto-Calculate
+        full_scenario = crud.get_scenario_by_id(db_scenario.id)
+        updated_scenario = _run_calculation_internal(full_scenario, crud)
+        
+        return updated_scenario
         
     except Exception as e:
         logger.error(f"Error creating scenario: {e}")
@@ -424,97 +493,44 @@ def delete_scenario(
 @router.post("/scenarios/{scenario_id}/calculate", response_model=CalculationResponse)
 def calculate_scenario(
     scenario_id: UUID,
+    inputs_in: UserInputsSchema, # <--- [NEW] Accepts input payload!
     current_user: User = Depends(get_current_active_user),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud),
-    db: Session = Depends(get_db)
+    crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
-    """Run calculations for a scenario."""
-    # Verify scenario exists and user has access
+    """
+    Update inputs AND run calculation in one request.
+    """
+    # 1. Verify access
     db_scenario = crud.get_scenario_by_id(scenario_id)
     if not db_scenario or db_scenario.project.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scenario not found or access denied"
-        )
-    
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
     try:
-        # Get process, feedstock, and country names
-        process_name = db_scenario.process.name
-        feedstock_name = db_scenario.feedstock.name  
-        country_name = db_scenario.country.name
+        # 2. Update the Database with the NEW inputs received from Frontend
+        # We must convert Pydantic schema to dict for JSONB storage
+        updated_inputs_dict = inputs_in.dict(by_alias=True)
         
-        # Convert stored user_inputs JSON to UserInputs dataclass
-        user_inputs_data = db_scenario.user_inputs
+        crud.update_scenario(scenario_id, {"user_inputs": updated_inputs_dict})
         
-        # Reconstruct UserInputs dataclass from stored data
-        from app.schemas.biofuel_schema import (
-            UserInputs, ConversionPlant, EconomicParameters, 
-            FeedstockData, UtilityData, ProductData, Quantity
-        )
-        
-        # Convert nested dictionary data back to dataclass instances
-        conversion_plant_data = user_inputs_data["conversion_plant"]
-        conversion_plant = ConversionPlant(
-            plant_capacity=Quantity(**conversion_plant_data["plant_capacity"]),
-            annual_load_hours=conversion_plant_data["annual_load_hours"],
-            ci_process_default=conversion_plant_data["ci_process_default"]
-        )
-        
-        economic_params_data = user_inputs_data["economic_parameters"]
-        economic_parameters = EconomicParameters(**economic_params_data)
-        
-        # Convert lists of data back to dataclass instances
-        feedstock_data = [
-            FeedstockData.from_schema(**data) for data in user_inputs_data["feedstock_data"]
-        ]
-        
-        utility_data = [
-            UtilityData.from_schema(**data) for data in user_inputs_data["utility_data"]
-        ]
-        
-        product_data = [
-            ProductData.from_schema(**data) for data in user_inputs_data["product_data"]
-        ]
-        
-        # Create the full UserInputs dataclass
-        user_inputs = UserInputs(
-            process_technology=process_name,
-            feedstock=feedstock_name,
-            country=country_name,
-            conversion_plant=conversion_plant,
-            economic_parameters=economic_parameters,
-            feedstock_data=feedstock_data,
-            utility_data=utility_data,
-            product_data=product_data
-        )
-        
-        # Run calculations using BiofuelEconomics service
-        economics = BiofuelEconomics(user_inputs, crud)
-        calculation_results = economics.run(
-            process_technology=process_name,
-            feedstock=feedstock_name,
-            country=country_name
-        )
-        
-        # Save results back to scenario
-        updated_scenario = crud.run_scenario_calculation(scenario_id, calculation_results)
+        # 3. Refresh the scenario object to ensure we have the latest data
+        db_scenario = crud.get_scenario_by_id(scenario_id)
+
+        # 4. Run Calculation using the Helper
+        updated_scenario = _run_calculation_internal(db_scenario, crud)
         
         if not updated_scenario:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to save calculation results"
-            )
-        
-        # Convert the results to match CalculationResponse schema
-        # Note: BiofuelEconomics returns keys that match CalculationResponse
-        return CalculationResponse(**calculation_results)
+             raise HTTPException(status_code=500, detail="Calculation save failed")
+
+        # 5. Return results
+        return CalculationResponse(
+            techno_economics=updated_scenario.techno_economics,
+            financials=updated_scenario.financial_analysis,
+            resolved_inputs=updated_scenario.user_inputs # Return what we used
+        )
         
     except Exception as e:
-        logger.error(f"Calculation error for scenario {scenario_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Calculation failed: {str(e)}"
-        )
+        logger.error(f"Calculation error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
 
 # ==================== AUTH ENDPOINTS ====================
 
