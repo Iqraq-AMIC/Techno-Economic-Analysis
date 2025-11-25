@@ -211,9 +211,9 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         console.log("📈 Found saved calculation results, updating charts...");
 
         const results = {
-          techno_economics: currentScenario.technoEconomics,
+          technoEconomics: currentScenario.technoEconomics,
           financials: currentScenario.financialAnalysis,
-          resolved_inputs: currentScenario.userInputs // or whatever structure needed
+          resolvedInputs: currentScenario.userInputs // or whatever structure needed
         };
 
         setApiData(results);
@@ -857,9 +857,9 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
       if (result.success) {
         const calculationResults = {
-          techno_economics: result.data.technoEconomics,
+          technoEconomics: result.data.technoEconomics,
           financials: result.data.financials,
-          resolved_inputs: result.data.resolvedInputs
+          resolvedInputs: result.data.resolvedInputs
         };
 
         setApiData(calculationResults);
@@ -939,22 +939,41 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const currSymbol = currencyRates[selectedCurrency]?.symbol || "$";
 
   const toFiniteNumber = (val) => (typeof val === "number" && Number.isFinite(val) ? val : null);
-  const rawTotalCO2 = toFiniteNumber(apiData?.technoEconomics?.total_co2_emissions);
+
+  // 1. DEFINE HELPERS FOR NESTED DATA
+  const te = apiData?.technoEconomics || {};
+  const breakdown = te.opex_breakdown || {};
+  const consumption = te.utility_consumption || {};
+
+  // 2. READ BASIC METRICS
+  const rawTotalCO2 = toFiniteNumber(te.total_co2_emissions);
   const totalCO2Tonnes = rawTotalCO2 !== null ? rawTotalCO2 / 1_000_000 : null;
-  const hydrogenCost = toFiniteNumber(apiData?.technoEconomics?.hydrogen_cost);
-  const electricityCost = toFiniteNumber(apiData?.technoEconomics?.electricity_cost);
+  const annualCapacity = toFiniteNumber(te.production) || inputs?.production_capacity || 0;
+  const safeCapacity = annualCapacity > 0 ? annualCapacity : null;
+
+
+  // 3. FIX: READ COSTS FROM 'opex_breakdown'
+  const hydrogenCost = toFiniteNumber(breakdown.hydrogen); 
+  const electricityCost = toFiniteNumber(breakdown.electricity);
+  const feedstockCostValue = toFiniteNumber(breakdown.feedstock);
+  const totalIndirectOpexValue = toFiniteNumber(breakdown.indirect_opex);
   const utilityCost =
     hydrogenCost === null && electricityCost === null
       ? null
       : (hydrogenCost ?? 0) + (electricityCost ?? 0);
-  const totalDirectOpex = toFiniteNumber(apiData?.technoEconomics?.total_direct_opex);
-  const annualCapacity = toFiniteNumber(apiData?.technoEconomics?.production) || inputs?.production_capacity || 0;
-  const safeCapacity = annualCapacity > 0 ? annualCapacity : null;
-  const lcopValue = toFiniteNumber(apiData?.technoEconomics?.lcop ?? apiData?.technoEconomics?.LCOP);
-  const totalCapitalInvestment = toFiniteNumber(apiData?.technoEconomics?.total_capital_investment);
-  const feedstockCostValue = toFiniteNumber(apiData?.technoEconomics?.feedstock_cost);
-  const totalIndirectOpexValue = toFiniteNumber(apiData?.technoEconomics?.total_indirect_opex);
-  const totalOpexValue = toFiniteNumber(apiData?.technoEconomics?.total_opex);
+
+  // 4. FIX: CALCULATE DIRECT OPEX (It is not in the JSON, so we sum it up)
+  const totalDirectOpex = toFiniteNumber(te.total_direct_opex) 
+    ?? ((feedstockCostValue || 0) + (hydrogenCost || 0) + (electricityCost || 0));
+
+  const totalOpexValue = toFiniteNumber(te.total_opex);
+  const totalCapitalInvestment = toFiniteNumber(te.total_capital_investment);
+  const lcopValue = toFiniteNumber(te.lcop ?? te.LCOP);
+
+  // 5. FIX: READ CONSUMPTION FROM 'utility_consumption'
+  const feedstockConsumption = toFiniteNumber(te.feedstock_consumption);
+  const hydrogenConsumption = toFiniteNumber(consumption.hydrogen); 
+  const electricityConsumption = toFiniteNumber(consumption.electricity);
 
   // Calculate annualized capital using Capital Recovery Factor (CRF)
   const discountRate = inputs?.discount_factor || 0.07;
@@ -993,9 +1012,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       ? (rawTotalCO2 / 1000) / productionOutput
       : toFiniteNumber(apiData?.technoEconomics?.carbon_intensity);
   const consumptionCards = [];
-  const feedstockConsumption = toFiniteNumber(apiData?.technoEconomics?.feedstock_consumption);
-  const hydrogenConsumption = toFiniteNumber(apiData?.technoEconomics?.hydrogen_consumption);
-  const electricityConsumption = toFiniteNumber(apiData?.technoEconomics?.electricity_consumption);
 
   if (feedstockConsumption !== null) {
     consumptionCards.push({
@@ -1030,7 +1046,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
   const productCarbonEfficiencyDetails = (apiData?.technoEconomics?.products || []).map((p) => ({
     label: p.name || "Product",
-    value: `${formatNumber(p.carbon_conversion_efficiency_percent ?? 0, 2)}%`,
+    value: `${formatNumber(p.carbon_conversion_efficiency_percent ?? p.carbon_conversion_efficiency ?? 0, 2)}%`,
   }));
 
   // Helper function to check if a stat should be visible based on access level
@@ -1076,7 +1092,11 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         },
         {
           label: "Carbon Conversion Efficiency (%)",
-          value: formatNumber(apiData?.technoEconomics?.carbon_conversion_efficiency_percent, 2),
+          value: formatNumber(
+            apiData?.technoEconomics?.carbon_conversion_efficiency_percent ??
+            apiData?.technoEconomics?.carbon_conversion_efficiency,
+            2
+          ),
           details: productCarbonEfficiencyDetails,
         },
         {
@@ -1135,7 +1155,10 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         },
         {
           label: 'Payback period (years)',
-          value: apiData?.financials?.paybackPeriod ? apiData.financials.paybackPeriod.toFixed(1) : 'N/A',
+          value: (() => {
+            const pp = apiData?.financials?.paybackPeriod ?? apiData?.financials?.payback_period;
+            return (pp !== null && pp !== undefined) ? Number(pp).toFixed(1) : 'N/A';
+          })(),
         },
       ].filter(stat => isStatVisible(stat.label)),
     },
