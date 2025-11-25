@@ -276,10 +276,12 @@ export const deleteScenario = async (scenarioId) => {
   }
 };
 
-export const calculateScenario = async (scenarioId) => {
+export const calculateScenario = async (scenarioId, userInputs) => { // <--- Add argument
   try {
-    const response = await api.post(`/scenarios/${scenarioId}/calculate`);
-    // Backend returns { technoEconomics: ..., financials: ... } (camelCase due to Pydantic alias)
+    // Pass userInputs as the second argument (the body)
+    const response = await api.post(`/scenarios/${scenarioId}/calculate`, userInputs);
+    
+    // Backend returns { technoEconomics: ..., financials: ... }
     return { success: true, data: response.data };
   } catch (error) {
     console.error("Error calculating scenario:", error);

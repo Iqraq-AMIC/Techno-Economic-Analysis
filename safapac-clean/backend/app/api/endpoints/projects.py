@@ -50,7 +50,7 @@ def get_current_user_obj(current_user: User = Depends(get_current_active_user)) 
 def get_biofuel_crud(db: Session = Depends(get_db)) -> BiofuelCRUD:
     return BiofuelCRUD(db)
 
-# 1. Add this Helper Function at the top level
+# Helper Function to Sanitize NaN/Inf
 def sanitize_for_json(obj):
     """Recursively replace NaN and Infinity with None for valid JSON serialization."""
     if isinstance(obj, float):
@@ -171,6 +171,7 @@ def _run_calculation_internal(db_scenario, crud: BiofuelCRUD):
     user_inputs_data = db_scenario.user_inputs
     
     # (Parsing logic to convert JSON dict to UserInputs object)
+    # NOTE: Keys here must match what is stored in DB (snake_case)
     conversion_plant = ConversionPlant(
         plant_capacity=Quantity(**user_inputs_data["conversion_plant"]["plant_capacity"]),
         annual_load_hours=user_inputs_data["conversion_plant"]["annual_load_hours"],
@@ -493,12 +494,12 @@ def delete_scenario(
 @router.post("/scenarios/{scenario_id}/calculate", response_model=CalculationResponse)
 def calculate_scenario(
     scenario_id: UUID,
-    inputs_in: UserInputsSchema, # <--- [NEW] Accepts input payload!
+    inputs_in: UserInputsSchema, 
     current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """
-    Update inputs AND run calculation in one request.
+    Update inputs (JSON + Relational Columns) AND run calculation in one request.
     """
     # 1. Verify access
     db_scenario = crud.get_scenario_by_id(scenario_id)
@@ -506,28 +507,44 @@ def calculate_scenario(
         raise HTTPException(status_code=404, detail="Scenario not found")
 
     try:
-        # 2. Update the Database with the NEW inputs received from Frontend
-        # We must convert Pydantic schema to dict for JSONB storage
-        updated_inputs_dict = inputs_in.dict(by_alias=True)
+        # 2. [NEW] Sync Relational Columns (Process, Feedstock, Country)
+        # extract names from the incoming Pydantic model
+        process_name = inputs_in.process_technology
+        feedstock_name = inputs_in.feedstock
+        country_name = inputs_in.country
+
+        success = crud.update_scenario_core_parameters(
+            scenario_id, process_name, feedstock_name, country_name
+        )
         
+        if not success:
+             logger.warning(f"Could not sync relational columns for scenario {scenario_id}. Names might be invalid: {process_name}, {feedstock_name}, {country_name}")
+             # We might choose to raise an error here, or proceed with just the JSON update. 
+             # Raising error ensures data integrity.
+             raise HTTPException(status_code=400, detail="Invalid Process, Feedstock, or Country name provided.")
+
+        # 3. Update the Database JSON blob
+        updated_inputs_dict = inputs_in.dict()
         crud.update_scenario(scenario_id, {"user_inputs": updated_inputs_dict})
         
-        # 3. Refresh the scenario object to ensure we have the latest data
+        # 4. Refresh the scenario object to get the new IDs and Data
         db_scenario = crud.get_scenario_by_id(scenario_id)
 
-        # 4. Run Calculation using the Helper
+        # 5. Run Calculation using the Helper
         updated_scenario = _run_calculation_internal(db_scenario, crud)
         
         if not updated_scenario:
              raise HTTPException(status_code=500, detail="Calculation save failed")
 
-        # 5. Return results
+        # 6. Return results
         return CalculationResponse(
             techno_economics=updated_scenario.techno_economics,
             financials=updated_scenario.financial_analysis,
-            resolved_inputs=updated_scenario.user_inputs # Return what we used
+            resolved_inputs=updated_scenario.user_inputs 
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Calculation error: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))

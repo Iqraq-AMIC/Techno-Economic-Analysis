@@ -440,3 +440,45 @@ class BiofuelCRUD:
             .order_by(UnitOfMeasure.unit_group_id, UnitOfMeasure.name)
         )
         return self.db.execute(stmt).unique().scalars().all()
+    
+    def update_scenario_core_parameters(self, scenario_id: UUID, 
+                                      process_name: str, 
+                                      feedstock_name: str, 
+                                      country_name: str) -> bool:
+        """
+        Look up IDs for the given names and update the scenario's foreign keys.
+        This ensures the SQL columns match the JSON payload.
+        """
+        # 1. Resolve Process ID
+        process = self.db.execute(
+            select(ProcessTechnology).where(ProcessTechnology.name == process_name)
+        ).scalar_one_or_none()
+        
+        # 2. Resolve Feedstock ID
+        feedstock = self.db.execute(
+            select(Feedstock).where(Feedstock.name == feedstock_name)
+        ).scalar_one_or_none()
+        
+        # 3. Resolve Country ID
+        country = self.db.execute(
+            select(Country).where(Country.name == country_name)
+        ).scalar_one_or_none()
+
+        if not process or not feedstock or not country:
+            # If bad data is sent, we log it but don't crash; 
+            # we just return False so the endpoint can handle it.
+            return False
+
+        # 4. Update the Scenario Record
+        scenario = self.db.get(Scenario, scenario_id)
+        if scenario:
+            scenario.process_id = process.id
+            scenario.feedstock_id = feedstock.id
+            scenario.country_id = country.id
+            scenario.updated_at = datetime.datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(scenario)
+            return True
+            
+        return False

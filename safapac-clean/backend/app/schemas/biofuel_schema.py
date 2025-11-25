@@ -276,6 +276,10 @@ class UtilityDataSchema(CamelCaseBaseModel):
         allow_population_by_field_name = True
 
 class UserInputsSchema(CamelCaseBaseModel):
+    process_technology: Optional[str] = None
+    feedstock: Optional[str] = None
+    country: Optional[str] = None
+    
     conversion_plant: ConversionPlantSchema 
     economic_parameters: EconomicParametersSchema
     feedstock_data: List[FeedstockDataSchema]
