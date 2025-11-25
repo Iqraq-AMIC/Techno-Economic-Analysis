@@ -235,8 +235,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     conversion_process_ci_default: 45,
     feedstock_price: 250,
     feedstock_price_unit: "USD/t",
-    hydrogen_price: 2.5,
-    hydrogen_price_unit: "USD/kg",
     electricity_rate: 0.12,
     electricity_rate_unit: "USD/kWh",
     feedstock_carbon_intensity: 50,
@@ -245,15 +243,26 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     feedstock_energy_unit: "MJ/kg",
     feedstock_yield: 1.5,
     feedstock_yield_unit: "kg/kg",
+    feedstock_carbon_content: 0.5,
+    // ✅ NEW: HYDROGEN PARAMETERS
+    hydrogen_price: 2.5,
+    hydrogen_price_unit: "USD/kg",
     hydrogen_yield: 0.042,
     hydrogen_yield_unit: "kg/kg",
-    electricity_yield: 0.12,
-    electricity_yield_unit: "kWh/kg",
     hydrogen_carbon_intensity: 0,
     hydrogen_ci_unit: "gCO2/kg",
+    hydrogen_energy_content: 120, // Default LHV for Hydrogen
+    hydrogen_carbon_content: 0,   // Pure H2 has 0 carbon
+
+    // ✅ NEW: ELECTRICITY PARAMETERS
+    electricity_rate: 0.12,
+    electricity_rate_unit: "USD/kWh",
+    electricity_yield: 0.12,
+    electricity_yield_unit: "kWh/kg",
     electricity_carbon_intensity: 0,
     electricity_ci_unit: "gCO2/kWh",
-    feedstock_carbon_content: 0.5,
+    electricity_energy_content: 0, // Electricity has no mass-based energy content usually
+    electricity_carbon_content: 0,
     plant_lifetime: 25,
     discount_factor: 0.105,
     land_cost: 1026898.876,

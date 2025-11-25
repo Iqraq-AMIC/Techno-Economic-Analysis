@@ -919,6 +919,26 @@ const BiofuelForm = ({
           "slider-feedstock"
         )}
         {renderSlider(
+          "hydrogen_energy_content",
+          "Hydrogen Energy Content (MJ/kg)",
+          inputs.hydrogen_energy_content,
+          { min: 0, max: 200 },
+          1,
+          handleSliderChange("hydrogen_energy_content"),
+          1,
+          null, [], "slider-feedstock"
+        )}
+        {renderSlider(
+          "hydrogen_carbon_content",
+          "Hydrogen Carbon Content (fraction)",
+          inputs.hydrogen_carbon_content,
+          { min: 0, max: 1 },
+          0.01,
+          handleSliderChange("hydrogen_carbon_content"),
+          2,
+          null, [], "slider-feedstock"
+        )}
+        {renderSlider(
           "hydrogen_yield",
           "Hydrogen Yield",
           inputs.hydrogen_yield,
@@ -973,6 +993,26 @@ const BiofuelForm = ({
           "electricity_ci_unit",
           UNIT_OPTIONS.electricity_ci_unit,
           "slider-feedstock"
+        )}
+        {renderSlider(
+          "electricity_energy_content",
+          "Electricity Energy Content (MJ/kg)", // Note: usually 0 or 3.6 depending on model
+          inputs.electricity_energy_content,
+          { min: 0, max: 50 },
+          0.1,
+          handleSliderChange("electricity_energy_content"),
+          2,
+          null, [], "slider-feedstock"
+        )}
+        {renderSlider(
+          "electricity_carbon_content",
+          "Electricity Carbon Content (fraction)",
+          inputs.electricity_carbon_content,
+          { min: 0, max: 1 },
+          0.01,
+          handleSliderChange("electricity_carbon_content"),
+          2,
+          null, [], "slider-feedstock"
         )}
         {renderSlider(
           "electricity_yield",

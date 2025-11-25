@@ -37,17 +37,17 @@ export const mapUiStateToBackend = (uiInputs, selectedProcess, selectedFeedstock
       {
         name: "Hydrogen",
         price: { value: num(uiInputs.hydrogen_price), unit_id: 6 },
-        carbon_content: 0,
+        carbon_content: num(uiInputs.hydrogen_carbon_content),
         carbon_intensity: { value: num(uiInputs.hydrogen_carbon_intensity), unit_id: 11 },
-        energy_content: 120,
+        energy_content: num(uiInputs.hydrogen_energy_content),
         yield_percent: num(uiInputs.hydrogen_yield)
       },
       {
         name: "Electricity",
         price: { value: num(uiInputs.electricity_rate), unit_id: 10 },
-        carbon_content: 0,
+        carbon_content: num(uiInputs.electricity_carbon_content),
         carbon_intensity: { value: num(uiInputs.electricity_carbon_intensity), unit_id: 13 },
-        energy_content: 0,
+        energy_content: num(uiInputs.electricity_energy_content),
         yield_percent: num(uiInputs.electricity_yield)
       }
     ],
@@ -127,12 +127,15 @@ export const mapBackendToUiState = (backendInputs) => {
     hydrogen_price: getVal(util('Hydrogen'), 'price', 'price'),
     hydrogen_yield: get(util('Hydrogen'), 'yield_percent', 'yieldPercent'),
     hydrogen_carbon_intensity: getVal(util('Hydrogen'), 'carbon_intensity', 'carbonIntensity'),
-    
+    hydrogen_energy_content: get(util('Hydrogen'), 'energy_content', 'energyContent'),
+    hydrogen_carbon_content: get(util('Hydrogen'), 'carbon_content', 'carbonContent'),
+
     // Utilities (Elec)
     electricity_rate: getVal(util('Electricity'), 'price', 'price'),
     electricity_yield: get(util('Electricity'), 'yield_percent', 'yieldPercent'),
     electricity_carbon_intensity: getVal(util('Electricity'), 'carbon_intensity', 'carbonIntensity'),
-
+    electricity_energy_content: get(util('Electricity'), 'energy_content', 'energyContent'),
+    electricity_carbon_content: get(util('Electricity'), 'carbon_content', 'carbonContent'),
     // Products
     products: pdList.map(p => ({
       name: p.name,
