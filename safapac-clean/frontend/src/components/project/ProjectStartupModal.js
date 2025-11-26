@@ -19,7 +19,6 @@ const ProjectStartupModal = ({ isOpen, onProjectSelected }) => {
   const { 
     loadProject, 
     listUserProjects, 
-    createProject,
     loading: projectLoading 
   } = useProject();
 

@@ -152,7 +152,7 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
       ];
     }
 
-    canvasRef.current.chartInstance = new Chart(ctx, {
+    const chartInstance = new Chart(ctx, {
       type: "line",
       plugins: [],
       data: {
@@ -262,10 +262,15 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
       },
     });
 
+    // Save instance to ref for destruction later
+    canvasRef.current.chartInstance = chartInstance;
+
+    // CAPTURE REF HERE
+    const canvasNode = canvasRef.current
     // Cleanup function to prevent memory leaks
     return () => {
-      if (canvasRef.current?.chartInstance) {
-        canvasRef.current.chartInstance.destroy();
+      if (canvasNode?.chartInstance) {
+        canvasNode.chartInstance.destroy();
       }
     };
   }, [data, comparisonData, isComparisonMode, theme, colors]);

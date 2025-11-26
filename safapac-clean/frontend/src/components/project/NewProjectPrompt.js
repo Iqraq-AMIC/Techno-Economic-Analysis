@@ -14,11 +14,9 @@ import {
   Row,
   Col,
 } from "shards-react";
-import { useAuth } from "../../contexts/AuthContext";
 import { useProject } from "../../contexts/ProjectContext";
 
 const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
-  const { } = useAuth();
   const { createProject, loadMasterData, masterData } = useProject();
 
   const [projectName, setProjectName] = useState("");

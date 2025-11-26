@@ -1,7 +1,6 @@
 // src/contexts/ProjectContext.js
 
 import React, { createContext, useContext, useState, useMemo, useCallback } from "react";
-import { useAuth } from "./AuthContext";
 import {
   createProject as apiCreateProject,
   listProjectsByUser,
@@ -19,8 +18,6 @@ const PROJECT_STORAGE_KEY = "safapac-current-project";
 const SCENARIO_STORAGE_KEY = "safapac-current-scenario";
 
 export const ProjectProvider = ({ children }) => {
-  const { } = useAuth();
-
   // Current project - DON'T load from localStorage automatically
   // User must select project via modal after each login
   const [currentProject, setCurrentProject] = useState(null);
@@ -219,9 +216,9 @@ export const ProjectProvider = ({ children }) => {
       } else {
         // ... (Keep your existing fallback default inputs logic here) ...
         userInputsPayload = {
-           conversion_plant: { plant_capacity: { value: 500, unit_id: 3 }, annual_load_hours: 8000, ci_process_default: 20.0 },
-           economic_parameters: { project_lifetime_years: 25, discount_rate_percent: 10.0, tci_ref_musd: 250, reference_capacity_ktpa: 50, tci_scaling_exponent: 0.6, working_capital_tci_ratio: 0.10, indirect_opex_tci_ratio: 0.03 },
-           feedstock_data: [], utility_data: [], product_data: []
+          conversion_plant: { plant_capacity: { value: 500, unit_id: 3 }, annual_load_hours: 8000, ci_process_default: 20.0 },
+          economic_parameters: { project_lifetime_years: 25, discount_rate_percent: 10.0, tci_ref_musd: 250, reference_capacity_ktpa: 50, tci_scaling_exponent: 0.6, working_capital_tci_ratio: 0.10, indirect_opex_tci_ratio: 0.03 },
+          feedstock_data: [], utility_data: [], product_data: []
         };
       }
 
@@ -251,12 +248,12 @@ export const ProjectProvider = ({ children }) => {
 
         // 3. UPDATE STATE IMMEDIATELY (Fixes the UI needing refresh)
         setScenarios((prev) => [...prev, newScenario]);
-        
+
         // 4. NORMALIZE RETURN (Fixes the ScenarioTabs crash)
         // We return 'scenario' key because ScenarioTabs.js expects result.scenario.id
         return { success: true, scenario: newScenario };
       }
-      
+
       return result;
     } catch (error) {
       console.error("Error adding scenario:", error);
@@ -407,31 +404,6 @@ export const ProjectProvider = ({ children }) => {
       setLoading(false);
     }
   }, [currentProject, currentScenario, scenarios, persistScenario]);
-
-  // Default user inputs for new scenarios
-  const getDefaultUserInputs = useCallback(() => {
-    return {
-      conversion_plant: {
-        plant_capacity: { value: 500, unit_id: 3 }, // 500 kta default
-        annual_load_hours: 8000,
-        ci_process_default: 20.0
-      },
-      economic_parameters: {
-        project_lifetime_years: 25,
-        discount_rate_percent: 10.0,
-        tci_ref_musd: 250, // Standard default
-        reference_capacity_ktpa: 50,
-        tci_scaling_exponent: 0.6,
-        working_capital_tci_ratio: 0.10,
-        indirect_opex_tci_ratio: 0.03
-      },
-      // Empty lists trigger backend to use its own defaults if needed, 
-      // or you can provide standard placeholders here
-      feedstock_data: [],
-      utility_data: [],
-      product_data: []
-    };
-  }, []);
 
   const value = useMemo(
     () => ({

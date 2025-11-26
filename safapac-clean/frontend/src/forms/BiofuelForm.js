@@ -1030,21 +1030,6 @@ const BiofuelForm = ({
     </div>
   );
 
-  const feedstockUtilitiesPlaceholder = (
-    <div
-      style={{
-        padding: "12px",
-        borderRadius: "6px",
-        backgroundColor: colors.cardBackground,
-        border: `1px dashed ${colors.border}`,
-        fontSize: "0.75rem",
-        color: colors.textSecondary,
-      }}
-    >
-      The selected feedstock data will be used automatically. Choose <strong>Full Customization</strong> to override these settings directly.
-    </div>
-  );
-
   // Add this useEffect to debug the data flow
   useEffect(() => {
     console.log("🔍 BiofuelForm Debug:", {
@@ -1064,29 +1049,6 @@ const BiofuelForm = ({
   const feedstockUtilitiesSubtitle = "Describe the primary feedstock and supporting utilities.";
 
   const feedstockUtilitiesContent = feedstockUtilitiesForm;
-
-  const DebugInfo = () => (
-    <div style={{
-      position: 'fixed',
-      top: '10px',
-      right: '10px',
-      background: 'rgba(0,0,0,0.8)',
-      color: 'white',
-      padding: '10px',
-      fontSize: '12px',
-      zIndex: 1000,
-      maxWidth: '300px'
-    }}>
-      <strong>Debug Info:</strong><br />
-      Master Data: {masterData ? '✅ Loaded' : '❌ Loading...'}<br />
-      Processes: {processes.length}<br />
-      Feedstocks: {feedstocks.length}<br />
-      <pre>{JSON.stringify({
-        processes: processes.map(p => p.name),
-        feedstocks: feedstocks.map(f => f.name)
-      }, null, 2)}</pre>
-    </div>
-  );
 
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
 

@@ -145,10 +145,10 @@ export const AuthProvider = ({ children }) => {
     }
   }, [persistAuthState, recordLoginHistory]);
 
-  const completeLogin = () => {
+  const completeLogin = useCallback(() => {
     // No longer needed - kept for compatibility
     console.log("completeLogin called (no-op)");
-  };
+  }, []);
 
   const logout = useCallback(() => {
     setToken(null);

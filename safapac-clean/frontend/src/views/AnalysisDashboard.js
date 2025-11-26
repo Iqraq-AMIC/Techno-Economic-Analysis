@@ -36,88 +36,6 @@ const buildChartData = (tableData = []) => {
   });
 };
 
-const toNumericOrZero = (value) => {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-};
-
-const normalizeHydrogenPrice = (value, unit = "USD/kg") => {
-  const numeric = toNumericOrZero(value);
-  switch ((unit || "").toUpperCase()) {
-    case "USD/KG":
-    case "$/KG":
-      return { value: numeric, unit: "USD/kg" };
-    case "USD/T":
-    case "USD/TON":
-    case "$/T":
-    case "$/TON":
-      return { value: numeric / 1000, unit: "USD/kg" };
-    case "USD/KT":
-    case "$/KT":
-      return { value: numeric / 1_000_000, unit: "USD/kg" };
-    default:
-      return { value: numeric, unit };
-  }
-};
-
-const normalizeElectricityRate = (value, unit = "USD/kWh") => {
-  const numeric = toNumericOrZero(value);
-  switch ((unit || "").toUpperCase()) {
-    case "USD/KWH":
-    case "$/KWH":
-      return { value: numeric, unit: "USD/kWh" };
-    case "USD/MWH":
-    case "$/MWH":
-      return { value: numeric / 1000, unit: "USD/kWh" };
-    default:
-      return { value: numeric, unit };
-  }
-};
-
-const normalizeHydrogenYield = (value, unit = "kg/kg") => {
-  const numeric = toNumericOrZero(value);
-  switch ((unit || "").toLowerCase()) {
-    case "kg/kg":
-    case "ton/ton":
-      return { value: numeric, unit: "kg/kg" };
-    default:
-      return { value: numeric, unit };
-  }
-};
-
-const normalizeElectricityYield = (value, unit = "kWh/kg") => {
-  const numeric = toNumericOrZero(value);
-  const unitKey = (unit || "").toLowerCase();
-  if (unitKey === "mwh/kg") {
-    return { value: numeric * 1000, unit: "kWh/kg" };
-  }
-  return { value: numeric, unit: "kWh/kg" };
-};
-
-const normalizeCarbonIntensity = (value, unit, baseUnit) => {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-  const numeric = toNumericOrZero(value);
-  if (!unit) {
-    return { value: numeric, unit: baseUnit };
-  }
-  const key = `${unit}->${baseUnit}`;
-  const normalizedValue = {
-    "kgCO2/t->gCO2/kg": numeric,
-    "kgCO2/MWh->gCO2/kWh": numeric,
-  }[key];
-
-  if (normalizedValue !== undefined) {
-    return { value: normalizedValue, unit: baseUnit };
-  }
-
-  if (unit === baseUnit) {
-    return { value: numeric, unit: baseUnit };
-  }
-  return { value: numeric, unit };
-};
-
 const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const { colors } = useTheme();
   const { selectedAccess } = useAccess();
@@ -217,7 +135,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     conversion_process_ci_default: 45,
     feedstock_price: 250,
     feedstock_price_unit: "USD/t",
-    electricity_rate_unit: "USD/kWh",
     feedstock_carbon_intensity: 50,
     feedstock_ci_unit: "gCO2/kg",
     feedstock_energy_content: 18,
@@ -332,6 +249,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     loadData();
   }, [loadMasterData, masterData]);
 
+  const currentScenarioId = currentScenario?.id;
+
   // Fetch comparison data when scenarios are selected for comparison
   useEffect(() => {
     const fetchComparisonData = async () => {
@@ -411,7 +330,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     };
 
     fetchComparisonData();
-  }, [comparisonScenarios, scenarios, currentScenario?.id]);
+  }, [comparisonScenarios, scenarios, currentScenarioId]);
 
   const toggleStatDetail = (statKey) => {
     setExpandedStatDetails((prev) => ({
@@ -552,6 +471,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     setChartData({ labels: [], pv: [], breakevenIndex: -1 });
   };
 
+
   const handleSave = () => {
     // Export inputs and outputs to CSV
     if (!apiData) {
@@ -664,104 +584,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     document.body.removeChild(link);
   };
 
-  const buildStructuredInputs = () => {
-    const feedstockName = selectedFeedstock || "Feedstock_1";
-
-    const hasAverageDensity =
-      inputs.average_liquid_density !== null &&
-      inputs.average_liquid_density !== undefined &&
-      inputs.average_liquid_density_unit;
-
-    const averageDensityBlock = hasAverageDensity
-      ? {
-        value: inputs.average_liquid_density,
-        unit: inputs.average_liquid_density_unit,
-      }
-      : null;
-
-    const feedstockBlock = {
-      name: feedstockName,
-      price: { value: inputs.feedstock_price, unit: inputs.feedstock_price_unit },
-      carbon_content: inputs.feedstock_carbon_content,
-      carbon_intensity: { value: inputs.feedstock_carbon_intensity, unit: inputs.feedstock_ci_unit },
-      energy_content: { value: inputs.feedstock_energy_content, unit: inputs.feedstock_energy_unit },
-      yield_: { value: inputs.feedstock_yield, unit: inputs.feedstock_yield_unit },
-    };
-
-    const hydrogenPrice = normalizeHydrogenPrice(inputs.hydrogen_price, inputs.hydrogen_price_unit);
-    const electricityRate = normalizeElectricityRate(inputs.electricity_rate, inputs.electricity_rate_unit);
-    const hydrogenYield = normalizeHydrogenYield(inputs.hydrogen_yield, inputs.hydrogen_yield_unit);
-    const electricityYield = normalizeElectricityYield(inputs.electricity_yield, inputs.electricity_yield_unit);
-    const hydrogenCI = normalizeCarbonIntensity(
-      inputs.hydrogen_carbon_intensity,
-      inputs.hydrogen_ci_unit,
-      "gCO2/kg"
-    );
-    const electricityCI = normalizeCarbonIntensity(
-      inputs.electricity_carbon_intensity,
-      inputs.electricity_ci_unit,
-      "gCO2/kWh"
-    );
-
-    const utilitiesBlock = [
-      {
-        name: "Hydrogen",
-        price: hydrogenPrice,
-        yield_: hydrogenYield,
-        carbon_intensity: hydrogenCI,
-      },
-      {
-        name: "Electricity",
-        price: electricityRate,
-        yield_: electricityYield,
-        carbon_intensity: electricityCI,
-      },
-    ];
-
-    const productsBlock = (inputs.products || []).map((product) => ({
-      name: product.name,
-      price: { value: Number(product.price) || 0, unit: product.priceUnit },
-      price_sensitivity_to_ci: {
-        value: Number(product.priceSensitivity) || 0,
-        unit: product.priceSensitivityUnit,
-      },
-      carbon_content: Number(product.carbonContent) || 0,
-      energy_content: { value: Number(product.energyContent) || 0, unit: product.energyUnit },
-      density: Number(product.density) || null,
-      yield_: { value: Number(product.yield) || 0, unit: product.yieldUnit },
-      mass_fraction: Number(product.massFraction) || 0,
-    }));
-
-    const economicsBlock = {
-      discount_rate: inputs.discount_factor,
-      project_lifetime_years: inputs.plant_lifetime,
-      tci_at_reference_capacity: { value: inputs.tci_ref, unit: inputs.tci_ref_unit },
-      tci_scaling_exponent: inputs.tci_scaling_exponent,
-      reference_production_capacity: { value: inputs.capacity_ref, unit: inputs.capacity_ref_unit },
-      wc_to_tci_ratio: inputs.wc_to_tci_ratio,
-      indirect_opex_to_tci_ratio: inputs.indirect_opex_to_tci_ratio,
-    };
-
-    return {
-      plant: {
-        total_liquid_fuel_capacity: { value: inputs.production_capacity, unit: inputs.plant_capacity_unit },
-        annual_load_hours: inputs.annual_load_hours,
-        conversion_process_carbon_intensity_default: inputs.conversion_process_ci_default,
-        process_type: selectedProcess,
-        average_liquid_density: averageDensityBlock,
-      },
-      feedstocks: [feedstockBlock],
-      utilities: utilitiesBlock,
-      products: productsBlock,
-      economics: economicsBlock,
-    };
-  };
-
-  const applyTableData = (tableData) => {
-    setTable(tableData);
-    setChartData(buildChartData(tableData));
-  };
-
+  
+  
   // Add this function to generate mock cash flow data
   const generateMockCashFlowData = (calculationResults) => {
 
@@ -966,7 +790,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
   const lcopCapital = safeCapacity && annualizedCapital !== null ? annualizedCapital / safeCapacity : null;
   const lcopFeedstock = safeCapacity && feedstockCostValue !== null ? feedstockCostValue / safeCapacity : null;
-  const lcopUtility = safeCapacity && utilityCost !== null ? utilityCost / safeCapacity : null;
   const lcopHydrogen = safeCapacity && hydrogenCost !== null ? hydrogenCost / safeCapacity : null;
   const lcopElectricity = safeCapacity && electricityCost !== null ? electricityCost / safeCapacity : null;
   const lcopIndirect = safeCapacity && totalIndirectOpexValue !== null ? totalIndirectOpexValue / safeCapacity : null;
@@ -1462,7 +1285,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
                               {hasDetails && isDetailOpen && (
                                 <div style={{ marginTop: "0.5rem", paddingLeft: "0.5rem", borderLeft: `3px solid ${colors.border}` }}>
                                   {stat.details.map((detail, dIdx) => {
-                                    const isNA = detail.value === 'N/A';
                                     return (
                                       <div
                                         key={dIdx}
