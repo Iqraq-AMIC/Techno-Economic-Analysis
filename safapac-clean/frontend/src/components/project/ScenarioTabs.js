@@ -131,27 +131,6 @@ const ScenarioTabs = () => {
           const isCompared = comparisonScenarios.includes(scenario.id); // Changed scenario_id to id
           const canDelete = index > 0; // Can delete Scenario 2 and 3 (index 1 and 2)
 
-          const DebugScenarioData = () => (
-            <div style={{
-              position: 'fixed',
-              bottom: '10px',
-              right: '10px',
-              background: 'rgba(0,0,0,0.9)',
-              color: 'white',
-              padding: '10px',
-              fontSize: '10px',
-              zIndex: 1000,
-              maxWidth: '400px',
-              maxHeight: '300px',
-              overflow: 'auto'
-            }}>
-              <strong>🔧 Scenario Data Debug:</strong><br />
-              <strong>Project:</strong> {JSON.stringify(currentProject, null, 2)}<br />
-              <strong>Current Scenario:</strong> {JSON.stringify(currentScenario, null, 2)}<br />
-              <strong>All Scenarios:</strong> {JSON.stringify(scenarios, null, 2)}
-            </div>
-          );
-
           return (
 
             <div

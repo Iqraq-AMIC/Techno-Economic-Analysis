@@ -120,7 +120,7 @@ const ProjectStartupModal = ({ isOpen, onProjectSelected }) => {
   }
 
   return (
-    <Modal open={isOpen} centered backdrop="static" toggle={() => {}} style={{ zIndex: 1050 }}>
+    <Modal open={isOpen} centered backdrop={true} toggle={() => {}} style={{ zIndex: 1050 }}>
       <ModalHeader style={{ backgroundColor: "#006D7C", color: "white" }}>
         Welcome to SAFAPAC TEA
       </ModalHeader>

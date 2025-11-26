@@ -3,8 +3,6 @@
 import React, { useState, useEffect } from "react";
 import {
   Container,
-  Row,
-  Col,
   Card,
   CardBody,
   CardHeader,
@@ -12,7 +10,6 @@ import {
   Modal,
   ModalBody,
 } from "shards-react";
-import axios from "axios";
 import BreakevenBarChart from "../components/charts/BreakevenBarChart";
 import BiofuelForm from "../forms/BiofuelForm";
 import CashFlowTable from "../forms/CashFlowTable";
@@ -22,21 +19,6 @@ import { useProject } from "../contexts/ProjectContext";
 import ProjectStartupModal from "../components/project/ProjectStartupModal";
 import { getScenario, calculateScenario } from "../api/projectApi";
 import { mapUiStateToBackend, mapBackendToUiState } from "../utils/payloadMapper";
-
-// ✅ Mock data for fallback
-const mockCashFlowTable = [
-  { year: 0, cashInflow: 0, cashOutflow: 1000000, netCashFlow: -1000000, presentValue: -1000000 },
-  { year: 1, cashInflow: 200000, cashOutflow: 50000, netCashFlow: 150000, presentValue: -850000 },
-  { year: 2, cashInflow: 250000, cashOutflow: 60000, netCashFlow: 190000, presentValue: -660000 },
-  { year: 3, cashInflow: 300000, cashOutflow: 70000, netCashFlow: 230000, presentValue: -430000 },
-  { year: 4, cashInflow: 320000, cashOutflow: 80000, netCashFlow: 240000, presentValue: -190000 },
-  { year: 5, cashInflow: 350000, cashOutflow: 90000, netCashFlow: 260000, presentValue: 70000 },
-  { year: 6, cashInflow: 400000, cashOutflow: 100000, netCashFlow: 300000, presentValue: 370000 },
-  { year: 7, cashInflow: 450000, cashOutflow: 110000, netCashFlow: 340000, presentValue: 710000 },
-  { year: 8, cashInflow: 500000, cashOutflow: 120000, netCashFlow: 380000, presentValue: 1090000 },
-  { year: 9, cashInflow: 520000, cashOutflow: 130000, netCashFlow: 390000, presentValue: 1480000 },
-  { year: 10, cashInflow: 550000, cashOutflow: 150000, netCashFlow: 400000, presentValue: 1880000 },
-];
 
 const buildChartData = (tableData = []) => {
   if (!tableData || tableData.length === 0) return [];
@@ -235,7 +217,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     conversion_process_ci_default: 45,
     feedstock_price: 250,
     feedstock_price_unit: "USD/t",
-    electricity_rate: 0.12,
     electricity_rate_unit: "USD/kWh",
     feedstock_carbon_intensity: 50,
     feedstock_ci_unit: "gCO2/kg",

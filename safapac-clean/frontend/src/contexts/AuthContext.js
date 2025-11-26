@@ -1,6 +1,6 @@
 // src/contexts/AuthContext.js
 
-import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
+import React, { createContext, useContext, useMemo, useState, useEffect , useCallback} from "react";
 import axios from "axios";
 
 const AuthContext = createContext();
@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
-  const persistAuthState = (newToken, user = null) => {
+  const persistAuthState = useCallback((newToken, user = null) => {
     if (typeof window === "undefined") {
       return;
     }
@@ -60,9 +60,9 @@ export const AuthProvider = ({ children }) => {
       window.localStorage.removeItem(TOKEN_STORAGE_KEY);
       window.localStorage.removeItem(USER_STORAGE_KEY);
     }
-  };
+  }, []);
 
-  const recordLoginHistory = (email, success) => {
+  const recordLoginHistory = useCallback((email, success) => {
     if (typeof window === "undefined") return;
 
     const history = JSON.parse(window.localStorage.getItem(LOGIN_HISTORY_KEY) || "[]");
@@ -78,12 +78,12 @@ export const AuthProvider = ({ children }) => {
     }
 
     window.localStorage.setItem(LOGIN_HISTORY_KEY, JSON.stringify(history));
-  };
+  }, []);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     try {
       console.log("🔐 Attempting login with:", email);
-      
+
       // Call backend login endpoint
       const response = await api.post("/auth/login", {
         email: email.trim(),
@@ -113,14 +113,14 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error("Login error:", error);
       recordLoginHistory(email, false);
-      
+
       let errorMessage = "Unable to connect to authentication server";
-      
+
       if (error.response) {
         // Server responded with error status
-        errorMessage = error.response.data?.detail || 
-                      error.response.data?.message || 
-                      `Server error: ${error.response.status}`;
+        errorMessage = error.response.data?.detail ||
+          error.response.data?.message ||
+          `Server error: ${error.response.status}`;
       } else if (error.request) {
         // Request was made but no response received
         errorMessage = "No response from server. Please check if the backend is running.";
@@ -131,22 +131,22 @@ export const AuthProvider = ({ children }) => {
         message: errorMessage
       };
     }
-  };
+  }, [persistAuthState, recordLoginHistory]);
 
   const completeLogin = () => {
     // No longer needed - kept for compatibility
     console.log("completeLogin called (no-op)");
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setToken(null);
     setIsAuthenticated(false);
     setCurrentUser(null);
     persistAuthState(null);
     delete api.defaults.headers.common["Authorization"];
-  };
+  }, [persistAuthState]);
 
-  const signup = async (name, email, password) => {
+  const signup = useCallback(async (name, email, password) => {
     try {
       // Note: Backend doesn't have signup endpoint yet, using login as fallback
       // For now, we'll simulate success
@@ -165,9 +165,9 @@ export const AuthProvider = ({ children }) => {
         message: "Signup is not available at the moment."
       };
     }
-  };
+  }, []);
 
-  const forgotPassword = async (email) => {
+  const forgotPassword = useCallback(async (email) => {
     try {
       // Note: Backend doesn't have forgot password endpoint yet
       return new Promise((resolve) => {
@@ -185,9 +185,9 @@ export const AuthProvider = ({ children }) => {
         message: "Password reset is not available at the moment."
       };
     }
-  };
+  }, []);
 
-  const resetPassword = async (token, newPassword) => {
+  const resetPassword = useCallback(async (token, newPassword) => {
     try {
       // Note: Backend doesn't have reset password endpoint yet
       return new Promise((resolve) => {
@@ -205,7 +205,7 @@ export const AuthProvider = ({ children }) => {
         message: "Password reset failed."
       };
     }
-  };
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -218,9 +218,9 @@ export const AuthProvider = ({ children }) => {
       signup,
       forgotPassword,
       resetPassword,
-      api, // Export the axios instance for other components to use
+      api,
     }),
-    [isAuthenticated, currentUser, token]
+    [isAuthenticated, currentUser, token, login, logout, completeLogin, signup, forgotPassword, resetPassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

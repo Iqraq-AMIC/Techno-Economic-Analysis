@@ -18,7 +18,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useProject } from "../../contexts/ProjectContext";
 
 const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
-  const { currentUser } = useAuth();
+  const { } = useAuth();
   const { createProject, loadMasterData, masterData } = useProject();
 
   const [projectName, setProjectName] = useState("");
@@ -109,7 +109,7 @@ const NewProjectPrompt = ({ isOpen, onCancel, onProjectCreated }) => {
   };
 
   return (
-    <Modal open={isOpen} centered backdrop="static" toggle={() => { }} style={{ zIndex: 1050 }} size="lg">
+    <Modal open={isOpen} centered backdrop={true} toggle={() => { }} style={{ zIndex: 1050 }} size="lg">
       <ModalHeader style={{ backgroundColor: "#006D7C", color: "white" }}>
         Create New Project
       </ModalHeader>

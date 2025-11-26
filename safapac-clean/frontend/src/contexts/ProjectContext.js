@@ -19,7 +19,7 @@ const PROJECT_STORAGE_KEY = "safapac-current-project";
 const SCENARIO_STORAGE_KEY = "safapac-current-scenario";
 
 export const ProjectProvider = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { } = useAuth();
 
   // Current project - DON'T load from localStorage automatically
   // User must select project via modal after each login
@@ -81,7 +81,7 @@ export const ProjectProvider = ({ children }) => {
   }, []);
 
   // Create a new project (auto-creates Scenario 1)
-  const createProject = async (projectName, initialProcessId, initialFeedstockId, initialCountryId) => {
+  const createProject = useCallback(async (projectName, initialProcessId, initialFeedstockId, initialCountryId) => {
     try {
       console.log("🔵 ProjectContext - Creating project with:", {
         projectName,
@@ -135,7 +135,7 @@ export const ProjectProvider = ({ children }) => {
         error: error.message || "Failed to create project"
       };
     }
-  };
+  }, [persistProject, persistScenario]);
 
   // In the loadProject function, update the project normalization:
   const loadProject = useCallback(async (projectId, projectName) => {
@@ -264,7 +264,7 @@ export const ProjectProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentProject, scenarios, currentScenario, persistScenario]);
+  }, [currentProject, scenarios, currentScenario]);
 
   // Switch to a different scenario
   const switchScenario = useCallback(async (scenarioId) => {
