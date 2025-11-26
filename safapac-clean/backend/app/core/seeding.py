@@ -428,51 +428,58 @@ def load_users_from_csv() -> List[Dict[str, str]]:
             "id": "00000000-0000-0000-0000-000000000001",
             "name": "Admin User",
             "email": "admin@example.com", 
-            "password": "adminsaf1234"
+            "password": "adminsaf1234",
+            "access_level": "ADVANCE" 
         }]
     
     users = []
+    valid_levels = ["CORE", "ADVANCE", "ROADSHOW"]
     try:
         with open(csv_path, 'r', encoding='utf-8') as file:
-            # Read the file content to detect delimiter
+            # Read content to sniff delimiter
             content = file.read()
             file.seek(0)
+            delimiter = '\t' if '\t' in content else ','
             
-            # Try different delimiters
-            if '\t' in content:
-                reader = csv.DictReader(file, delimiter='\t')
-            else:
-                reader = csv.DictReader(file, delimiter=',')
+            reader = csv.DictReader(file, delimiter=delimiter)
             
+            # Normalize headers (strip spaces)
+            reader.fieldnames = [name.strip() for name in reader.fieldnames]
+
             for i, row in enumerate(reader):
-                # Handle potential missing columns
+                # Safe get with defaults
                 name = row.get("Staff Name", f"User {i+1}").strip()
-                email = row.get("Email Address", f"user{i+1}@example.com").strip()
-                password = row.get("Suggested Password", f"password{i+1}").strip()
+                email = row.get("Email Address", "").strip()
+                password = row.get("Suggested Password", "password123").strip()
                 
-                # Ensure password is not too long for bcrypt
-                if len(password) > 72:
-                    password = password[:72]
-                    logger.warning(f"Truncated password for user {email}")
+                # SAFE ACCESS LEVEL EXTRACTION
+                # 1. Get value, default to CORE
+                raw_access = row.get("Access Level", "CORE")
+                # 2. Handle None/Empty
+                if not raw_access: 
+                    raw_access = "CORE"
+                # 3. Normalize
+                access_level = raw_access.strip().upper()
                 
-                users.append({
-                    "name": name,
-                    "email": email,
-                    "password": password
-                })
+                # 4. Validate
+                if access_level not in valid_levels:
+                    logger.warning(f"Invalid access level '{access_level}' for user {email}. Defaulting to CORE.")
+                    access_level = "CORE"
+
+                if email: # Only add if email exists
+                    users.append({
+                        "name": name,
+                        "email": email,
+                        "password": password,
+                        "access_level": access_level
+                    })
         
         logger.info(f"Loaded {len(users)} users from CSV")
         return users
         
     except Exception as e:
         logger.error(f"Error reading CSV file: {e}")
-        # Fallback to default user
-        return [{
-            "id": "00000000-0000-0000-0000-000000000001",
-            "name": "Admin User",
-            "email": "admin@example.com",
-            "password": "adminsaf1234"
-        }]
+        return []
 
 
 def seed_database(db: Session):
@@ -488,42 +495,43 @@ def seed_database(db: Session):
             users_data = load_users_from_csv()
             
             for i, data in enumerate(users_data):
-                # Generate UUID if not provided
-                user_id = UUID(data["id"]) if "id" in data else UUID(int=i+1)
+                # Create deterministic UUID based on index
+                user_id = UUID(int=i+1)
                 
-                # Ensure password is properly handled
-                password = data["password"]
-                if len(password) > 72:
-                    password = password[:72]
+                password = data["password"][:72] # Truncate for bcrypt safety
                 
                 db.add(User(
                     id=user_id,
                     name=data["name"],
                     email=data["email"],
                     password_hash=get_password_hash(password),
+                    access_level=data["access_level"], # <--- CRITICAL FIX: Actually passing the value
                     created_at=datetime.utcnow()
                 ))
-            db.commit()
-            logger.info(f"{len(users_data)} Users seeded.")
+            
+            try:
+                db.commit()
+                logger.info(f"{len(users_data)} Users seeded successfully.")
+            except IntegrityError as ie:
+                db.rollback()
+                logger.error(f"❌ USER SEEDING FAILED: Duplicate data detected.")
+                logger.error(f"Detailed Error: {ie.orig}")
+                logger.error("Check your pw.csv for duplicate Email Addresses.")
+                raise # Re-raise to stop process
 
-        # --- 3. SEED MASTER DATA (Processes, Countries, Products, Feedstocks, Utilities) ---
-        # Get ID maps for foreign key lookups in later steps
+        # --- 3. REST OF SEEDING ---
         id_maps = seed_master_data(db, REFERENCE_DATA_SEED)
-        
-        # --- 4. SEED UTILITY PRICES (U+C) ---
         seed_utility_prices(db, REFERENCE_DATA_SEED, id_maps)
-
-        # --- 5. SEED P+F REFERENCES AND DEFAULTS (P+F, P+F+U, P+F+Product, P+F+C) ---
         seed_p_f_references(db, REFERENCE_DATA_SEED, id_maps)
         
-        logger.info("Reference data seeding successful.")
+        logger.info("✅ Database seeding completed successfully.")
             
-    except IntegrityError:
+    except IntegrityError as e:
         db.rollback()
-        logger.warning("Data already exists or integrity constraint violated. Rolling back and skipping insertions.")
+        logger.warning("⚠️ Data integrity warning: " + str(e.orig))
     except Exception as e:
         db.rollback()
-        logger.error(f"FATAL ERROR during seeding: {e}", exc_info=True)
+        logger.error(f"❌ FATAL ERROR during seeding: {e}", exc_info=True)
         raise
 
 # ----------------------------------------------------------------------------

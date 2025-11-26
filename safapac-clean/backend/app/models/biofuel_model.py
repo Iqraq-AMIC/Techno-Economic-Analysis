@@ -222,6 +222,7 @@ class User(Base):
     name = Column(String, nullable=False)  # NEW: Staff name field
     email = Column(String, nullable=False, unique=True)
     password_hash = Column(String, nullable=False, default='placeholder')
+    access_level = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships

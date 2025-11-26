@@ -394,6 +394,7 @@ class UserSchema(CamelCaseBaseModel):
     id: UUID
     name: str
     email: str
+    access_level: str
 
 class LoginRequest(CamelCaseBaseModel):
     email: str = Field(..., format="email")

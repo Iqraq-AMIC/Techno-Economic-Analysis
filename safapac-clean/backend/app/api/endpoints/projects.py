@@ -602,7 +602,8 @@ def login(
         user_schema = UserSchema(
             id=user.id,
             name=user.name,
-            email=user.email
+            email=user.email,
+            access_level=user.access_level
         )
         
         return LoginResponse(

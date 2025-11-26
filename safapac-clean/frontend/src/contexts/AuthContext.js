@@ -8,6 +8,7 @@ const AuthContext = createContext();
 const TOKEN_STORAGE_KEY = "safapac-token";
 const USER_STORAGE_KEY = "safapac-user";
 const LOGIN_HISTORY_KEY = "safapac-login-history";
+const ACCESS_STORAGE_KEY = "safapac-access-level";
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -59,6 +60,7 @@ export const AuthProvider = ({ children }) => {
     } else {
       window.localStorage.removeItem(TOKEN_STORAGE_KEY);
       window.localStorage.removeItem(USER_STORAGE_KEY);
+      window.localStorage.removeItem(ACCESS_STORAGE_KEY);
     }
   }, []);
 

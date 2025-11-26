@@ -10,9 +10,11 @@ import {
   Alert
 } from "shards-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useAccess } from "../contexts/AccessContext";
 
 const Login = ({ history }) => {
   const { login } = useAuth();
+  const { changeAccessLevel } = useAccess();
 
   // Force light mode on login page
   useEffect(() => {
@@ -70,6 +72,16 @@ const Login = ({ history }) => {
     if (result.success) {
       console.log("✅ Login SUCCESS - Showing loading transition");
       console.log("👤 User data:", result.user);
+
+      // The backend sends 'accessLevel' (CamelCase) in the user object
+      if (result.user.accessLevel) {
+        console.log("🔓 Setting Access Level to:", result.user.accessLevel);
+        changeAccessLevel(result.user.accessLevel);
+      } else {
+        // Fallback if backend doesn't send it yet
+        console.warn("⚠️ No access level in response, defaulting to CORE");
+        changeAccessLevel("CORE");
+      }
 
       // Show brief loading transition before redirect
       setTimeout(() => {
