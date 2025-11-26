@@ -21,6 +21,28 @@ const createApiInstance = () => {
     (error) => Promise.reject(error)
   );
 
+  // --- NEW: Response Interceptor (Auto Logout on 401) ---
+  instance.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      // Check for 401 Unauthorized
+      if (error.response && error.response.status === 401) {
+        console.warn("⚠️ 401 Unauthorized detected in ProjectAPI. Logging out...");
+        
+        // 1. Clear Local Storage
+        localStorage.removeItem("safapac-token");
+        localStorage.removeItem("safapac-user");
+        localStorage.removeItem("safapac-access-level");
+
+        // 2. Force Redirect to Login if not already there
+        if (!window.location.pathname.includes("/login")) {
+           window.location.href = "/login";
+        }
+      }
+      return Promise.reject(error);
+    }
+  );
+  
   return instance;
 };
 

@@ -16,48 +16,58 @@ const api = axios.create({
   timeout: 10000,
 });
 
+// --- HELPER: Decode JWT to check expiration ---
+const isTokenExpired = (token) => {
+  if (!token) return true;
+  try {
+    // JWT is comprised of 3 parts separated by '.'
+    // The middle part is the payload (Base64 encoded)
+    const payloadBase64 = token.split('.')[1];
+    const decodedJson = atob(payloadBase64);
+    const payload = JSON.parse(decodedJson);
+    
+    // 'exp' is in seconds, Date.now() is in milliseconds
+    const expirationTime = payload.exp * 1000;
+    
+    // Return true if expired (with a small buffer of 10 seconds)
+    return Date.now() >= (expirationTime - 10000);
+  } catch (e) {
+    return true; // If we can't decode it, assume it's invalid
+  }
+};
+
 export const AuthProvider = ({ children }) => {
+  // Initial State Load
+  const [token, setToken] = useState(() => {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  });
+  
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
+    if (typeof window === "undefined") return false;
+    const storedToken = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    // Check validity immediately on load
+    if (storedToken && !isTokenExpired(storedToken)) {
+      return true;
     }
-    return !!window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    return false;
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
+    if (typeof window === "undefined") return null;
     const storedUser = window.localStorage.getItem(USER_STORAGE_KEY);
     return storedUser ? JSON.parse(storedUser) : null;
   });
 
-  const [token, setToken] = useState(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    return window.localStorage.getItem(TOKEN_STORAGE_KEY);
-  });
-
-  // Set up axios interceptor for authenticated requests
-  useEffect(() => {
-    if (token) {
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    } else {
-      delete api.defaults.headers.common["Authorization"];
-    }
-  }, [token]);
-
   const persistAuthState = useCallback((newToken, user = null) => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined") return;
     if (newToken) {
       window.localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
       if (user) {
         window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       }
     } else {
+      // If persist is called with null, it implies logout
       window.localStorage.removeItem(TOKEN_STORAGE_KEY);
       window.localStorage.removeItem(USER_STORAGE_KEY);
       window.localStorage.removeItem(ACCESS_STORAGE_KEY);
@@ -145,6 +155,14 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     setCurrentUser(null);
     persistAuthState(null);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      window.localStorage.removeItem(USER_STORAGE_KEY);
+      window.localStorage.removeItem(ACCESS_STORAGE_KEY);
+      // Optional: Force redirect to ensure clean state
+      // window.location.href = "/login"; 
+    }
     delete api.defaults.headers.common["Authorization"];
   }, [persistAuthState]);
 
@@ -208,6 +226,35 @@ export const AuthProvider = ({ children }) => {
       };
     }
   }, []);
+
+  // --- EFFECT: Token Expiration Check (Polling) ---
+  useEffect(() => {
+    if (!token) return;
+
+    // 1. Check immediately
+    if (isTokenExpired(token)) {
+      logout();
+      return;
+    }
+
+    // 2. Set up an interval to check every minute
+    const intervalId = setInterval(() => {
+      if (isTokenExpired(token)) {
+        logout();
+      }
+    }, 60000); // Check every 60 seconds
+
+    return () => clearInterval(intervalId);
+  }, [token, logout]);
+
+  // Set up axios interceptor for authenticated requests
+  useEffect(() => {
+    if (token) {
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    } else {
+      delete api.defaults.headers.common["Authorization"];
+    }
+  }, [token]);
 
   const value = useMemo(
     () => ({
