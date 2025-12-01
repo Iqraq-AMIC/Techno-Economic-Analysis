@@ -13,7 +13,7 @@ class DataBridge:
         """
         # Key mapping from database to calculation layer
         key_mapping = {
-            # Capital case (DB) → lowercase (Calc)
+            # Capital case (DB) -> lowercase (Calc)
             "tci_ref": "tci_ref",
             "capacity_ref": "capacity_ref", 
             "yield_biomass": "yield_biomass",

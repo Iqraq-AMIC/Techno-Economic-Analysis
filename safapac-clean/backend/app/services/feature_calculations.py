@@ -42,7 +42,7 @@ class Layer1:
     # --- (1) Total Capital Investment ---
     def total_capital_investment(self, tci_ref, plant_capacity, capacity_ref):
         """Economy-of-scale capital scaling."""
-        print(f"🚨 DEBUG TCI DETAILS:")
+        print(f"DEBUG DEBUG TCI DETAILS:")
         print(f"   tci_ref: ${tci_ref}M")
         print(f"   plant_capacity: {plant_capacity:,.0f} tons/year") 
         print(f"   capacity_ref: {capacity_ref:,.0f} tons/year")
@@ -54,10 +54,10 @@ class Layer1:
 
     # --- (2) Production ---
     def production(self, plant_capacity, product_yield):
-        return plant_capacity * 1000 * product_yield  # Convert KTA → tons/year
+        return plant_capacity * 1000 * product_yield  # Convert KTA -> tons/year
 
     def feedstock_consumption(self, plant_capacity, feedstock_yield):
-        return plant_capacity * 1000 * feedstock_yield  # Convert KTA → tons/year
+        return plant_capacity * 1000 * feedstock_yield  # Convert KTA -> tons/year
 
     # --- (4) Fuel Energy Content ---
     def fuel_energy_content(self, product_energy_content, mass_fraction):
@@ -73,17 +73,17 @@ class Layer1:
 
     # --- (7) Amount of Product ---
     def amount_of_product(self, plant_capacity, mass_fraction):
-        return plant_capacity * 1000 * mass_fraction  # Convert KTA → tons/year
+        return plant_capacity * 1000 * mass_fraction  # Convert KTA -> tons/year
 
     # --- (8) Hydrogen Consumption ---
     def hydrogen_consumption(self, plant_capacity, yield_h2):
         """Calculate hydrogen consumption in kg/year"""
-        # plant_capacity (KTA) → tons/year → kg/year
+        # plant_capacity (KTA) -> tons/year -> kg/year
         return plant_capacity * 1000 * 1000 * yield_h2
 
     def electricity_consumption(self, plant_capacity, yield_kwh):
         """Calculate electricity consumption in kWh/year"""  
-        # plant_capacity (KTA) → tons/year → kg/year (since yield is per kg)
+        # plant_capacity (KTA) -> tons/year -> kg/year (since yield is per kg)
         return plant_capacity * 1000 * 1000 * yield_kwh
 
     # --- Orchestrator (runs full layer) ---
@@ -159,7 +159,7 @@ class Layer1:
                 "product_price_sensitivity_ci": float(product.get("product_price_sensitivity_ci", 0.0)),
             })
 
-        print("🔍 DEBUG PRODUCT AMOUNTS:")
+        print("DEBUG PRODUCT AMOUNTS:")
         for product in product_results:
             print(f"   {product['name']}: {product['amount_of_product']:,.0f} tons/year")
 
@@ -193,7 +193,7 @@ class Layer1:
 
         aggregated_product_yield = total_production / plant_capacity if plant_capacity else 0.0
 
-        print("🔍 DEBUG YIELD OVERRIDE CHECK:")
+        print("DEBUG DEBUG YIELD OVERRIDE CHECK:")
         print(f"   User provided feedstock_yield: {inputs.get('feedstock_yield')}")
         print(f"   Reference feedstock_yield: {ref.get('yield_biomass')}")
         print(f"   Using feedstock_yield: {feedstock_yield}")  # This shows which one is actually used
@@ -206,7 +206,7 @@ class Layer1:
         print(f"   Reference electricity_yield: {ref.get('yield_kwh')}")
         print(f"   Using electricity_yield: {yield_kwh}")  # This shows which one is actually used
 
-        print("🔍 DEBUG UTILITY CONSUMPTION:")
+        print("DEBUG DEBUG UTILITY CONSUMPTION:")
         print(f"   Hydrogen: {h2_cons:,.0f} kg/year (should be ~21,000,000)")
         print(f"   Electricity: {elec_cons:,.0f} kWh/year (should be ~60,000,000)")
 
@@ -269,7 +269,7 @@ class Layer2:
 
     # --- (5) Total Carbon Intensity ---
     def total_carbon_intensity(self, feedstock_ci, conversion_process_ci):
-        # Divide by 1000 to convert gCO2/MJ → kgCO2/MJ or similar scaling
+        # Divide by 1000 to convert gCO2/MJ -> kgCO2/MJ or similar scaling
         return (feedstock_ci + conversion_process_ci) / 1000.0
 
     # --- (6) Revenue ---

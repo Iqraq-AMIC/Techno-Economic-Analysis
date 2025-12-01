@@ -1,0 +1,80 @@
+{
+  "process_outputs": {
+    "feedstock_consumption": {
+      "UCO": {
+        "value": 605000.0,
+        "unit": "tons/year"
+      }
+    },
+    "product_production": {
+      "JET": {
+        "value": 320000.0,
+        "unit": "tons/year"
+      },
+      "DIESEL": {
+        "value": 75000.0,
+        "unit": "tons/year"
+      },
+      "Naphtha": {
+        "value": 105000.0,
+        "unit": "tons/year"
+      }
+    }
+  },
+  "economic_outputs": {
+    "total_capital_investment": {
+      "value": 400.0,
+      "unit": "MUSD"
+    },
+    "total_direct_opex": {
+      "value": 679350000.0,
+      "unit": "USD/year"
+    },
+    "feedstock_cost": {
+      "value": 562650000.0,
+      "unit": "USD/year"
+    },
+    "hydrogen_cost": {
+      "value": 113400000.00000001,
+      "unit": "USD/year"
+    },
+    "electricity_cost": {
+      "value": 3300000.0,
+      "unit": "USD/year"
+    },
+    "total_indirect_opex": {
+      "value": 30800000.0,
+      "unit": "USD/year"
+    },
+    "total_opex": {
+      "value": 710150000.0,
+      "unit": "USD/year"
+    },
+    "lcop": {
+      "value": 1495.8143405946046,
+      "unit": "USD/ton"
+    },
+    "lcop_breakdown": {
+      "feedstock_component": {
+        "value": 0.7522992456087026,
+        "unit": "fraction"
+      },
+      "hydrogen_component": {
+        "value": 0.1516230950893573,
+        "unit": "fraction"
+      },
+      "electricity_component": {
+        "value": 0.0044123122909601326,
+        "unit": "fraction"
+      },
+      "indirect_opex_component": {
+        "value": 0.04118158138229457,
+        "unit": "fraction"
+      },
+      "tci_component": {
+        "value": 0.050483765628685354,
+        "unit": "fraction"
+      }
+    }
+  }
+}

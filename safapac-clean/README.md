@@ -226,11 +226,24 @@ As long as you keep these endpoint paths and JSON shapes stable, you can safely 
 
 ### Backend Tests
 
-From `safapac-clean/backend`:
+The backend includes a comprehensive test suite for HEFA calculation verification.
+
+**Location:** `backend/tests/`
 
 ```bash
-pytest tests/ -v
+# Quick start
+python backend/tests/check_setup.py          # Verify setup
+python backend/tests/run_tests.py --list     # List test scenarios
+python backend/tests/run_tests.py            # Run all tests
+
+# Run specific scenario
+python backend/tests/run_tests.py hefa_usa_500kta
 ```
+
+For detailed testing documentation, see:
+- **Main Guide:** `backend/tests/README.md`
+- **Quick Start:** `backend/tests/QUICKSTART.md`
+- **Creating Scenarios:** `backend/tests/scenarios/README.md`
 
 ### Frontend
 
