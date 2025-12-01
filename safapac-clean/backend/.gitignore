@@ -27,6 +27,7 @@ data/scenarios.json.backup
 # Environment
 .env
 .env.local
+.env.aws
 
 # Logs
 *.log
