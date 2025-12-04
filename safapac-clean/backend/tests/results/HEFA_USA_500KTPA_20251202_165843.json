@@ -1,0 +1,133 @@
+{
+  "scenario_name": "hefa_usa_500kta",
+  "timestamp": "2025-12-02T16:58:43.766121",
+  "status": "passed",
+  "tests": [
+    {
+      "test_name": "Total Capital Investment (TCI)",
+      "expected": 400.0,
+      "actual": 400.0,
+      "unit": "MUSD",
+      "difference_pct": 0.0,
+      "tolerance_pct": 1.0,
+      "passed": true
+    },
+    {
+      "test_name": "Feedstock Consumption",
+      "expected": 605000.0,
+      "actual": 602400.0,
+      "unit": "tons/year",
+      "difference_pct": 0.4297520661157025,
+      "tolerance_pct": 1.0,
+      "passed": true
+    },
+    {
+      "test_name": "Total Production",
+      "expected": 500000,
+      "actual": 500000.0,
+      "unit": "tons/year",
+      "difference_pct": 0.0,
+      "tolerance_pct": 1.0,
+      "passed": true
+    },
+    {
+      "test_name": "Hydrogen Consumption",
+      "expected": 21000000,
+      "actual": 21000000.0,
+      "unit": "kg/year",
+      "difference_pct": 0.0,
+      "tolerance_pct": 1.0,
+      "passed": true
+    },
+    {
+      "test_name": "Electricity Consumption",
+      "expected": 60000000,
+      "actual": 60000000.0,
+      "unit": "kWh/year",
+      "difference_pct": 0.0,
+      "tolerance_pct": 1.0,
+      "passed": true
+    },
+    {
+      "test_name": "Total Direct OPEX",
+      "expected": 679350000.0,
+      "actual": 676932000.0,
+      "unit": "USD/year",
+      "difference_pct": 0.35592846102892467,
+      "tolerance_pct": 2.0,
+      "passed": true
+    },
+    {
+      "test_name": "Total Indirect OPEX",
+      "expected": 30800000.0,
+      "actual": 30800000.0,
+      "unit": "USD/year",
+      "difference_pct": 0.0,
+      "tolerance_pct": 2.0,
+      "passed": true
+    },
+    {
+      "test_name": "Total OPEX",
+      "expected": 710150000.0,
+      "actual": 707732000.0,
+      "unit": "USD/year",
+      "difference_pct": 0.340491445469267,
+      "tolerance_pct": 2.0,
+      "passed": true
+    },
+    {
+      "test_name": "LCOP",
+      "expected": 1495.8143405946046,
+      "actual": 1490.9783405946046,
+      "unit": "USD/ton",
+      "difference_pct": 0.3233021551376251,
+      "tolerance_pct": 2.0,
+      "passed": true
+    },
+    {
+      "test_name": "Carbon Intensity",
+      "expected": 20.553472987872095,
+      "actual": 20.553472987872095,
+      "unit": "gCO2e/MJ",
+      "difference_pct": 0.0,
+      "tolerance_pct": 2.0,
+      "passed": true
+    },
+    {
+      "test_name": "Total CO2 Emissions",
+      "expected": 447408000000,
+      "actual": 447407999999.9997,
+      "unit": "gCO2e/year",
+      "difference_pct": 6.820972831285984e-14,
+      "tolerance_pct": 2.0,
+      "passed": true
+    },
+    {
+      "test_name": "Carbon Conversion Efficiency",
+      "expected": 30.266537869843656,
+      "actual": 30.397170337409378,
+      "unit": "percent",
+      "difference_pct": 0.43160690571047583,
+      "tolerance_pct": 2.0,
+      "passed": true
+    }
+  ],
+  "calculation_results": {
+    "tci": 400.0,
+    "feedstock_consumption": 602400.0,
+    "production": 500000.0,
+    "total_direct_opex": 676932000.0,
+    "total_indirect_opex": 30800000.0,
+    "total_opex": 707732000.0,
+    "lcop": 1490.9783405946046,
+    "revenue": 1177500000.0,
+    "carbon_intensity": 20.553472987872095,
+    "total_co2_emissions": 447407999999.9997,
+    "carbon_conversion_efficiency": 30.397170337409378
+  },
+  "summary": {
+    "total_tests": 12,
+    "passed": 12,
+    "failed": 0
+  }
+}

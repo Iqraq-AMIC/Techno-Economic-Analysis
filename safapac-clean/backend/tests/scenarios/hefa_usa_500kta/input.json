@@ -21,9 +21,15 @@
       "unit": "USD/t"
     },
     "yield": {
-      "value": 1.21,
+      "value": 1.2048,
       "unit": "kg UCO/kg_fuel",
       "description": "Feedstock consumption per kg of liquid fuel produced"
+    },
+    "carbon_content": 0.77,
+    "energy_content": 37,
+    "carbon_intensity": {
+      "value": 20,
+      "unit": "gCO2e/MJ"
     }
   },
   "utilities": [
@@ -34,8 +40,15 @@
         "unit": "USD/kg"
       },
       "yield": {
-        "value": 0.042,
-        "unit": "kg H2/kg_fuel"
+        "value": 4.2,
+        "unit": "percent",
+        "description": "Percentage of feedstock input"
+      },
+      "carbon_content": 0,
+      "energy_content": 120,
+      "carbon_intensity": {
+        "value": 0,
+        "unit": "gCO2e/kg"
       }
     },
     {
@@ -44,13 +57,16 @@
         "value": 55,
         "unit": "USD/MWh"
       },
-      "ci": {
+      "yield": {
+        "value": 12,
+        "unit": "percent",
+        "description": "Percentage of feedstock input"
+      },
+      "carbon_content": 0,
+      "energy_content": 0,
+      "carbon_intensity": {
         "value": 20,
         "unit": "gCO2e/kWh"
-      },
-      "yield": {
-        "value": 0.12,
-        "unit": "kWh/kg_fuel"
       }
     }
   ],
@@ -61,13 +77,15 @@
         "value": 3000,
         "unit": "USD/t"
       },
+      "yield": {
+        "value": 64,
+        "unit": "percent",
+        "description": "Product yield percentage"
+      },
       "carbon_content": 0.847,
       "energy_content": 43.8,
-      "yield": {
-        "value": 0.64,
-        "unit": "kg/kg",
-        "description": "Product yield per kg of liquid fuel"
-      }
+      "product_density": 0.81,
+      "price_sensitivity_to_ci": 0.5
     },
     {
       "name": "DIESEL",
@@ -75,12 +93,14 @@
         "value": 1500,
         "unit": "USD/t"
       },
+      "yield": {
+        "value": 15,
+        "unit": "percent"
+      },
       "carbon_content": 0.85,
       "energy_content": 42.6,
-      "yield": {
-        "value": 0.15,
-        "unit": "kg/kg"
-      }
+      "product_density": 0.83,
+      "price_sensitivity_to_ci": 0.5
     },
     {
       "name": "Naphtha",
@@ -88,12 +108,14 @@
         "value": 1000,
         "unit": "USD/t"
       },
+      "yield": {
+        "value": 21,
+        "unit": "percent"
+      },
       "carbon_content": 0.84,
       "energy_content": 43.4,
-      "yield": {
-        "value": 0.21,
-        "unit": "kg/kg"
-      }
+      "product_density": 0.7,
+      "price_sensitivity_to_ci": 0.5
     }
   ],
   "economic_parameters": {

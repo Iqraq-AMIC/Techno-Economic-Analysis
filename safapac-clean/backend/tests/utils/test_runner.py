@@ -113,15 +113,29 @@ class TestRunner:
         # Build products list
         products = []
         for p in inputs["products"]:
+            # Handle yield conversion (convert percentage to decimal if needed)
+            product_yield = p["yield"]["value"]
+            if p["yield"].get("unit") == "percent":
+                product_yield = product_yield / 100
+
             products.append({
                 "name": p["name"],
-                "mass_fraction": p["yield"]["value"],
-                "product_yield": p["yield"]["value"],
+                "mass_fraction": product_yield,
+                "product_yield": product_yield,
                 "product_energy_content": p["energy_content"],
                 "product_carbon_content": p["carbon_content"],
                 "product_price": p["price"]["value"],
                 "product_price_sensitivity_ci": 0.0
             })
+
+        # Handle utility yield conversions (convert percentage to decimal if needed)
+        hydrogen_yield = inputs["utilities"][0]["yield"]["value"]
+        if inputs["utilities"][0]["yield"].get("unit") == "percent":
+            hydrogen_yield = hydrogen_yield / 100
+
+        electricity_yield = inputs["utilities"][1]["yield"]["value"]
+        if inputs["utilities"][1]["yield"].get("unit") == "percent":
+            electricity_yield = electricity_yield / 100
 
         calc_inputs = {
             "plant_total_liquid_fuel_capacity": inputs["conversion_plant"]["plant_capacity"]["value"],
@@ -130,9 +144,9 @@ class TestRunner:
             "feedstock_price": inputs["feedstock_data"]["price"]["value"],
             "feedstock_yield": inputs["feedstock_data"]["yield"]["value"],
             "hydrogen_price": inputs["utilities"][0]["price"]["value"],
-            "hydrogen_yield": inputs["utilities"][0]["yield"]["value"],
+            "hydrogen_yield": hydrogen_yield,
             "electricity_rate": inputs["utilities"][1]["price"]["value"] / 1000,
-            "electricity_yield": inputs["utilities"][1]["yield"]["value"],
+            "electricity_yield": electricity_yield,
             "process_type": inputs["process_technology"],
             "indirect_opex_tci_ratio": inputs["economic_parameters"]["indirect_opex_tci_ratio"],
             "products": products
@@ -186,6 +200,27 @@ class TestRunner:
                 "tolerance": 0.01
             },
             {
+                "name": "Total Production",
+                "actual": calc_results["layer1"]["production"],
+                "expected": expected["process_outputs"]["total_production"]["value"],
+                "unit": "tons/year",
+                "tolerance": 0.01
+            },
+            {
+                "name": "Hydrogen Consumption",
+                "actual": calc_results["layer1"]["hydrogen_consumption"],
+                "expected": expected["process_outputs"]["utility_consumption"]["hydrogen"]["value"],
+                "unit": "kg/year",
+                "tolerance": 0.01
+            },
+            {
+                "name": "Electricity Consumption",
+                "actual": calc_results["layer1"]["electricity_consumption"],
+                "expected": expected["process_outputs"]["utility_consumption"]["electricity"]["value"],
+                "unit": "kWh/year",
+                "tolerance": 0.01
+            },
+            {
                 "name": "Total Direct OPEX",
                 "actual": calc_results["layer3"]["total_direct_opex"],
                 "expected": expected["economic_outputs"]["total_direct_opex"]["value"],
@@ -211,6 +246,27 @@ class TestRunner:
                 "actual": calc_results["layer4"]["lcop"],
                 "expected": expected["economic_outputs"]["lcop"]["value"],
                 "unit": "USD/ton",
+                "tolerance": 0.02
+            },
+            {
+                "name": "Carbon Intensity",
+                "actual": calc_results["layer4"]["carbon_intensity"],
+                "expected": expected["environmental_outputs"]["carbon_intensity"]["value"],
+                "unit": "gCO2e/MJ",
+                "tolerance": 0.02
+            },
+            {
+                "name": "Total CO2 Emissions",
+                "actual": calc_results["layer4"]["total_co2_emissions"],
+                "expected": expected["environmental_outputs"]["total_co2_emissions"]["value"],
+                "unit": "gCO2e/year",
+                "tolerance": 0.02
+            },
+            {
+                "name": "Carbon Conversion Efficiency",
+                "actual": calc_results["layer1"]["carbon_conversion_efficiency_percent"],
+                "expected": expected["environmental_outputs"]["carbon_conversion_efficiency"]["value"],
+                "unit": "percent",
                 "tolerance": 0.02
             }
         ]
@@ -273,7 +329,10 @@ class TestRunner:
                 "total_indirect_opex": calc_results["layer2"]["total_indirect_opex"],
                 "total_opex": calc_results["layer4"]["total_opex"],
                 "lcop": calc_results["layer4"]["lcop"],
-                "revenue": calc_results["layer2"]["revenue"]
+                "revenue": calc_results["layer2"]["revenue"],
+                "carbon_intensity": calc_results["layer4"]["carbon_intensity"],
+                "total_co2_emissions": calc_results["layer4"]["total_co2_emissions"],
+                "carbon_conversion_efficiency": calc_results["layer1"]["carbon_conversion_efficiency_percent"]
             }
 
             # Compare results
@@ -376,3 +435,6 @@ class TestRunner:
         print(f"  Total OPEX:         ${calc['total_opex']:,.0f}/year")
         print(f"  Revenue:            ${calc['revenue']:,.0f}/year")
         print(f"  LCOP:               ${calc['lcop']:,.2f}/ton")
+        print(f"  Carbon Intensity:   {calc['carbon_intensity']:.4f} gCO2e/MJ")
+        print(f"  Total CO2 Emissions: {calc['total_co2_emissions']:,.0f} gCO2e/year")
+        print(f"  Carbon Conv. Eff.:  {calc['carbon_conversion_efficiency']:.2f}%")

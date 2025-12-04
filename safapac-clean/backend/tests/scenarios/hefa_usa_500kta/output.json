@@ -19,6 +19,20 @@
         "value": 105000.0,
         "unit": "tons/year"
       }
+    },
+    "total_production": {
+      "value": 500000,
+      "unit": "tons/year"
+    },
+    "utility_consumption": {
+      "hydrogen": {
+        "value": 21000000,
+        "unit": "kg/year"
+      },
+      "electricity": {
+        "value": 60000000,
+        "unit": "kWh/year"
+      }
     }
   },
   "economic_outputs": {
@@ -50,6 +64,24 @@
       "value": 710150000.0,
       "unit": "USD/year"
     },
+    "opex_breakdown": {
+      "hydrogen": {
+        "value": 113400000.00000001,
+        "unit": "USD/year"
+      },
+      "feedstock": {
+        "value": 562650000,
+        "unit": "USD/year"
+      },
+      "electricity": {
+        "value": 3300000,
+        "unit": "USD/year"
+      },
+      "indirect_opex": {
+        "value": 30800000,
+        "unit": "USD/year"
+      }
+    },
     "lcop": {
       "value": 1495.8143405946046,
       "unit": "USD/ton"
@@ -75,6 +107,36 @@
         "value": 0.050483765628685354,
         "unit": "fraction"
       }
+    }
+  },
+  "environmental_outputs": {
+    "carbon_intensity": {
+      "value": 0.5558618155089913,
+      "unit": "gCO2e/MJ"
+    },
+    "total_co2_emissions": {
+      "value": 12099999999.999722,
+      "unit": "gCO2e/year"
+    },
+    "carbon_conversion_efficiency": {
+      "value": 30.266537869843656,
+      "unit": "percent"
+    }
+  },
+  "financial_outputs": {
+    "irr": {
+      "value": 1.1971498252216972,
+      "unit": "ratio",
+      "description": "Internal Rate of Return"
+    },
+    "npv": {
+      "value": 3072929501.5571237,
+      "unit": "USD",
+      "description": "Net Present Value"
+    },
+    "payback_period": {
+      "value": 1,
+      "unit": "years"
     }
   }
 }
