@@ -154,10 +154,14 @@ class UserInputs:
             if utility.name.lower() == "hydrogen":
                 flat["hydrogen_price"] = utility.price.value
                 flat["hydrogen_yield"] = utility.yield_percent / 100.0
+                flat["hydrogen_carbon_intensity"] = utility.carbon_intensity.value
+                flat["hydrogen_carbon_content"] = utility.carbon_content
             elif utility.name.lower() == "electricity":
                 flat["electricity_rate"] = utility.price.value / 1000.0
                 flat["electricity_yield"] = utility.yield_percent / 100.0
-        
+                flat["electricity_carbon_intensity"] = utility.carbon_intensity.value
+                flat["electricity_carbon_content"] = utility.carbon_content
+
         return flat
 
 # ==================== MASTER DATA SCHEMAS ====================

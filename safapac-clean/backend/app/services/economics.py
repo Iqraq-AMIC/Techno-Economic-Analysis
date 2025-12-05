@@ -141,6 +141,28 @@ class BiofuelEconomics:
             npv, irr, payback = 0, 0, 0
             cash_flow_table = []
 
+        # Get product carbon metrics from Layer 2
+        product_carbon_metrics = layer2_results.get("product_carbon_metrics", [])
+
+        # Build product breakdown with carbon metrics
+        product_breakdown = {}
+        product_carbon_intensity = {}
+        product_carbon_conversion_efficiency = {}
+        product_co2_emissions = {}
+
+        for product_metric in product_carbon_metrics:
+            name = product_metric.get("name", "").lower()
+            product_carbon_intensity[name] = product_metric.get("carbon_intensity_kgco2_ton", 0)
+            product_carbon_conversion_efficiency[name] = product_metric.get("carbon_conversion_efficiency_percent", 0)
+            product_co2_emissions[name] = product_metric.get("co2_emissions_ton_per_year", 0)
+
+        for p in layer1_results.get("products", []):
+            name = p["name"].lower()
+            product_breakdown[name] = p["amount_of_product"]
+
+        # Calculate total CO2 emissions across all products
+        total_co2_emissions_products = sum(product_co2_emissions.values())
+
         # Restructure output
         final_result = {
             "techno_economics": {
@@ -151,24 +173,32 @@ class BiofuelEconomics:
                 "production": layer1_results.get("production", 0),
                 "feedstock_consumption": layer1_results.get("feedstock_consumption", 0),
                 "total_opex": layer4_results.get("total_opex", 0),
-                "total_co2_emissions": layer4_results.get("total_co2_emissions", 0),
+                "total_co2_emissions": total_co2_emissions_products,
                 "carbon_intensity": layer4_results.get("carbon_intensity", 0),
                 "utility_consumption": {
                     "hydrogen": layer1_results.get("hydrogen_consumption", 0),
                     "electricity": layer1_results.get("electricity_consumption", 0)
                 },
-                "product_breakdown": {
-                    "jet": next((p["amount_of_product"] for p in layer1_results.get("products", []) if p["name"].lower() == "jet"), 0),
-                    "diesel": next((p["amount_of_product"] for p in layer1_results.get("products", []) if p["name"].lower() == "diesel"), 0),
-                    "naphtha": next((p["amount_of_product"] for p in layer1_results.get("products", []) if p["name"].lower() == "naphtha"), 0)
-                },
+                "product_breakdown": product_breakdown,
                 "carbon_conversion_efficiency": layer1_results.get("carbon_conversion_efficiency_percent", 0),
                 "opex_breakdown": {
                     "feedstock": layer2_results.get("feedstock_cost", 0),
                     "hydrogen": layer2_results.get("hydrogen_cost", 0),
                     "electricity": layer2_results.get("electricity_cost", 0),
                     "indirect_opex": layer2_results.get("total_indirect_opex", 0)
-                }
+                },
+                # New carbon metrics (kg CO2e/ton)
+                "carbon_intensity_breakdown": {
+                    "feedstock": layer2_results.get("carbon_intensity_feedstock_kgco2_ton", 0),
+                    "hydrogen": layer2_results.get("carbon_intensity_hydrogen_kgco2_ton", 0),
+                    "electricity": layer2_results.get("carbon_intensity_electricity_kgco2_ton", 0),
+                    "process": layer2_results.get("carbon_intensity_process_kgco2_ton", 0),
+                    "total": layer2_results.get("carbon_intensity_total_kgco2_ton", 0)
+                },
+                "product_carbon_intensity": product_carbon_intensity,
+                "product_carbon_conversion_efficiency": product_carbon_conversion_efficiency,
+                "product_co2_emissions": product_co2_emissions,
+                "total_carbon_conversion_efficiency": layer2_results.get("total_carbon_conversion_efficiency_percent", 0)
             },
             "financials": {
                 "npv": npv,
@@ -178,10 +208,10 @@ class BiofuelEconomics:
             },
             "resolved_inputs": {
                 "process_technology": process_technology,
-                "feedstock": feedstock, 
+                "feedstock": feedstock,
                 "country": country,
                 "conversion_plant": self.inputs_flat,
             }
         }
-        
+
         return final_result

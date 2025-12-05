@@ -243,6 +243,9 @@ class Layer2:
         (2) Feedstock Cost       = Feedstock Consumption × Feedstock Price
         (3) Total Carbon Intensity = (Feedstock CI + Conversion Process CI) / 1000
         (4) Revenue              = Amount of Product × Product Price
+        (5) Carbon Intensity (per input type and per product)
+        (6) Carbon Conversion Efficiency (per product)
+        (7) Total CO2 Emissions (per product)
     """
 
     # --- (1) Total Indirect OPEX ---
@@ -276,6 +279,62 @@ class Layer2:
     def revenue(self, amount_of_product, product_price):
         return amount_of_product * product_price
 
+    # --- (7) Carbon Intensity Components ---
+    def carbon_intensity_feedstock(self, feedstock_ci_gco2_kg, feedstock_yield_kg_per_kg, fuel_energy_content_mj_kg):
+        """
+        CI feedstock (kg CO2e/ton) = (feedstock CI gCO2/kg × feedstock yield kg/kg) / fuel energy content MJ/kg × energy content MJ/kg
+
+        Simplified: CI feedstock (kg CO2e/ton) = feedstock CI gCO2/kg × feedstock yield kg/kg / 1000
+
+        Returns: kg CO2e/ton product
+        """
+        # gCO2/kg × kg/kg × (1 kg / 1000 g) × (1000 kg / ton) = kg CO2e/ton
+        return feedstock_ci_gco2_kg * feedstock_yield_kg_per_kg
+
+    def carbon_intensity_hydrogen(self, hydrogen_ci_gco2_kg, hydrogen_yield_kg_per_kg, fuel_energy_content_mj_kg):
+        """
+        CI hydrogen (kg CO2e/ton) = (hydrogen CI gCO2/kg × hydrogen yield kg/kg)
+
+        Returns: kg CO2e/ton product
+        """
+        return hydrogen_ci_gco2_kg * hydrogen_yield_kg_per_kg
+
+    def carbon_intensity_electricity(self, electricity_ci_gco2_kwh, electricity_yield_kwh_per_kg, fuel_energy_content_mj_kg):
+        """
+        CI electricity (kg CO2e/ton) = (electricity CI gCO2/kWh × electricity yield kWh/kg)
+
+        Returns: kg CO2e/ton product
+        """
+        return electricity_ci_gco2_kwh * electricity_yield_kwh_per_kg
+
+    def carbon_intensity_per_product(self, ci_total_kgco2_ton, product_yield):
+        """
+        CI (product) = CI total × product yield
+        Returns: kg CO2e/ton product
+        """
+        return ci_total_kgco2_ton * product_yield
+
+    # --- (8) Carbon Conversion Efficiency ---
+    def carbon_conversion_efficiency_per_product(self, product_carbon_content, product_yield,
+                                                   feedstock_carbon_content, feedstock_yield):
+        """
+        CCE (product) = (CC product × product yield / CC feedstock × feedstock yield) × 100%
+        Returns: percentage
+        """
+        denominator = feedstock_carbon_content * feedstock_yield
+        if denominator <= 0:
+            return 0.0
+        return (product_carbon_content * product_yield / denominator) * 100.0
+
+    # --- (9) Total CO2 Emissions per Product ---
+    def total_co2_emissions_per_product(self, ci_product_kgco2_ton, production_tons_year):
+        """
+        Total CO2 emission (product) = CI (product) × production (product) / 1000
+        CI is in kg CO2e/ton, production is in tons/year
+        Returns: ton/year (ton CO2 per year)
+        """
+        return ci_product_kgco2_ton * production_tons_year / 1000.0
+
     # --- Orchestrator ---
     def compute(self, layer1_results: dict, ref: dict, inputs: dict):
         """
@@ -305,19 +364,88 @@ class Layer2:
             (entry.get("name") or "").strip().lower(): entry for entry in product_outputs
         }
 
-        # Per-product revenues
+        # Get CI data from inputs
+        feedstock_ci_input = inputs.get("feedstock_carbon_intensity", 0.0)  # gCO2/kg
+        hydrogen_ci = inputs.get("hydrogen_carbon_intensity", 0.0)  # gCO2/kg
+        electricity_ci = inputs.get("electricity_carbon_intensity", 0.0)  # gCO2/kWh
+
+        # Get yields
+        feedstock_yield = layer1_results.get("feedstock_yield", 0.0)
+        hydrogen_yield = layer1_results.get("yield_h2", 0.0)
+        electricity_yield = layer1_results.get("yield_kwh", 0.0)
+
+        # Get feedstock carbon content
+        feedstock_carbon_content = inputs.get("feedstock_carbon_content", 0.0)
+
+        # Calculate weighted average fuel energy content across all products
+        total_weighted_energy = layer1_results.get("fuel_energy_content", 0.0)
+
+        # Calculate CI components (kg CO2e/ton)
+        # CI = (input CI gCO2/unit × input yield unit/kg fuel) = gCO2/kg fuel = kg CO2e/ton fuel
+        ci_feedstock_kgco2_ton = self.carbon_intensity_feedstock(
+            feedstock_ci_input, feedstock_yield, total_weighted_energy
+        )
+        ci_hydrogen_kgco2_ton = self.carbon_intensity_hydrogen(
+            hydrogen_ci, hydrogen_yield, total_weighted_energy
+        )
+        ci_electricity_kgco2_ton = self.carbon_intensity_electricity(
+            electricity_ci, electricity_yield, total_weighted_energy
+        )
+
+        # Convert process CI from gCO2/MJ to kg CO2e/ton
+        # gCO2/MJ × MJ/kg × kg/1000g = kg CO2e/ton
+        ci_process_kgco2_ton = conversion_process_ci * total_weighted_energy
+
+        # Calculate EC product (Emission Coefficient for product mix)
+        # For HEFA: EC product = sum(EC_i * Yield_i) for each product
+        ec_product = sum(
+            prod.get("mass_fraction", 0.0) for prod in product_outputs
+        )
+
+        # Total carbon intensity (kg CO2e/ton) = [CI feedstock + CI hydrogen + CI electricity + CI process] × EC product
+        ci_total_kgco2_ton = (ci_feedstock_kgco2_ton + ci_hydrogen_kgco2_ton +
+                               ci_electricity_kgco2_ton + ci_process_kgco2_ton) * ec_product
+
+        # Per-product calculations
         product_revenues = []
+        product_carbon_metrics = []
         total_revenue = 0.0
+        total_cce = 0.0
+        product_count = 0
+
         for idx, product_input in enumerate(products_input):
             name = (product_input.get("name") or "").strip()
             lookup_key = name.lower()
             output_entry = product_output_lookup.get(lookup_key)
             if output_entry is None and idx < len(product_outputs):
                 output_entry = product_outputs[idx]
+
             amount = output_entry.get("amount_of_product", 0.0) if output_entry else 0.0
             price = product_input.get("product_price", 0.0)
             revenue_i = amount * price
             total_revenue += revenue_i
+
+            # Get product-specific data
+            product_yield = output_entry.get("product_yield", 0.0) if output_entry else 0.0
+            product_carbon_content = output_entry.get("product_carbon_content", 0.0) if output_entry else 0.0
+            product_energy_content = output_entry.get("product_energy_content", 0.0) if output_entry else 0.0
+
+            # Calculate CI for this product (kg CO2e/ton)
+            ci_product_kgco2_ton = self.carbon_intensity_per_product(ci_total_kgco2_ton, product_yield)
+
+            # Calculate CCE for this product (%)
+            cce_product = self.carbon_conversion_efficiency_per_product(
+                product_carbon_content, product_yield,
+                feedstock_carbon_content, feedstock_yield
+            )
+
+            # Calculate total CO2 emissions for this product (ton/year)
+            # Using the formula from the document: CI × production / 1000
+            co2_emissions_product = ci_product_kgco2_ton * amount / 1000.0
+
+            total_cce += cce_product
+            product_count += 1
+
             product_revenues.append({
                 "name": name or product_input.get("name"),
                 "amount_of_product": amount,
@@ -326,9 +454,19 @@ class Layer2:
                 "mass_fraction": output_entry.get("mass_fraction") if output_entry else None,
             })
 
+            product_carbon_metrics.append({
+                "name": name,
+                "carbon_intensity_kgco2_ton": ci_product_kgco2_ton,
+                "carbon_conversion_efficiency_percent": cce_product,
+                "co2_emissions_ton_per_year": co2_emissions_product,
+            })
+
+        # Calculate total CCE (average of all products)
+        total_carbon_conversion_efficiency = total_cce / product_count if product_count > 0 else 0.0
+
         # Should be (using user input):
         indirect_opex_ratio = inputs.get("indirect_opex_tci_ratio", 0.077)  # Use user input
-        total_indirect_opex = self.total_indirect_opex(indirect_opex_ratio, total_capital_investment * 1e6)        
+        total_indirect_opex = self.total_indirect_opex(indirect_opex_ratio, total_capital_investment * 1e6)
         feedstock_cost = self.feedstock_cost(feedstock_consumption, feedstock_price)
         hydrogen_cost = self.hydrogen_cost(hydrogen_consumption, hydrogen_price)
         electricity_cost = self.electricity_cost(electricity_consumption, electricity_rate)
@@ -336,9 +474,11 @@ class Layer2:
 
         # Add after revenue calculation
         print("DEBUG: Revenue Verification:")
-        print(f"  - Product Amount: {amount:,.0f} tons/year")
-        print(f"  - Product Price: ${price:,.2f}/ton")
-        print(f"  - Revenue: ${revenue_i:,.2f}/year")
+        if product_revenues:
+            last_product = product_revenues[-1]
+            print(f"  - Product Amount: {last_product['amount_of_product']:,.0f} tons/year")
+            print(f"  - Product Price: ${last_product['price']:,.2f}/ton")
+            print(f"  - Revenue: ${last_product['revenue']:,.2f}/year")
 
         # Output dictionary
         return {
@@ -354,6 +494,14 @@ class Layer2:
             "product_revenues": product_revenues,
             "product_yield": layer1_results.get("product_yield", 0.0),
             "products": product_outputs,
+            # New carbon metrics (kg CO2e/ton)
+            "carbon_intensity_feedstock_kgco2_ton": ci_feedstock_kgco2_ton,
+            "carbon_intensity_hydrogen_kgco2_ton": ci_hydrogen_kgco2_ton,
+            "carbon_intensity_electricity_kgco2_ton": ci_electricity_kgco2_ton,
+            "carbon_intensity_process_kgco2_ton": ci_process_kgco2_ton,
+            "carbon_intensity_total_kgco2_ton": ci_total_kgco2_ton,
+            "product_carbon_metrics": product_carbon_metrics,
+            "total_carbon_conversion_efficiency_percent": total_carbon_conversion_efficiency,
         }
     
 class Layer3:
