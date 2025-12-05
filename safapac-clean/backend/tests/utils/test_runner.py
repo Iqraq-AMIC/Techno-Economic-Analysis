@@ -181,95 +181,189 @@ class TestRunner:
         }
 
     def compare_results(self, calc_results):
-        """Compare calculated results with expected outputs"""
+        """Compare calculated results with expected outputs - tests ALL parameters in output.json"""
         expected = self.scenario.expected_outputs
+        tests = []
 
-        tests = [
-            {
-                "name": "Total Capital Investment (TCI)",
-                "actual": calc_results["layer1"]["total_capital_investment"],
-                "expected": expected["economic_outputs"]["total_capital_investment"]["value"],
-                "unit": "MUSD",
-                "tolerance": 0.01
-            },
-            {
-                "name": "Feedstock Consumption",
-                "actual": calc_results["layer1"]["feedstock_consumption"],
-                "expected": expected["process_outputs"]["feedstock_consumption"][self.scenario.inputs["feedstock"]]["value"],
-                "unit": "tons/year",
-                "tolerance": 0.01
-            },
-            {
-                "name": "Total Production",
-                "actual": calc_results["layer1"]["production"],
-                "expected": expected["process_outputs"]["total_production"]["value"],
-                "unit": "tons/year",
-                "tolerance": 0.01
-            },
-            {
-                "name": "Hydrogen Consumption",
-                "actual": calc_results["layer1"]["hydrogen_consumption"],
-                "expected": expected["process_outputs"]["utility_consumption"]["hydrogen"]["value"],
-                "unit": "kg/year",
-                "tolerance": 0.01
-            },
-            {
-                "name": "Electricity Consumption",
-                "actual": calc_results["layer1"]["electricity_consumption"],
-                "expected": expected["process_outputs"]["utility_consumption"]["electricity"]["value"],
-                "unit": "kWh/year",
-                "tolerance": 0.01
-            },
-            {
-                "name": "Total Direct OPEX",
-                "actual": calc_results["layer3"]["total_direct_opex"],
-                "expected": expected["economic_outputs"]["total_direct_opex"]["value"],
-                "unit": "USD/year",
-                "tolerance": 0.02
-            },
-            {
-                "name": "Total Indirect OPEX",
-                "actual": calc_results["layer2"]["total_indirect_opex"],
-                "expected": expected["economic_outputs"]["total_indirect_opex"]["value"],
-                "unit": "USD/year",
-                "tolerance": 0.02
-            },
-            {
-                "name": "Total OPEX",
-                "actual": calc_results["layer4"]["total_opex"],
-                "expected": expected["economic_outputs"]["total_opex"]["value"],
-                "unit": "USD/year",
-                "tolerance": 0.02
-            },
-            {
-                "name": "LCOP",
-                "actual": calc_results["layer4"]["lcop"],
-                "expected": expected["economic_outputs"]["lcop"]["value"],
-                "unit": "USD/ton",
-                "tolerance": 0.02
-            },
-            {
-                "name": "Carbon Intensity",
-                "actual": calc_results["layer4"]["carbon_intensity"],
-                "expected": expected["environmental_outputs"]["carbon_intensity"]["value"],
-                "unit": "gCO2e/MJ",
-                "tolerance": 0.02
-            },
-            {
-                "name": "Total CO2 Emissions",
-                "actual": calc_results["layer4"]["total_co2_emissions"],
-                "expected": expected["environmental_outputs"]["total_co2_emissions"]["value"],
-                "unit": "gCO2e/year",
-                "tolerance": 0.02
-            },
-            {
-                "name": "Carbon Conversion Efficiency",
-                "actual": calc_results["layer1"]["carbon_conversion_efficiency_percent"],
-                "expected": expected["environmental_outputs"]["carbon_conversion_efficiency"]["value"],
-                "unit": "percent",
-                "tolerance": 0.02
-            }
-        ]
+        # === PROCESS OUTPUTS SECTION ===
+
+        # Test feedstock consumption
+        tests.append({
+            "name": "Feedstock Consumption",
+            "actual": calc_results["layer1"]["feedstock_consumption"],
+            "expected": expected["process_outputs"]["feedstock_consumption"][self.scenario.inputs["feedstock"]]["value"],
+            "unit": "tons/year",
+            "tolerance": 0.01
+        })
+
+        # Test each product production
+        products = calc_results["layer1"].get("products", [])
+        for product in products:
+            product_name = product["name"]
+            if product_name in expected["process_outputs"]["product_production"]:
+                tests.append({
+                    "name": f"Production - {product_name}",
+                    "actual": product["amount_of_product"],
+                    "expected": expected["process_outputs"]["product_production"][product_name]["value"],
+                    "unit": "tons/year",
+                    "tolerance": 0.01
+                })
+
+        # Test total production
+        tests.append({
+            "name": "Total Production",
+            "actual": calc_results["layer1"]["production"],
+            "expected": expected["process_outputs"]["total_production"]["value"],
+            "unit": "tons/year",
+            "tolerance": 0.01
+        })
+
+        # Test utility consumption
+        tests.append({
+            "name": "Hydrogen Consumption",
+            "actual": calc_results["layer1"]["hydrogen_consumption"],
+            "expected": expected["process_outputs"]["utility_consumption"]["hydrogen"]["value"],
+            "unit": "kg/year",
+            "tolerance": 0.01
+        })
+
+        tests.append({
+            "name": "Electricity Consumption",
+            "actual": calc_results["layer1"]["electricity_consumption"],
+            "expected": expected["process_outputs"]["utility_consumption"]["electricity"]["value"],
+            "unit": "kWh/year",
+            "tolerance": 0.01
+        })
+
+        # === ECONOMIC OUTPUTS SECTION ===
+
+        tests.append({
+            "name": "Total Capital Investment (TCI)",
+            "actual": calc_results["layer1"]["total_capital_investment"],
+            "expected": expected["economic_outputs"]["total_capital_investment"]["value"],
+            "unit": "MUSD",
+            "tolerance": 0.01
+        })
+
+        tests.append({
+            "name": "Total Direct OPEX",
+            "actual": calc_results["layer3"]["total_direct_opex"],
+            "expected": expected["economic_outputs"]["total_direct_opex"]["value"],
+            "unit": "USD/year",
+            "tolerance": 0.02
+        })
+
+        tests.append({
+            "name": "Feedstock Cost",
+            "actual": calc_results["layer2"]["feedstock_cost"],
+            "expected": expected["economic_outputs"]["feedstock_cost"]["value"],
+            "unit": "USD/year",
+            "tolerance": 0.02
+        })
+
+        tests.append({
+            "name": "Hydrogen Cost",
+            "actual": calc_results["layer2"]["hydrogen_cost"],
+            "expected": expected["economic_outputs"]["hydrogen_cost"]["value"],
+            "unit": "USD/year",
+            "tolerance": 0.02
+        })
+
+        tests.append({
+            "name": "Electricity Cost",
+            "actual": calc_results["layer2"]["electricity_cost"],
+            "expected": expected["economic_outputs"]["electricity_cost"]["value"],
+            "unit": "USD/year",
+            "tolerance": 0.02
+        })
+
+        tests.append({
+            "name": "Total Indirect OPEX",
+            "actual": calc_results["layer2"]["total_indirect_opex"],
+            "expected": expected["economic_outputs"]["total_indirect_opex"]["value"],
+            "unit": "USD/year",
+            "tolerance": 0.02
+        })
+
+        tests.append({
+            "name": "Total OPEX",
+            "actual": calc_results["layer4"]["total_opex"],
+            "expected": expected["economic_outputs"]["total_opex"]["value"],
+            "unit": "USD/year",
+            "tolerance": 0.02
+        })
+
+        tests.append({
+            "name": "LCOP",
+            "actual": calc_results["layer4"]["lcop"],
+            "expected": expected["economic_outputs"]["lcop"]["value"],
+            "unit": "USD/ton",
+            "tolerance": 0.02
+        })
+
+        # === CARBON METRICS SECTION ===
+
+        # Test carbon intensity per product
+        product_carbon_metrics = calc_results["layer2"].get("product_carbon_metrics", [])
+        for metric in product_carbon_metrics:
+            product_name = metric["name"]
+            if product_name in expected["carbon_metrics"]["product_carbon_intensity"]:
+                tests.append({
+                    "name": f"Carbon Intensity - {product_name}",
+                    "actual": metric["carbon_intensity_kgco2_ton"],
+                    "expected": expected["carbon_metrics"]["product_carbon_intensity"][product_name]["value"],
+                    "unit": "kg CO2e/ton",
+                    "tolerance": 0.02
+                })
+
+        # Test carbon conversion efficiency per product
+        for metric in product_carbon_metrics:
+            product_name = metric["name"]
+            if product_name in expected["carbon_metrics"]["product_carbon_conversion_efficiency"]:
+                tests.append({
+                    "name": f"CCE - {product_name}",
+                    "actual": metric["carbon_conversion_efficiency_percent"],
+                    "expected": expected["carbon_metrics"]["product_carbon_conversion_efficiency"][product_name]["value"],
+                    "unit": "percent",
+                    "tolerance": 0.02
+                })
+
+        # Test CO2 emissions per product
+        for metric in product_carbon_metrics:
+            product_name = metric["name"]
+            if product_name in expected["carbon_metrics"]["product_co2_emissions"]:
+                tests.append({
+                    "name": f"CO2 Emissions - {product_name}",
+                    "actual": metric["co2_emissions_ton_per_year"],
+                    "expected": expected["carbon_metrics"]["product_co2_emissions"][product_name]["value"],
+                    "unit": "tons/year",
+                    "tolerance": 0.02
+                })
+
+        # === REVENUE OUTPUTS SECTION ===
+
+        tests.append({
+            "name": "Total Revenue",
+            "actual": calc_results["layer2"]["revenue"],
+            "expected": expected["revenue_outputs"]["total_revenue"]["value"],
+            "unit": "USD/year",
+            "tolerance": 0.02
+        })
+
+        # Test revenue per product
+        product_revenues = calc_results["layer2"].get("product_revenues", [])
+        for rev in product_revenues:
+            product_name = rev["name"]
+            if product_name in expected["revenue_outputs"]["product_revenues"]:
+                tests.append({
+                    "name": f"Revenue - {product_name}",
+                    "actual": rev["revenue"],
+                    "expected": expected["revenue_outputs"]["product_revenues"][product_name]["value"],
+                    "unit": "USD/year",
+                    "tolerance": 0.02
+                })
+
+        # === RUN ALL TESTS ===
 
         comparison_results = []
         passed_count = 0
@@ -403,8 +497,8 @@ class TestRunner:
 
         # Print test details
         print(f"\n{Colors.BOLD}Test Results:{Colors.ENDC}")
-        print(f"{'Metric':<40} {'Expected':<18} {'Actual':<18} {'Diff %':<10} {'Status':<10}")
-        print("-" * 96)
+        print(f"{'Metric':<50} {'Expected':<18} {'Actual':<18} {'Diff %':<10} {'Status':<10}")
+        print("-" * 106)
 
         for test in self.results["tests"]:
             status = f"{Colors.OKGREEN}PASS{Colors.ENDC}" if test["passed"] else f"{Colors.FAIL}FAIL{Colors.ENDC}"
@@ -422,7 +516,7 @@ class TestRunner:
 
             diff_str = f"{test['difference_pct']:.2f}%"
 
-            print(f"{test['test_name']:<40} {exp_str:<18} {act_str:<18} {diff_str:<10} {status}")
+            print(f"{test['test_name']:<50} {exp_str:<18} {act_str:<18} {diff_str:<10} {status}")
 
         # Print calculation results
         print(f"\n{Colors.BOLD}Calculated Values:{Colors.ENDC}")

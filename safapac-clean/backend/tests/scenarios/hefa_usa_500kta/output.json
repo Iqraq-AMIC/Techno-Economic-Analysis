@@ -109,18 +109,72 @@
       }
     }
   },
-  "environmental_outputs": {
-    "carbon_intensity": {
-      "value": 0.5558618155089913,
-      "unit": "gCO2e/MJ"
+  "carbon_metrics": {
+    "product_carbon_intensity": {
+      "JET": {
+        "value": 614.523,
+        "unit": "kg CO2e/ton"
+      },
+      "DIESEL": {
+        "value": 144.029,
+        "unit": "kg CO2e/ton"
+      },
+      "Naphtha": {
+        "value": 201.64,
+        "unit": "kg CO2e/ton"
+      }
     },
-    "total_co2_emissions": {
-      "value": 12099999999.999722,
-      "unit": "gCO2e/year"
+    "product_carbon_conversion_efficiency": {
+      "JET": {
+        "value": 57.67,
+        "unit": "percent"
+      },
+      "DIESEL": {
+        "value": 13.57,
+        "unit": "percent"
+      },
+      "Naphtha": {
+        "value": 18.77,
+        "unit": "percent"
+      }
     },
-    "carbon_conversion_efficiency": {
-      "value": 30.266537869843656,
-      "unit": "percent"
+    "product_co2_emissions": {
+      "JET": {
+        "value": 196647.32,
+        "unit": "tons/year"
+      },
+      "DIESEL": {
+        "value": 10802.16,
+        "unit": "tons/year"
+      },
+      "Naphtha": {
+        "value": 21172.23,
+        "unit": "tons/year"
+      }
+    }
+  },
+  "revenue_outputs": {
+    "product_revenues": {
+      "JET": {
+        "value": 960000000,
+        "value_musd": 960.0,
+        "unit": "USD/year"
+      },
+      "DIESEL": {
+        "value": 112500000,
+        "value_musd": 112.5,
+        "unit": "USD/year"
+      },
+      "Naphtha": {
+        "value": 105000000,
+        "value_musd": 105.0,
+        "unit": "USD/year"
+      }
+    },
+    "total_revenue": {
+      "value": 1177500000,
+      "value_musd": 1177.5,
+      "unit": "USD/year"
     }
   },
   "financial_outputs": {

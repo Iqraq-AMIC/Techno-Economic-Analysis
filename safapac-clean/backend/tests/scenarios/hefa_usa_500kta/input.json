@@ -21,15 +21,15 @@
       "unit": "USD/t"
     },
     "yield": {
-      "value": 1.2048,
+      "value": 1.21,
       "unit": "kg UCO/kg_fuel",
       "description": "Feedstock consumption per kg of liquid fuel produced"
     },
-    "carbon_content": 0.77,
-    "energy_content": 37,
+    "carbon_content": 0.78,
+    "energy_content": 0,
     "carbon_intensity": {
-      "value": 20,
-      "unit": "gCO2e/MJ"
+      "value": 6.526,
+      "unit": "gCO2e/kg"
     }
   },
   "utilities": [
@@ -45,7 +45,7 @@
         "description": "Percentage of feedstock input"
       },
       "carbon_content": 0,
-      "energy_content": 120,
+      "energy_content": 0,
       "carbon_intensity": {
         "value": 0,
         "unit": "gCO2e/kg"
