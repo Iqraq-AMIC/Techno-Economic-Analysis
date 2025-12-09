@@ -13,14 +13,13 @@ import bcrypt  # Add bcrypt for password hashing
 
 
 # Import all necessary models - REMOVE UnitRatio import
-from app.models.biofuel_model import (
-    UnitConversion, UnitGroup, UnitOfMeasure,  # REMOVED: UnitRatio
-    User, Utility, Country, UtilityCountryPriceDefaults, ProcessTechnology,
-    Feedstock, ProcessFeedstockRef, ProcessUtilityConsumptionRef, ProductReferenceBreakdown,
-    DefaultParameterSet, Product
-)
+
+from app.models.master_data import Country, DefaultParameterSet, Feedstock, ProcessFeedstockRef, ProcessTechnology, ProcessUtilityConsumptionRef, Product, ProductReferenceBreakdown, Utility, UtilityCountryPriceDefaults
+
 from app.core.database import SessionLocal, create_tables
 from app.core.security import get_password_hash
+from app.models.unit_mgmt import UnitConversion, UnitGroup, UnitOfMeasure
+from app.models.user_project import User
 
 # Setup logging
 logger = logging.getLogger(__name__)

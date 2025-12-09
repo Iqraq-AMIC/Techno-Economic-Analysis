@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.crud.biofuel_crud import BiofuelCRUD
-from app.schemas.biofuel_schema import (
+from app.schemas.master_data_schema import (
     MasterDataResponse, ProcessTechnologySchema, FeedstockSchema,
     UtilitySchema, ProductSchema, CountrySchema, UnitOfMeasureSchema
 )

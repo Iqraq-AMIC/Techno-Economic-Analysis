@@ -1,12 +1,11 @@
-# app/models/biofuel_model.py
+# app/models/master_data.py
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.schema import UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-import datetime
-import uuid
+from sqlalchemy.dialects.postgresql import JSONB
 
+# Assuming Base is imported from your core module
 from app.core.base_model import Base 
 
 # ==================== MASTER DATA TABLES ====================
@@ -16,7 +15,7 @@ class ProcessTechnology(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, unique=True)
 
-    # Relationships
+    # Relationships (Forward-declared or imported models will link here)
     refs = relationship("ProcessFeedstockRef", back_populates="process")
     default_params = relationship("DefaultParameterSet", back_populates="process")
     scenarios = relationship("Scenario", back_populates="process")
@@ -70,6 +69,7 @@ class Product(Base):
     breakdowns = relationship("ProductReferenceBreakdown", back_populates="product")
 
 # ==================== REFERENCE DATA TABLES ====================
+# These tables link Master Data entities together and hold reference values
 
 class ProcessFeedstockRef(Base):
     __tablename__ = "process_feedstock_ref"
@@ -79,7 +79,7 @@ class ProcessFeedstockRef(Base):
     feedstock_id = Column(Integer, ForeignKey("feedstock.id"), nullable=False)
     average_product_density_ref = Column(Float)
 
-    # Relationships
+    # Relationships - NOTE: Process and Feedstock are defined above
     process = relationship("ProcessTechnology", back_populates="refs")
     feedstock = relationship("Feedstock", back_populates="refs")
     utility_consumptions = relationship("ProcessUtilityConsumptionRef", back_populates="ref")
@@ -97,7 +97,7 @@ class ProcessUtilityConsumptionRef(Base):
     utility_id = Column(Integer, ForeignKey("utility.id"), nullable=False)
     consumption_ratio_ref_unit_per_kg_fuel = Column(Float, nullable=False)
 
-    # Relationships
+    # Relationships - NOTE: Ref and Utility are defined above
     ref = relationship("ProcessFeedstockRef", back_populates="utility_consumptions")
     utility = relationship("Utility", back_populates="consumption_refs")
 
@@ -113,7 +113,7 @@ class UtilityCountryPriceDefaults(Base):
     country_id = Column(Integer, ForeignKey("country.id"), nullable=False)
     price_ref_usd_per_unit = Column(Float, nullable=False)
 
-    # Relationships
+    # Relationships - NOTE: Utility and Country are defined above
     utility = relationship("Utility", back_populates="price_defaults")
     country = relationship("Country", back_populates="utility_price_defaults")
 
@@ -171,119 +171,11 @@ class DefaultParameterSet(Base):
     p_steps = Column(Integer)
     nnp_steps = Column(Integer) 
 
-    # Relationships
+    # Relationships - NOTE: Process, Feedstock, Country are defined above
     process = relationship("ProcessTechnology", back_populates="default_params")
     feedstock = relationship("Feedstock", back_populates="default_params")
     country = relationship("Country", back_populates="default_params")
 
     __table_args__ = (
         UniqueConstraint('process_id', 'feedstock_id', 'country_id', name='_pfc_default_uc'),
-    )
-
-# ==================== UNIT MANAGEMENT TABLES ====================
-
-class UnitGroup(Base):
-    __tablename__ = "unit_group"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, unique=True)
-    base_unit_name = Column(String, nullable=False)
-
-    units = relationship("UnitOfMeasure", back_populates="group")
-    
-class UnitOfMeasure(Base):
-    __tablename__ = "unit_of_measure"
-    id = Column(Integer, primary_key=True, index=True)
-    unit_group_id = Column(Integer, ForeignKey("unit_group.id"), nullable=False)
-    name = Column(String, nullable=False)
-    display_name = Column(String)
-
-    # Relationships
-    group = relationship("UnitGroup", back_populates="units")
-    conversion = relationship("UnitConversion", uselist=False, back_populates="unit")
-
-    __table_args__ = (
-        UniqueConstraint('unit_group_id', 'name', name='_unit_group_name_uc'),
-    )
-
-class UnitConversion(Base):
-    __tablename__ = "unit_conversion"
-    id = Column(Integer, primary_key=True, index=True)
-    unit_id = Column(Integer, ForeignKey("unit_of_measure.id"), nullable=False, unique=True)
-    conversion_factor = Column(Float, nullable=False)
-
-    # Relationship
-    unit = relationship("UnitOfMeasure", back_populates="conversion")
-
-# ==================== USER & PROJECT TABLES ====================
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, nullable=False)  # NEW: Staff name field
-    email = Column(String, nullable=False, unique=True)
-    password_hash = Column(String, nullable=False, default='placeholder')
-    access_level = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    # Relationships
-    projects = relationship("UserProject", back_populates="user")
-
-class UserProject(Base):
-    __tablename__ = "user_projects"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Foreign Keys
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    
-    # Project metadata
-    project_name = Column(String, nullable=False)
-    
-    # Initial selections (optional)
-    initial_process_id = Column(Integer, ForeignKey("process_technologies.id"), nullable=True)
-    initial_feedstock_id = Column(Integer, ForeignKey("feedstock.id"), nullable=True)
-    initial_country_id = Column(Integer, ForeignKey("country.id"), nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    # Relationships
-    user = relationship("User", back_populates="projects")
-    initial_process = relationship("ProcessTechnology", foreign_keys=[initial_process_id])
-    initial_feedstock = relationship("Feedstock", foreign_keys=[initial_feedstock_id])
-    initial_country = relationship("Country", foreign_keys=[initial_country_id])
-    
-    # Scenarios
-    scenarios = relationship("Scenario", back_populates="project", cascade="all, delete-orphan")
-
-class Scenario(Base):
-    __tablename__ = "scenarios"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id = Column(UUID(as_uuid=True), ForeignKey("user_projects.id"), nullable=False)
-    
-    # Scenario metadata
-    scenario_name = Column(String, nullable=False)
-    scenario_order = Column(Integer, nullable=False, default=0)
-    
-    # Core selections for this scenario
-    process_id = Column(Integer, ForeignKey("process_technologies.id"), nullable=False)
-    feedstock_id = Column(Integer, ForeignKey("feedstock.id"), nullable=False)
-    country_id = Column(Integer, ForeignKey("country.id"), nullable=False)
-    
-    # Change these field names:
-    user_inputs = Column(JSONB, nullable=False)  # Changed from user_inputs_json
-    techno_economics = Column(JSONB)  # Changed from techno_economics_json  
-    financial_analysis = Column(JSONB)  # Changed from financial_analysis_json
-    
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    # Relationships
-    project = relationship("UserProject", back_populates="scenarios")
-    process = relationship("ProcessTechnology", back_populates="scenarios")
-    feedstock = relationship("Feedstock", back_populates="scenarios")
-    country = relationship("Country", back_populates="scenarios")
-
-    __table_args__ = (
-        UniqueConstraint('project_id', 'scenario_order', name='_project_scenario_order_uc'),
     )

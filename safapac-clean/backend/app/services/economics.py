@@ -1,9 +1,9 @@
 # app/services/economics.py
 from app.crud.biofuel_crud import BiofuelCRUD  # <<< New Import from CRUD layer
 from app.services.feature_calculations import Layer1, Layer2, Layer3, Layer4
-from app.schemas.biofuel_schema import UserInputs
 from app.services.data_bridge import DataBridge
 from app.services.financial_analysis import FinancialAnalysis  # <<< Updated import from schemas/
+from app.models.calculation_data import UserInputs
 
 # Note: The BiofuelEconomics class now accepts the CRUD object.
 

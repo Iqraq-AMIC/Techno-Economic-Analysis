@@ -15,7 +15,10 @@ logger = logging.getLogger(__name__)
 
 # CRITICAL: Import the models module here to register all ORM classes with Base.metadata.
 # This must be done before Base.metadata.create_all is called.
-import app.models.biofuel_model 
+import app.models.master_data
+import app.models.unit_mgmt 
+import app.models.user_project 
+
 
 # -----------------------------------------------------------------------------
 # 1. DATABASE ENGINE AND SESSION SETUP

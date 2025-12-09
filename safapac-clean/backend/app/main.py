@@ -10,9 +10,10 @@ from app.core.seeding import initialize_database
 from app.core.database import create_tables
 
 # Routers
-from app.api.endpoints.projects import router as projects_router
-from app.api.endpoints.calculations import router as calculations_router
 from app.api.endpoints.master_data import router as master_data_router
+from app.api.endpoints.auth import router as auth_router
+from app.api.endpoints.projects_endpoints import router as projects_router
+from app.api.endpoints.scenarios_endpoints import router as scenarios_router
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -51,9 +52,10 @@ async def log_requests(request: Request, call_next):
     return response
 
 # Include routers
-app.include_router(projects_router, prefix="/api/v1", tags=["Projects & Scenarios"])
-app.include_router(calculations_router, prefix="/api/v1", tags=["Calculations"])
 app.include_router(master_data_router, prefix="/api/v1", tags=["Master Data"])
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(projects_router, prefix="/api/v1/projects", tags=["Projects"])
+app.include_router(scenarios_router, prefix="/api/v1/projects/{project_id}/scenarios", tags=["Scenarios"])
 
 # Health check endpoint
 @app.get("/")

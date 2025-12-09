@@ -6,16 +6,27 @@ from sqlalchemy import select, and_, desc
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 
-# Import ORM models
-from app.models.biofuel_model import (
-    ProcessTechnology, Feedstock, UnitConversion, UnitGroup, UnitOfMeasure, 
-    Utility, Country, ProcessFeedstockRef, ProcessUtilityConsumptionRef,
-    Product, ProductReferenceBreakdown, UtilityCountryPriceDefaults,
-    DefaultParameterSet, User, UserProject, Scenario
+# --- MODIFIED ORM MODEL IMPORTS ---
+# Import master data models (assuming these are still grouped or separated)
+from app.models.master_data import (
+    ProcessFeedstockRef, ProcessTechnology, Feedstock, ProcessUtilityConsumptionRef, ProductReferenceBreakdown, 
+    Utility, Country, DefaultParameterSet, Product, UtilityCountryPriceDefaults
 )
+# Import reference data models (assuming these are still grouped or separated)
+from app.models.unit_mgmt import (
+    UnitConversion, UnitGroup, UnitOfMeasure
+)
+# Import core application models (User, Project, Scenario)
+from app.models.user_project import User, UserProject, Scenario
 
-# Pydantic Schemas
-from app.schemas.biofuel_schema import ProjectCreate, ProjectUpdate, ScenarioCreate
+
+# Pydantic Schemas - Assuming these have also been moved to dedicated files
+# NOTE: The original CRUD file only used ProjectCreate and ScenarioCreate for type hints,
+# but since the functions use Dict[str, Any], we can keep the CRUD layer cleaner by only
+# importing the necessary models/schemas if they are explicitly used for type hinting 
+# in the public interface. For completeness, we import them from their new assumed location.
+from app.schemas.project_schema import ProjectCreate # Moved ProjectCreate here
+from app.schemas.scenario_schema import ScenarioCreate # Moved ScenarioCreate here
 
 class BiofuelCRUD:
     def __init__(self, db: Session):
@@ -96,7 +107,7 @@ class BiofuelCRUD:
             )
             .options(
                 joinedload(ProcessFeedstockRef.utility_consumptions).joinedload(ProcessUtilityConsumptionRef.utility),
-                joinedload(ProcessFeedstockRef.product_breakdowns).joinedload(ProductReferenceBreakdown.product)            
+                joinedload(ProcessFeedstockRef.product_breakdowns).joinedload(ProductReferenceBreakdown.product)              
             )
         )
         pfr_record = self.db.execute(pfr_stmt).unique().scalar_one_or_none()
@@ -442,9 +453,9 @@ class BiofuelCRUD:
         return self.db.execute(stmt).unique().scalars().all()
     
     def update_scenario_core_parameters(self, scenario_id: UUID, 
-                                      process_name: str, 
-                                      feedstock_name: str, 
-                                      country_name: str) -> bool:
+                                       process_name: str, 
+                                       feedstock_name: str, 
+                                       country_name: str) -> bool:
         """
         Look up IDs for the given names and update the scenario's foreign keys.
         This ensures the SQL columns match the JSON payload.
