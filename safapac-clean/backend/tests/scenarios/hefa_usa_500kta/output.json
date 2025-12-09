@@ -112,43 +112,43 @@
   "carbon_metrics": {
     "product_carbon_intensity": {
       "JET": {
-        "value": 614.523,
+        "value": 594.83,
         "unit": "kg CO2e/ton"
       },
       "DIESEL": {
-        "value": 144.029,
+        "value": 139.41,
         "unit": "kg CO2e/ton"
       },
       "Naphtha": {
-        "value": 201.64,
+        "value": 195.18,
         "unit": "kg CO2e/ton"
       }
     },
     "product_carbon_conversion_efficiency": {
       "JET": {
-        "value": 57.67,
+        "value": 57.44,
         "unit": "percent"
       },
       "DIESEL": {
-        "value": 13.57,
+        "value": 13.51,
         "unit": "percent"
       },
       "Naphtha": {
-        "value": 18.77,
+        "value": 18.69,
         "unit": "percent"
       }
     },
     "product_co2_emissions": {
       "JET": {
-        "value": 196647.32,
+        "value": 190344,
         "unit": "tons/year"
       },
       "DIESEL": {
-        "value": 10802.16,
+        "value": 10456,
         "unit": "tons/year"
       },
       "Naphtha": {
-        "value": 21172.23,
+        "value": 20494,
         "unit": "tons/year"
       }
     }
@@ -179,12 +179,12 @@
   },
   "financial_outputs": {
     "irr": {
-      "value": 1.1971498252216972,
+      "value": 1.20,
       "unit": "ratio",
       "description": "Internal Rate of Return"
     },
     "npv": {
-      "value": 3072929501.5571237,
+      "value": 3532017806,
       "unit": "USD",
       "description": "Net Present Value"
     },

@@ -31,3 +31,6 @@ data/scenarios.json.backup
 
 # Logs
 *.log
+
+# Test Results
+tests/results/

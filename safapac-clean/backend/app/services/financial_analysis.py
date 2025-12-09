@@ -40,8 +40,9 @@ class FinancialAnalysis:
         - Cash flow schedule table
     """
 
-    def __init__(self, discount_rate: float = 0.07):
+    def __init__(self, discount_rate: float = 0.07, tax_rate: float = 0.28):
         self.discount_rate = discount_rate
+        self.tax_rate = tax_rate
 
     def generate_cash_flow_schedule(self, tci_usd: float, annual_revenue: float,
                                      annual_manufacturing_cost: float,
@@ -66,14 +67,30 @@ class FinancialAnalysis:
 
         # === YEARS 1-N (OPERATIONS) ===
         # Capital expenditure = 0, Cash flow = Revenue - Manufacturing Cost
+        annual_depreciation = tci_usd / project_lifetime
+
         for year in range(1, project_lifetime + 1):
-            cash_flow = annual_revenue - annual_manufacturing_cost
+            gross_profit = annual_revenue - annual_manufacturing_cost
+            
+            # Taxable Income = Revenue - OPEX - Depreciation
+            taxable_income = max(0, gross_profit - annual_depreciation)
+            
+            income_tax = taxable_income * self.tax_rate
+            
+            # Net Income = Gross Profit - Tax
+            net_income = gross_profit - income_tax
+            
+            # Free Cash Flow = Net Income + Depreciation (add back non-cash charge)
+            # OR simply: Cash Flow = Gross Profit - Tax
+            # (In this simple model without loan principal repayment, these are equivalent)
+            cash_flow = gross_profit - income_tax
 
             cash_flows.append({
                 'year': year,
                 'capital_investment': 0,
                 'revenue': annual_revenue,
                 'manufacturing_cost': annual_manufacturing_cost,
+                'tax': income_tax, # Useful to see in table
                 'after_tax_cash_flow': cash_flow
             })
 

@@ -230,8 +230,12 @@ class Layer2:
         products_input = inputs.get("products") or []
 
         # Get reference data
-        conversion_ci_map = ref.get("conversion_process_ci", {})
-        conversion_process_ci = conversion_ci_map.get(process_type, 0.0)
+        conversion_ci_raw = ref.get("conversion_process_ci", 0.0)
+        # Handle both dict (legacy) and direct value formats
+        if isinstance(conversion_ci_raw, dict):
+            conversion_process_ci = conversion_ci_raw.get(process_type, 0.0)
+        else:
+            conversion_process_ci = conversion_ci_raw
 
         # Get Layer 1 results
         tci = layer1_results["total_capital_investment"]

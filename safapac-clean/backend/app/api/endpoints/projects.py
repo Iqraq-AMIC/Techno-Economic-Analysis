@@ -86,12 +86,12 @@ def get_default_user_inputs(process_id: int, feedstock_id: int, country_id: int)
                     "value": 930.0,
                     "unit_id": 7
                     },
-                    "carbon_content": 0.77,
+                    "carbon_content": 0.78,
                     "carbon_intensity": {
-                    "value": 20.0,
+                    "value": 46.526,
                     "unit_id": 11
                     },
-                    "energy_content": 37.0,
+                    "energy_content": 0.0,
                     "yield_percent": 121.0
                 }
 

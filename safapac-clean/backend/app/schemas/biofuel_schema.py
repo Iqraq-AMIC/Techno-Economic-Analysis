@@ -119,6 +119,7 @@ class UserInputs:
         flat["plant_total_liquid_fuel_capacity"] = self.conversion_plant.plant_capacity.value
         flat["annual_load_hours"] = self.conversion_plant.annual_load_hours
         flat["ci_process_default"] = self.conversion_plant.ci_process_default
+        flat["process_type"] = self.process_technology
         
         # Economic Parameters
         flat["discount_rate"] = self.economic_parameters.discount_rate_percent / 100.0

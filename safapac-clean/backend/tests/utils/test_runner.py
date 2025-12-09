@@ -4,6 +4,7 @@ Test runner utility for executing calculation tests and generating results.
 
 import json
 import sys
+import numpy as np
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -15,8 +16,21 @@ sys.path.insert(0, str(backend_path))
 from app.core.database import SessionLocal
 from app.crud.biofuel_crud import BiofuelCRUD
 from app.services.feature_calculations import Layer1, Layer2, Layer3, Layer4
+from app.services.financial_analysis import FinancialAnalysis
 
 from .test_colors import Colors
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles numpy types"""
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.floating)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (np.bool_, bool)):
+            return bool(obj)
+        return super().default(obj)
 
 
 class TestScenario:
@@ -106,9 +120,9 @@ class TestRunner:
 
             ref_data["mass_fractions"] = mass_fractions_dict
 
-        # Get feedstock data from ref_data
-        feedstock_carbon_content = ref_data.get("feedstock_carbon_content", 0.75)
-        feedstock_ci = ref_data.get("feedstock_ci", 20.0)
+        # Get feedstock data from ref_data, but allow input.json to override
+        feedstock_carbon_content = inputs["feedstock_data"].get("carbon_content", ref_data.get("feedstock_carbon_content", 0.75))
+        feedstock_ci = inputs["feedstock_data"]["carbon_intensity"]["value"]  # Use value from input.json
 
         # Build products list
         products = []
@@ -137,6 +151,10 @@ class TestRunner:
         if inputs["utilities"][1]["yield"].get("unit") == "percent":
             electricity_yield = electricity_yield / 100
 
+        # Get utility carbon intensities from input.json
+        hydrogen_ci = inputs["utilities"][0]["carbon_intensity"]["value"]
+        electricity_ci = inputs["utilities"][1]["carbon_intensity"]["value"]
+
         calc_inputs = {
             "plant_total_liquid_fuel_capacity": inputs["conversion_plant"]["plant_capacity"]["value"],
             "feedstock_carbon_intensity": feedstock_ci,
@@ -145,8 +163,10 @@ class TestRunner:
             "feedstock_yield": inputs["feedstock_data"]["yield"]["value"],
             "hydrogen_price": inputs["utilities"][0]["price"]["value"],
             "hydrogen_yield": hydrogen_yield,
+            "hydrogen_carbon_intensity": hydrogen_ci,
             "electricity_rate": inputs["utilities"][1]["price"]["value"] / 1000,
             "electricity_yield": electricity_yield,
+            "electricity_carbon_intensity": electricity_ci,
             "process_type": inputs["process_technology"],
             "indirect_opex_tci_ratio": inputs["economic_parameters"]["indirect_opex_tci_ratio"],
             "products": products
@@ -172,6 +192,25 @@ class TestRunner:
         discount_rate = inputs["economic_parameters"]["discount_rate"]
         plant_lifetime = inputs["economic_parameters"]["plant_lifetime"]
         layer4_results = layer4.compute(layer2_results, layer3_results, layer1_results, discount_rate, plant_lifetime)
+
+        # Run financial analysis
+        financial_analyzer = FinancialAnalysis(discount_rate=discount_rate)
+        tci_usd = layer1_results["total_capital_investment"] * 1_000_000  # Convert MUSD to USD
+        annual_revenue = layer2_results["revenue"]
+        annual_manufacturing_cost = layer4_results["total_opex"]
+
+        financial_results = financial_analyzer.calculate_financial_metrics(
+            tci_usd=tci_usd,
+            annual_revenue=annual_revenue,
+            annual_manufacturing_cost=annual_manufacturing_cost,
+            project_lifetime=plant_lifetime
+        )
+
+        # Add financial metrics to layer4 results
+        layer4_results["npv"] = financial_results["npv"]
+        layer4_results["irr"] = financial_results["irr"]
+        layer4_results["payback_period"] = financial_results["payback_period"]
+        layer4_results["cash_flow_schedule"] = financial_results["cash_flow_schedule"]
 
         return {
             "layer1": layer1_results,
@@ -363,6 +402,33 @@ class TestRunner:
                     "tolerance": 0.02
                 })
 
+        # === FINANCIAL OUTPUTS SECTION ===
+
+        if "financial_outputs" in expected:
+            tests.append({
+                "name": "NPV",
+                "actual": calc_results["layer4"]["npv"],
+                "expected": expected["financial_outputs"]["npv"]["value"],
+                "unit": "USD",
+                "tolerance": 0.02
+            })
+
+            tests.append({
+                "name": "IRR",
+                "actual": calc_results["layer4"]["irr"],
+                "expected": expected["financial_outputs"]["irr"]["value"],
+                "unit": "ratio",
+                "tolerance": 0.02
+            })
+
+            tests.append({
+                "name": "Payback Period",
+                "actual": calc_results["layer4"]["payback_period"],
+                "expected": expected["financial_outputs"]["payback_period"]["value"],
+                "unit": "years",
+                "tolerance": 0.02
+            })
+
         # === RUN ALL TESTS ===
 
         comparison_results = []
@@ -426,7 +492,10 @@ class TestRunner:
                 "revenue": calc_results["layer2"]["revenue"],
                 "carbon_intensity": calc_results["layer4"]["carbon_intensity"],
                 "total_co2_emissions": calc_results["layer4"]["total_co2_emissions"],
-                "carbon_conversion_efficiency": calc_results["layer1"]["carbon_conversion_efficiency_percent"]
+                "carbon_conversion_efficiency": calc_results["layer1"]["carbon_conversion_efficiency_percent"],
+                "npv": calc_results["layer4"]["npv"],
+                "irr": calc_results["layer4"]["irr"],
+                "payback_period": calc_results["layer4"]["payback_period"]
             }
 
             # Compare results
@@ -459,7 +528,7 @@ class TestRunner:
         output_file = output_dir / filename
 
         with open(output_file, 'w') as f:
-            json.dump(self.results, f, indent=2)
+            json.dump(self.results, f, indent=2, cls=NumpyEncoder)
 
         return output_file
 
@@ -532,3 +601,6 @@ class TestRunner:
         print(f"  Carbon Intensity:   {calc['carbon_intensity']:.4f} gCO2e/MJ")
         print(f"  Total CO2 Emissions: {calc['total_co2_emissions']:,.0f} gCO2e/year")
         print(f"  Carbon Conv. Eff.:  {calc['carbon_conversion_efficiency']:.2f}%")
+        print(f"  NPV:                ${calc['npv']:,.0f}")
+        print(f"  IRR:                {calc['irr']:.2f} ({calc['irr']*100:.0f}%)")
+        print(f"  Payback Period:     {calc['payback_period']:.0f} years")
