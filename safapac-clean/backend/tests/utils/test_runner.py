@@ -52,7 +52,18 @@ class TestScenario:
 
     def get_identifier(self):
         """Get unique identifier for this scenario"""
-        return f"{self.inputs['process_technology']}_{self.inputs['country']}_{self.inputs['conversion_plant']['plant_capacity']['value']}KTPA"
+        # CHANGED: Use IDs instead of names, as the input JSON uses IDs now
+        # Fallback to 'Unknown' if keys are missing to prevent crashes during debugging
+        p_id = self.inputs.get('process_id', 'UnknownProcess')
+        c_id = self.inputs.get('country_id', 'UnknownCountry')
+        
+        # Access nested capacity safely
+        try:
+            capacity = self.inputs['conversion_plant']['plant_capacity']['value']
+        except (KeyError, TypeError):
+            capacity = '0'
+
+        return f"ProcessID{p_id}_CountryID{c_id}_{capacity}KTPA"
 
 
 class TestRunner:
@@ -90,9 +101,9 @@ class TestRunner:
     def get_reference_data(self):
         """Retrieve reference data from database"""
         try:
-            process_tech = self.scenario.inputs["process_technology"]
-            feedstock = self.scenario.inputs["feedstock"]
-            country = self.scenario.inputs["country"]
+            process_tech = self.scenario.inputs["process_id"]
+            feedstock = self.scenario.inputs["feedstock_id"]
+            country = self.scenario.inputs["country_id"]
 
             ref_data = self.crud.get_project_reference_data(process_tech, feedstock, country)
 
@@ -122,7 +133,7 @@ class TestRunner:
 
         # Get feedstock data from ref_data, but allow input.json to override
         feedstock_carbon_content = inputs["feedstock_data"].get("carbon_content", ref_data.get("feedstock_carbon_content", 0.75))
-        feedstock_ci = inputs["feedstock_data"]["carbon_intensity"]["value"]  # Use value from input.json
+        feedstock_ci = inputs["feedstock_data"]["carbon_intensity"]["value"]
 
         # Build products list
         products = []
@@ -142,7 +153,7 @@ class TestRunner:
                 "product_price_sensitivity_ci": 0.0
             })
 
-        # Handle utility yield conversions (convert percentage to decimal if needed)
+        # Handle utility yield conversions
         hydrogen_yield = inputs["utilities"][0]["yield"]["value"]
         if inputs["utilities"][0]["yield"].get("unit") == "percent":
             hydrogen_yield = hydrogen_yield / 100
@@ -151,7 +162,7 @@ class TestRunner:
         if inputs["utilities"][1]["yield"].get("unit") == "percent":
             electricity_yield = electricity_yield / 100
 
-        # Get utility carbon intensities from input.json
+        # Get utility carbon intensities
         hydrogen_ci = inputs["utilities"][0]["carbon_intensity"]["value"]
         electricity_ci = inputs["utilities"][1]["carbon_intensity"]["value"]
 
@@ -167,7 +178,11 @@ class TestRunner:
             "electricity_rate": inputs["utilities"][1]["price"]["value"] / 1000,
             "electricity_yield": electricity_yield,
             "electricity_carbon_intensity": electricity_ci,
-            "process_type": inputs["process_technology"],
+            
+            # --- CHANGED THIS LINE ---
+            # Use ref_data (from DB) to get the name, because inputs (from JSON) only has the ID
+            "process_type": ref_data["process_technology"], 
+            
             "indirect_opex_tci_ratio": inputs["economic_parameters"]["indirect_opex_tci_ratio"],
             "products": products
         }
@@ -225,12 +240,12 @@ class TestRunner:
         tests = []
 
         # === PROCESS OUTPUTS SECTION ===
-
+        feedstock_name = self.scenario.inputs["feedstock_data"]["name"]
         # Test feedstock consumption
         tests.append({
             "name": "Feedstock Consumption",
             "actual": calc_results["layer1"]["feedstock_consumption"],
-            "expected": expected["process_outputs"]["feedstock_consumption"][self.scenario.inputs["feedstock"]]["value"],
+            "expected": expected["process_outputs"]["feedstock_consumption"][feedstock_name]["value"],            
             "unit": "tons/year",
             "tolerance": 0.01
         })

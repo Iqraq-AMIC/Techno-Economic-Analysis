@@ -93,9 +93,9 @@ class ConversionPlant:
 @dataclass(frozen=True)
 class UserInputs:
     # Core Selections
-    process_technology: str
-    feedstock: str
-    country: str 
+    process_id: int
+    feedstock_id: int
+    country_id: int 
     
     # Input Data Groups
     conversion_plant: ConversionPlant
@@ -110,6 +110,11 @@ class UserInputs:
         expected by the calculation service layers.
         """
         flat = {}
+
+        # Pass IDs to flat dict in case calculation layers need them
+        flat["process_id"] = self.process_id
+        flat["feedstock_id"] = self.feedstock_id
+        flat["country_id"] = self.country_id
 
         # 1. Conversion Plant
         # Maps specific input names to what the calculation engine expects
@@ -134,18 +139,29 @@ class UserInputs:
             flat["feedstock_carbon_content"] = fs.carbon_content
             flat["feedstock_carbon_intensity"] = fs.carbon_intensity.value
             flat["feedstock_energy_content"] = fs.energy_content
-            # Handle yield (ensure it matches calc expectation, typically ratio vs percent)
-            flat["feedstock_yield"] = fs.yield_percent 
+            # Handle yield (convert percent to ratio if > 1.0)
+            feedstock_yield = fs.yield_percent
+            if feedstock_yield > 1.0:
+                feedstock_yield = feedstock_yield / 100.0
+            flat["feedstock_yield"] = feedstock_yield 
 
         # 4. Utility Data (Map based on name matching)
         for util in self.utility_data:
             name_lower = util.name.lower()
+            # Convert utility yield from percent to ratio if > 1.0
+            util_yield = util.yield_percent
+            if util_yield > 1.0:
+                util_yield = util_yield / 100.0
+
             if "hydrogen" in name_lower:
                 flat["hydrogen_price"] = util.price.value
                 flat["hydrogen_carbon_intensity"] = util.carbon_intensity.value
+                flat["hydrogen_yield"] = util_yield
             elif "electricity" in name_lower:
-                flat["electricity_rate"] = util.price.value
+                # Convert electricity price from USD/MWh to USD/kWh
+                flat["electricity_rate"] = util.price.value / 1000.0
                 flat["electricity_carbon_intensity"] = util.carbon_intensity.value
+                flat["electricity_yield"] = util_yield
 
         # 5. Product Data
         products_list = []

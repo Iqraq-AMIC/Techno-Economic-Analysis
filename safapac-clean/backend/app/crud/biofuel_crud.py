@@ -65,7 +65,7 @@ class BiofuelCRUD:
     # Core Reference Data Read Operations
     # ------------------------------------------------------------
 
-    def get_project_reference_data(self, process_name: str, feedstock_name: str, country_name: str) -> Optional[Dict[str, Any]]:
+    def get_project_reference_data(self, process_id: int, feedstock_id: int, country_id: int) -> Optional[Dict[str, Any]]:
         """
         Fetches all static reference data (technical, economic, utility, product)
         required to run the techno-economic calculation for a P-F-C combination.
@@ -80,9 +80,9 @@ class BiofuelCRUD:
             .join(Country)
             .where(
                 and_(
-                    ProcessTechnology.name == process_name,
-                    Feedstock.name == feedstock_name,
-                    Country.name == country_name
+                    ProcessTechnology.id == process_id, 
+                    Feedstock.id == feedstock_id,       
+                    Country.id == country_id
                 )
             )
             .options(
@@ -138,7 +138,7 @@ class BiofuelCRUD:
             "p_steps": default_params_record.p_steps, # Changed from "P_steps"
             "nnp_steps": default_params_record.nnp_steps, # Changed from "Nnp_steps"
             
-            "process_type": process_name.upper(),
+            "process_type": process_id,
             "conversion_process_ci": default_params_record.ci_process_default_gco2_mj,
             "process_ratio": default_params_record.indirect_opex_tci_ratio,
             
@@ -197,9 +197,9 @@ class BiofuelCRUD:
         ]
 
         # Final cleanup on backward compatibility keys (Should be removed later)
-        data["process_type"] = process_name.upper()
-        data["conversion_process_ci"] = {process_name.upper(): default_params_record.ci_process_default_gco2_mj}
-        data["process_ratio"] = {process_name.upper(): default_params_record.indirect_opex_tci_ratio * 100}
+        data["process_type"] = process_id
+        # NOTE: conversion_process_ci is already set on line 142 as a scalar value
+        data["process_ratio"] = {process_id: default_params_record.indirect_opex_tci_ratio * 100}
 
         return data
 

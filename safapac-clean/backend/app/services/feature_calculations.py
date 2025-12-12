@@ -223,7 +223,7 @@ class Layer2:
         """Execute all Layer 2 calculations according to flowchart."""
 
         # === GET INPUTS ===
-        process_type = (inputs.get("process_type") or "").upper()
+        process_type = (inputs.get("process_type") or "")
         feedstock_price = inputs.get("feedstock_price", 0.0)
         hydrogen_price = inputs.get("hydrogen_price", 0.0)
         electricity_rate = inputs.get("electricity_rate", 0.0)

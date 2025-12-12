@@ -56,9 +56,10 @@ class UtilityDataSchema(CamelCaseBaseModel):
 
 class UserInputsSchema(CamelCaseBaseModel):
     """The main schema for all dynamic scenario inputs."""
-    process_technology: Optional[str] = None
-    feedstock: Optional[str] = None
-    country: Optional[str] = None
+    # CHANGED: These are now Integer IDs
+    process_id: Optional[int] = None
+    feedstock_id: Optional[int] = None
+    country_id: Optional[int] = None
     
     conversion_plant: ConversionPlantSchema 
     economic_parameters: EconomicParametersSchema
@@ -106,9 +107,10 @@ class ScenarioDetailResponse(ScenarioResponse):
 # ==================== CALCULATION SCHEMAS (API specific) ====================
 
 class QuickCalculationRequest(CamelCaseBaseModel):
-    process_technology: str
-    feedstock: str
-    country: str
+    # CHANGED: Top level fields now match the ID pattern
+    process_id: int
+    feedstock_id: int
+    country_id: int
     inputs: UserInputsSchema
 
 class CalculationResponse(CamelCaseBaseModel):

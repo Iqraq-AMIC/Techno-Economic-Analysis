@@ -24,16 +24,16 @@ class BiofuelEconomics:
         self.layer3 = Layer3()
         self.layer4 = Layer4()
 
-    def run(self, process_technology: str, feedstock: str, country: str, product_key: str = "jet") -> dict:
+    def run(self, process_id: int, feedstock_id: int, country_id: int, product_key: str = "jet") -> dict:
         """
         Compute full techno-economics for a selected process technology + feedstock.
         """
 
         # Fetch reference data using the CRUD object, which talks to the SQLAlchemy session
-        row = self.crud.get_project_reference_data(process_technology, feedstock, country)
+        row = self.crud.get_project_reference_data(process_id, feedstock_id, country_id)
         
         if row is None:
-            raise ValueError(f"No reference data found for process '{process_technology}' with feedstock '{feedstock}'")
+            raise ValueError(f"No reference data found for process '{process_id}' with feedstock '{feedstock_id}'")
         
         # DEBUG: Check the structure of row before conversion
         print("DEBUG: Raw reference data structure:")
@@ -46,8 +46,8 @@ class BiofuelEconomics:
         ref = self.data_bridge.db_to_calc_format(row)
         
         # Add process key for calculations
-        ref["process_key"] = process_technology.upper()
-        ref["feedstock_key"] = feedstock
+        ref["process_key"] = process_id
+        ref["feedstock_key"] = feedstock_id
 
         print("DEBUG: After conversion:")
         print(f"  - Mass fractions type: {type(ref.get('mass_fractions'))}")
@@ -56,6 +56,8 @@ class BiofuelEconomics:
         # DEBUG: Check what keys we have
         print("DEBUG: ref keys:", list(ref.keys()))
         print("DEBUG: ref['tci_ref']:", ref.get('tci_ref', 'MISSING'))
+        print("DEBUG: ref['conversion_process_ci']:", ref.get('conversion_process_ci', 'MISSING'))
+        print("DEBUG: ref['ci_process_default']:", ref.get('ci_process_default', 'MISSING'))
         print("DEBUG: inputs_flat keys:", list(self.inputs_flat.keys()))
         print("DEBUG: inputs_flat products:", self.inputs_flat.get('products', 'MISSING'))
         print("DEBUG: ref mass_fractions type:", type(ref.get('mass_fractions')))
@@ -166,8 +168,8 @@ class BiofuelEconomics:
         # Restructure output
         final_result = {
             "techno_economics": {
-                "process_technology": process_technology,
-                "feedstock": feedstock,
+                "process_technology": process_id,
+                "feedstock": feedstock_id,
                 "LCOP": layer4_results.get("lcop", 0),
                 "total_capital_investment": layer1_results.get("total_capital_investment", 0),
                 "production": layer1_results.get("production", 0),
@@ -207,9 +209,9 @@ class BiofuelEconomics:
                 "cashFlowTable": cash_flow_table # <--- Passed safely here
             },
             "resolved_inputs": {
-                "process_technology": process_technology,
-                "feedstock": feedstock,
-                "country": country,
+                "process_technology": process_id,
+                "feedstock": feedstock_id,
+                "country": country_id,
                 "conversion_plant": self.inputs_flat,
             }
         }

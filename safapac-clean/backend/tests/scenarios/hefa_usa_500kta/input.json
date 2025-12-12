@@ -1,8 +1,8 @@
 {
   "description": "HEFA test case inputs extracted from 'Wave 1 - specs for miniTEA_with HEFA and PTL examples' Excel file",
-  "process_technology": "HEFA",
-  "feedstock": "UCO",
-  "country": "USA",
+  "process_id": 1,
+  "feedstock_id": 1,
+  "country_id": 1,
   "conversion_plant": {
     "plant_capacity": {
       "value": 500,
