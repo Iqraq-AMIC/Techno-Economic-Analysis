@@ -72,6 +72,7 @@ class Layer1:
         Plant capacity in tonnes/year, yield in kg/kg -> result in kg/year
         """
         return plant_capacity * 1000 * yield_h2  # Convert tonnes to kg
+        # return plant_capacity * yield_h2  # For ton/year
 
     # --- (9) Electricity Consumption ---
     def electricity_consumption(self, plant_capacity, yield_kwh):

@@ -360,6 +360,14 @@ def get_project(project_id: str):
         logger.error(f"Error getting project: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# newly added
+@app.delete("/projects/{project_id}")
+async def delete_project_endpoint(project_id: str):
+    """Delete a project and all its scenarios"""
+    success = mock_db.delete_project(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"message": "Project deleted successfully"}
 
 # ====================== SCENARIO ENDPOINTS ======================
 

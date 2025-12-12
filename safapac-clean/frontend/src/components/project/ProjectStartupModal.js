@@ -21,13 +21,13 @@ import NewProjectPrompt from "./NewProjectPrompt";
 
 const ProjectStartupModal = ({ isOpen, onProjectSelected }) => {
   const { currentUser } = useAuth();
-  const { loadProject } = useProject();
-
+  const { createProject, loadProject, deleteProject } = useProject();
   const [showNewProjectPrompt, setShowNewProjectPrompt] = useState(false);
   const [existingProjects, setExistingProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
 
   // Fetch user's existing projects when modal opens
   useEffect(() => {
@@ -86,6 +86,34 @@ const ProjectStartupModal = ({ isOpen, onProjectSelected }) => {
     setShowNewProjectPrompt(false);
     onProjectSelected(project, scenario);
   };
+
+  const handleDeleteProject = async (e, projectId, projectName) => {
+  e.stopPropagation(); // Prevent triggering parent click handlers
+
+  const confirmDelete = window.confirm(
+    `Are you sure you want to delete project "${projectName}"? This will delete all scenarios in this project. This action cannot be undone.`
+  );
+
+  if (!confirmDelete) return;
+
+  setLoading(true);
+  setError(null);
+
+  const result = await deleteProject(projectId);
+
+  if (result.success) {
+    // Refresh projects list
+    fetchExistingProjects();
+    // Clear selection if deleted project was selected
+    if (selectedProjectId === projectId) {
+      setSelectedProjectId("");
+    }
+  } else {
+    setError(result.error || "Failed to delete project");
+  }
+
+  setLoading(false);
+};
 
   const hasProjects = existingProjects.length > 0;
 
@@ -152,32 +180,49 @@ const ProjectStartupModal = ({ isOpen, onProjectSelected }) => {
                 Or load an existing project:
               </h6>
               <FormGroup>
-                <FormSelect
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  disabled={loading}
-                  style={{ marginBottom: "1rem" }}
-                >
-                  <option value="">Select a project...</option>
-                  {existingProjects.map((project) => {
-                    const timestamp = project.created_at || project.updated_at;
-                    const formattedDate = timestamp
-                      ? new Date(timestamp).toLocaleString('en-US', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        }).replace(',', '')
-                      : '';
-                    return (
-                      <option key={project.project_id} value={project.project_id}>
-                        {project.project_name} - {formattedDate} ({project.scenario_count} scenario{project.scenario_count !== 1 ? "s" : ""})
-                      </option>
-                    );
-                  })}
-                </FormSelect>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "start" }}>
+                  <FormSelect
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    disabled={loading}
+                    style={{ marginBottom: "1rem" }}
+                  >
+                    <option value="">Select a project...</option>
+                    {existingProjects.map((project) => {
+                      const timestamp = project.created_at || project.updated_at;
+                      const formattedDate = timestamp
+                        ? new Date(timestamp).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          }).replace(',', '')
+                        : '';
+                      return (
+                        <option key={project.project_id} value={project.project_id}>
+                          {project.project_name} - {formattedDate} ({project.scenario_count} scenario{project.scenario_count !== 1 ? "s" : ""})
+                        </option>
+                      );
+                    })}
+                  </FormSelect>
+                  {selectedProjectId && (
+                    <Button
+                    theme="danger" size="sm"
+                    onClick={(e) => {
+                      const project = existingProjects.find(p => p.project_id === selectedProjectId);
+                      if (project) {
+                        handleDeleteProject(e, project.project_id, project.project_name);  // ✅ Pass project_name
+                      }
+                    }}>
+                      <i className="material-icons">delete</i>
+                    </Button>
+                    // <Button theme="danger" size="sm" onClick={handleDeleteProject}>
+                    //   <i className="material-icons">delete</i>
+                    // </Button>
+                  )}
+                </div>
                 <Button
                   theme="secondary"
                   onClick={handleLoadSelectedProject}
