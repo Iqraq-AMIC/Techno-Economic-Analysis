@@ -1,12 +1,7 @@
 """
-Mock Database Service for SAFAPAC - IMPROVED VERSION
+Mock Database Service for SAFAPAC
 Uses JSON files for persistence during development
 Will be replaced with SQLite/PostgreSQL in production
-
-IMPROVEMENTS:
-- Atomic writes to prevent file corruption from crashes
-- File locking to prevent race conditions from concurrent requests
-- Automatic backup and recovery
 """
 
 import json
@@ -15,13 +10,10 @@ from datetime import datetime
 from typing import List, Dict, Optional
 from pathlib import Path
 import uuid
-import tempfile
-import shutil
-import sys
 
 
 class MockDatabase:
-    """Simple JSON-based database for projects and scenarios with atomic writes and file locking"""
+    """Simple JSON-based database for projects and scenarios"""
 
     def __init__(self, data_dir: str = "data"):
         self.data_dir = Path(data_dir)
@@ -53,98 +45,15 @@ class MockDatabase:
         if not self.scenarios_file.exists():
             self._save_json(self.scenarios_file, {})
 
-    def _acquire_lock(self, file_path: Path):
-        """Acquire file lock (platform-specific)"""
-        lock_file = file_path.with_suffix('.lock')
-        lock_fd = open(lock_file, 'w')
-
-        if sys.platform == 'win32':
-            # Windows file locking
-            import msvcrt
-            msvcrt.locking(lock_fd.fileno(), msvcrt.LK_LOCK, 1)
-        else:
-            # Unix/Linux file locking
-            import fcntl
-            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
-
-        return lock_fd
-
-    def _release_lock(self, lock_fd):
-        """Release file lock"""
-        if sys.platform == 'win32':
-            import msvcrt
-            msvcrt.locking(lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
-
-        lock_fd.close()
-
     def _load_json(self, file_path: Path) -> dict:
-        """Load JSON file with error recovery"""
-        backup_path = file_path.with_suffix('.json.bak')
-
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError) as e:
-            # Try to recover from backup
-            if backup_path.exists():
-                print(f"Warning: {file_path} corrupted, recovering from backup...")
-                try:
-                    with open(backup_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    # Restore from backup
-                    shutil.copy2(backup_path, file_path)
-                    return data
-                except json.JSONDecodeError:
-                    print(f"Error: Both {file_path} and backup are corrupted!")
-                    raise
-            else:
-                print(f"Error: {file_path} corrupted and no backup available!")
-                raise
+        """Load JSON file"""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
 
     def _save_json(self, file_path: Path, data: dict):
-        """Save JSON file atomically with file locking and backup"""
-        lock_fd = None
-        temp_path = None
-
-        try:
-            # Acquire exclusive lock
-            lock_fd = self._acquire_lock(file_path)
-
-            # Create backup if file exists
-            backup_path = file_path.with_suffix('.json.bak')
-            if file_path.exists():
-                shutil.copy2(file_path, backup_path)
-
-            # Write to temporary file first (atomic write)
-            temp_fd, temp_path = tempfile.mkstemp(
-                dir=file_path.parent,
-                prefix=f'.{file_path.stem}_',
-                suffix='.tmp'
-            )
-
-            with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
-            # Atomic rename (replaces old file)
-            # On Windows, need to remove destination first
-            if sys.platform == 'win32' and file_path.exists():
-                os.remove(file_path)
-
-            shutil.move(temp_path, file_path)
-            temp_path = None  # Successfully moved, no cleanup needed
-
-        except Exception as e:
-            # Clean up temp file if write failed
-            if temp_path and os.path.exists(temp_path):
-                os.unlink(temp_path)
-            raise e
-        finally:
-            # Always release lock
-            if lock_fd:
-                self._release_lock(lock_fd)
+        """Save JSON file"""
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
     # ==================== USER OPERATIONS ====================
 

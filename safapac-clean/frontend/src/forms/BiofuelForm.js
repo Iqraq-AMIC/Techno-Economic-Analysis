@@ -43,6 +43,65 @@ const formatNumber = (num, decimals = 0) => {
   });
 };
 
+// newly added
+// Editable number input component that allows free-form typing
+const EditableNumberInput = ({ value, decimals = 2, onChange, id, colors, style, size = "sm", className = "" }) => {
+  const [localValue, setLocalValue] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
+
+  // Update local value when external value changes (but only when not focused)
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(formatNumber(value, decimals));
+    }
+  }, [value, decimals, isFocused]);
+
+  const handleChange = (e) => {
+    setLocalValue(e.target.value);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const raw = localValue.replace(/,/g, "");
+    const num = Number(raw);
+    if (!Number.isNaN(num) && Number.isFinite(num)) {
+      onChange([num]);
+    } else {
+      // Reset to the original formatted value if invalid or empty
+      setLocalValue(formatNumber(value, decimals));
+    }
+  };
+
+  const handleFocus = (e) => {
+    setIsFocused(true);
+    // Remove formatting when focused to allow easier editing
+    const raw = localValue.replace(/,/g, "");
+    setLocalValue(raw);
+    e.target.select(); // Select all text for easier replacement
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.target.blur(); // Trigger blur to save the value
+    }
+  };
+
+  return (
+    <FormInput
+      id={id}
+      type="text"
+      size={size}
+      className={className}
+      style={style}
+      value={localValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onFocus={handleFocus}
+      onKeyDown={handleKeyDown}
+    />
+  );
+};
+
 const UNIT_OPTIONS = {
   plant_capacity_unit: [
     { value: "t/yr", label: "tons/yr" },
@@ -66,8 +125,8 @@ const UNIT_OPTIONS = {
     { value: "USD/MWh", label: "USD/MWh" },
   ],
   feedstock_ci_unit: [
-    { value: "gCO2/kg", label: "gCO2/kg" },
-    { value: "kgCO2/t", label: "kgCO2/ton" },
+    { value: "gCO\u2082/kg", label: "gCO\u2082/kg" },
+    { value: "kgCO\u2082/t", label: "kgCO\u2082/ton" },
   ],
   feedstock_energy_unit: [
     { value: "MJ/kg", label: "MJ/kg" },
@@ -84,12 +143,12 @@ const UNIT_OPTIONS = {
     { value: "MWh/kg", label: "MWh/kg fuel" },
   ],
   hydrogen_ci_unit: [
-    { value: "gCO2/kg", label: "gCO2/kg" },
-    { value: "kgCO2/t", label: "kgCO2/ton" },
+    { value: "gCO\u2082/kg", label: "gCO\u2082/kg" },
+    { value: "kgCO\u2082/t", label: "kgCO\u2082/ton" },
   ],
   electricity_ci_unit: [
-    { value: "gCO2/kWh", label: "gCO2/kWh" },
-    { value: "kgCO2/MWh", label: "kgCO2/MWh" },
+    { value: "gCO\u2082/kWh", label: "gCO\u2082/kWh" },
+    { value: "kgCO\u2082/MWh", label: "kgCO\u2082/MWh" },
   ],
   tci_ref_unit: [
     { value: "USD", label: "USD" },
@@ -109,8 +168,8 @@ const PRODUCT_UNIT_OPTIONS = {
     { value: "USD/kt", label: "USD/kilo-ton" },
   ],
   priceSensitivityUnit: [
-    { value: "USD/gCO2", label: "USD/gCO2" },
-    { value: "USD/kgCO2", label: "USD/kgCO2" },
+    { value: "USD/gCO\u2082", label: "USD/gCO\u2082" },
+    { value: "USD/kgCO\u2082", label: "USD/kgCO\u2082" },
   ],
   energyUnit: [
     { value: "MJ/kg", label: "MJ/kg" },
@@ -242,14 +301,38 @@ const BiofuelForm = ({
     };
   }, [API_URL, selectedProcess]);
 
-  const totalMassFraction = useMemo(
-    () =>
-      (inputs.products || []).reduce(
-        (acc, product) => acc + (Number(product.massFraction) || 0),
-        0
-      ),
-    [inputs.products]
-  );
+  // const totalMassFraction = useMemo(
+  //   () =>
+  //     (inputs.products || []).reduce(
+  //       (acc, product) => acc + (Number(product.massFraction) || 0),
+  //       0
+  //     ),
+  //   [inputs.products]
+  // );
+  const totalMassFraction = useMemo(() => {
+    const products = inputs.products || [];
+    const totalYield = products.reduce((sum, p) => sum + (Number(p.yield) || 0), 0);
+    return totalYield > 0 ? 100 : 0; // Always 100% when yields exist
+  }, [inputs.products]);
+
+  const calculatedMassFractions = useMemo(() => {
+    const products = inputs.products || [];
+    if (products.length === 0) return [];
+
+    const totalYield = products.reduce((sum, p) => {
+      const yield_ = Number(p.yield) || 0;
+      return sum + yield_;
+    }, 0);
+
+    if (totalYield === 0) {
+      return products.map(() => 0);
+    }
+
+    return products.map(product => {
+      const yield_ = Number(product.yield) || 0;
+      return (yield_ / totalYield) * 100;
+    });
+  }, [inputs.products]);
 
   const massFractionExceeded = totalMassFraction > 100 + 1e-6;
   const massFractionShort = totalMassFraction < 100 - 1e-6;
@@ -368,7 +451,7 @@ const BiofuelForm = ({
               <span style={{ fontSize: "0.7rem", fontWeight: 600, color: colors.text }}>{title}</span>
             </div>
             {subtitle && (
-              <div style={{ fontSize: "0.6rem", color: colors.textSecondary }}>{subtitle}</div>
+              <div style={{ fontSize: "0.6rem", fontWeight: 400, color: colors.textSecondary }}>{subtitle}</div>
             )}
           </div>
           <span
@@ -414,27 +497,14 @@ const BiofuelForm = ({
             </label>
           </Col>
           <Col xs={hasUnit ? "4" : "5"}>
-            <FormInput
+            <EditableNumberInput
               id={id}
-              type="text"
-              size="sm"
+              value={startValue}
+              decimals={decimals}
+              onChange={handler}
+              colors={colors}
               className="text-right"
               style={{ fontSize: "0.65rem", backgroundColor: colors.inputBackground, padding: "2px 6px" }}
-              value={formatNumber(startValue, decimals)}
-              onChange={(e) => {
-                const raw = e.target.value.replace(/,/g, "");
-                const num = Number(raw);
-                if (!Number.isNaN(num)) {
-                  handler([num]);
-                }
-              }}
-              onBlur={(e) => {
-                const raw = e.target.value.replace(/,/g, "");
-                const num = Number(raw);
-                if (!Number.isNaN(num)) {
-                  handler([num]);
-                }
-              }}
             />
           </Col>
           {hasUnit && (
@@ -487,7 +557,8 @@ const BiofuelForm = ({
               {product.name || `Product ${index + 1}`}
             </strong>
             <span style={{ fontSize: "0.6rem", color: colors.textSecondary }}>
-              ({formatNumber(product.massFraction, 1)}%)
+              {/* ({formatNumber(product.massFraction, 1)}%) */}
+              ({formatNumber(calculatedMassFractions[index], 1)}%)
             </span>
           </div>
           <div className="d-flex align-items-center">
@@ -530,23 +601,11 @@ const BiofuelForm = ({
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price</label>
               <Row form className="align-items-center mb-1">
                 <Col xs="6">
-                  <FormInput
-                    size="sm"
-                    type="text"
+                  <EditableNumberInput
                     value={product.price}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      // Allow typing decimal numbers
-                      if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "price")(val === '' ? 0 : val);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const num = Number(e.target.value);
-                      if (!isNaN(num)) {
-                        handleProductInputChange(index, "price")(num);
-                      }
-                    }}
+                    decimals={2}
+                    onChange={(val) => handleProductInputChange(index, "price")(val[0])}
+                    colors={colors}
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
@@ -579,7 +638,7 @@ const BiofuelForm = ({
           </Col>
 
           {/* Mass Fraction slider with direct input - RIGHT UNDER PRICE */}
-          <Col xs="12" className="mb-2">
+          {/* <Col xs="12" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Mass Fraction (%)</label>
               <Row form className="align-items-center mb-1">
@@ -614,29 +673,18 @@ const BiofuelForm = ({
                 className="slider-product"
               />
             </FormGroup>
-          </Col>
+          </Col> */}
 
           <Col sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price Sensitivity</label>
               <Row form>
                 <Col xs="6">
-                  <FormInput
-                    size="sm"
-                    type="text"
+                  <EditableNumberInput
                     value={product.priceSensitivity}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "priceSensitivity")(val === '' ? 0 : val);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const num = Number(e.target.value);
-                      if (!isNaN(num)) {
-                        handleProductInputChange(index, "priceSensitivity")(num);
-                      }
-                    }}
+                    decimals={3}
+                    onChange={(val) => handleProductInputChange(index, "priceSensitivity")(val[0])}
+                    colors={colors}
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
@@ -662,22 +710,11 @@ const BiofuelForm = ({
           <Col sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Carbon Content (fraction)</label>
-              <FormInput
-                size="sm"
-                type="text"
+              <EditableNumberInput
                 value={product.carbonContent}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || val === '-' || !isNaN(val)) {
-                    handleProductInputChange(index, "carbonContent")(val === '' ? 0 : val);
-                  }
-                }}
-                onBlur={(e) => {
-                  const num = Number(e.target.value);
-                  if (!isNaN(num)) {
-                    handleProductInputChange(index, "carbonContent")(num);
-                  }
-                }}
+                decimals={3}
+                onChange={(val) => handleProductInputChange(index, "carbonContent")(val[0])}
+                colors={colors}
                 style={{ fontSize: "0.75rem" }}
               />
             </FormGroup>
@@ -686,22 +723,11 @@ const BiofuelForm = ({
           <Col sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Product Density (kg/m3)</label>
-              <FormInput
-                size="sm"
-                type="text"
-                value={product.density ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === '' || val === '-' || !isNaN(val)) {
-                    handleProductInputChange(index, "density")(val === '' ? '' : val);
-                  }
-                }}
-                onBlur={(e) => {
-                  const num = Number(e.target.value);
-                  if (!isNaN(num)) {
-                    handleProductInputChange(index, "density")(num);
-                  }
-                }}
+              <EditableNumberInput
+                value={product.density ?? 0}
+                decimals={2}
+                onChange={(val) => handleProductInputChange(index, "density")(val[0])}
+                colors={colors}
                 style={{ fontSize: "0.75rem" }}
               />
             </FormGroup>
@@ -713,22 +739,11 @@ const BiofuelForm = ({
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Energy Content</label>
               <Row form>
                 <Col xs="6">
-                  <FormInput
-                    size="sm"
-                    type="text"
+                  <EditableNumberInput
                     value={product.energyContent}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "energyContent")(val === '' ? 0 : val);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const num = Number(e.target.value);
-                      if (!isNaN(num)) {
-                        handleProductInputChange(index, "energyContent")(num);
-                      }
-                    }}
+                    decimals={2}
+                    onChange={(val) => handleProductInputChange(index, "energyContent")(val[0])}
+                    colors={colors}
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
@@ -758,22 +773,11 @@ const BiofuelForm = ({
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Yield</label>
               <Row form>
                 <Col xs="6">
-                  <FormInput
-                    size="sm"
-                    type="text"
+                  <EditableNumberInput
                     value={product.yield}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '' || val === '-' || !isNaN(val)) {
-                        handleProductInputChange(index, "yield")(val === '' ? 0 : val);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const num = Number(e.target.value);
-                      if (!isNaN(num)) {
-                        handleProductInputChange(index, "yield")(num);
-                      }
-                    }}
+                    decimals={3}
+                    onChange={(val) => handleProductInputChange(index, "yield")(val[0])}
+                    colors={colors}
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
@@ -1060,7 +1064,7 @@ const BiofuelForm = ({
                     size="sm"
                     value={selectedProcess}
                     onChange={handleProcessSelect}
-                    style={{ fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
+                    style={{ fontSize: "0.7rem", fontWeight: "400", padding: "0.25rem 0.5rem" }}
                   >
                     <option value="">-- Select Process --</option>
                     {processes.map((process) => (
@@ -1079,7 +1083,7 @@ const BiofuelForm = ({
                       size="sm"
                       value={selectedFeedstock}
                       onChange={handleFeedstockSelect}
-                      style={{ fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
+                      style={{ fontSize: "0.7rem", fontWeight: "400", padding: "0.25rem 0.5rem" }}
                     >
                       <option value="">-- Select Feedstock --</option>
                       {feedstocks.map((feedstock) => (
@@ -1099,7 +1103,7 @@ const BiofuelForm = ({
                       size="sm"
                       value={selectedCountry}
                       onChange={handleCountrySelect}
-                      style={{ fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
+                      style={{ fontSize: "0.7rem", fontWeight: "400", padding: "0.25rem 0.5rem" }}
                     >
                       <option value="">-- Select Country --</option>
                       {COUNTRIES.map((country) => (
@@ -1158,7 +1162,7 @@ const BiofuelForm = ({
 
                 {renderSlider(
                   "conversion_process_ci_default",
-                  "Conversion Process CI Default (gCO2/MJ)",
+                  "Conversion Process CI Default (gCO\u2082/MJ)",
                   inputs.conversion_process_ci_default,
                   { min: 0, max: 200 },
                   1,

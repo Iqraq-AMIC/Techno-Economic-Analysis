@@ -201,6 +201,8 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
             },
             ticks: {
               fontColor: colors.text,
+              padding: 10,  // Space between tick marks and labels
+              // autoSkip: false,  // Don't auto-skip any ticks
               callback: function(value, index, values) {
                 // Only show integer labels on x-axis
                 return Number.isInteger(Number(value)) ? value : '';
@@ -212,19 +214,26 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
               minRotation: 0
             },
             gridLines: {
-              display: false,  // Hide X-axis grid lines
+              display: true,  // Must be true to show borders
               drawBorder: true,
-              zeroLineColor: colors.border
+              drawOnChartArea: false,  // Don't draw grid lines in chart area
+              drawTicks: true,  // Show tick marks
+              tickMarkLength: 10,  // Length of tick marks in pixels
+              zeroLineColor: colors.text,  // Same color as labels
+              color: colors.text,
+              lineWidth: 2,  // Thickness of axis line
+              zeroLineWidth: 2  // Thickness of zero line
             }
           }],
           yAxes: [{
             scaleLabel: {
               display: true,
-              labelString: "Cumulative Discounted Cash Flow ($)",
+              labelString: "Cumulative Discounted Cash Flow ($M)",
               fontColor: colors.text
             },
             ticks: {
               fontColor: colors.text,
+              padding: 10,  // Space between tick marks and labels
               beginAtZero: false,
               // Set min/max based on all data values for proper scaling with padding
               min: (() => {
@@ -237,25 +246,20 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
               })(),
               callback: (val) => {
                 if (val === null || val === undefined || isNaN(val)) return "-";
-                const absVal = Math.abs(val);
-
-                // Format in millions with M notation for values >= 1,000,000
-                if (absVal >= 1000000) {
-                  const millions = val / 1000000;
-                  return (val < 0 ? "-" : "") + millions.toFixed(1) + "M";
-                }
-
-                // For smaller values, use regular formatting
-                return Number(val).toLocaleString(undefined, {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0
-                });
+                const millions = val / 1000000;
+                return millions.toFixed(1);
               },
             },
             gridLines: {
-              display: false,  // Hide Y-axis grid lines
+              display: true,  // Must be true to show borders
               drawBorder: true,
-              zeroLineColor: colors.border
+              drawOnChartArea: false,  // Don't draw grid lines in chart area
+              drawTicks: true,  // Show tick marks
+              tickMarkLength: 10,  // Length of tick marks in pixels
+              zeroLineColor: colors.text,  // Same color as labels
+              color: colors.text,
+              lineWidth: 2,  // Thickness of axis line
+              zeroLineWidth: 2  // Thickness of zero line
             }
           }],
         },

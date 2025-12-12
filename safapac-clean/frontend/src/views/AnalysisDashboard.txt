@@ -12,6 +12,7 @@ import {
 } from "shards-react";
 import axios from "axios";
 import BreakevenBarChart from "../components/charts/BreakevenBarChart";
+import LcopCostChart from "../components/charts/LcopCostChart";
 import BiofuelForm from "../forms/BiofuelForm";
 import CashFlowTable from "../forms/CashFlowTable";
 import { useTheme } from "../contexts/ThemeContext";
@@ -280,6 +281,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const [isCalculating, setIsCalculating] = useState(false);
   const [expandedStatDetails, setExpandedStatDetails] = useState({});
   const [maximizedKPI, setMaximizedKPI] = useState('processOutputs'); // 'processOutputs' or 'economicOutputs'
+  const [chartView, setChartView] = useState('breakeven'); // 'breakeven' or 'lcop'
   const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000";
 
   // Update ref when table changes (after table is declared)
@@ -444,7 +446,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           density: "",
           yield: 0.1,
           yieldUnit: "kg/kg",
-          // massFraction: 0,
+          massFraction: 0,
         },
       ],
     }));
@@ -511,7 +513,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           density: "",
           yield: 0,
           yieldUnit: "kg/kg",
-          // massFraction: 0,
+          massFraction: 0,
         },
       ],
     });
@@ -570,7 +572,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       csvRows.push(`Total Capital Investment,${te.total_capital_investment || 'N/A'},${selectedCurrency}`);
       csvRows.push(`Annual Production,${te.production || 'N/A'},t/yr`);
       csvRows.push(`Feedstock Consumption,${te.feedstock_consumption || 'N/A'},t/yr`);
-      csvRows.push(`Hydrogen Consumption,${te.hydrogen_consumption || 'N/A'},ton/yr`);
+      // csvRows.push(`Hydrogen Consumption,${te.hydrogen_consumption || 'N/A'},kg/yr`);
+      csvRows.push(`Hydrogen Consumption,${te.hydrogen_consumption || 'N/A'},ton/year`);
       csvRows.push(`Electricity Consumption,${te.electricity_consumption || 'N/A'},MWh/yr`);
       csvRows.push(`Total OPEX,${te.total_opex || 'N/A'},${selectedCurrency}/yr`);
       csvRows.push(`Total Direct OPEX,${te.total_direct_opex || 'N/A'},${selectedCurrency}/yr`);
@@ -1238,7 +1241,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           }}
         >
           {/* Toggle Button - always visible */}
-          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "30px", height: "30px" }}>
+          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "36px", height: "36px" }}>
             <button
               onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
               style={{
@@ -1300,8 +1303,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
               <Card small className="flex-fill d-flex flex-column">
                 <CardHeader className="border-bottom d-flex justify-content-between align-items-center p-2">
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <h6 className="m-0" style={{ fontSize: "0.95rem", fontWeight: "700" }}>Breakeven Analysis</h6>
-                    <small style={{ fontSize: '0.7rem', fontWeight: 400, color: colors.textSecondary }}>
+                    <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>Breakeven Analysis</h6>
+                    <small style={{ fontSize: '0.7rem', fontWeight: '400', color: colors.textSecondary }}>
                       Cumulative discounted cash flow across project lifetime; breakeven occurs
                       where the curve first crosses zero.
                     </small>

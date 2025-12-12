@@ -6,7 +6,6 @@
   --bg-card: #ffffff;
   --text-primary: #212529;
   --text-secondary: #5A6169;
-  --heading-blue: #132d54;
   --border-color: #e1e5eb;
   --navbar-bg: #07193D;
   --footer-bg: #07193D;
@@ -22,7 +21,6 @@
   --bg-card: #2a2a2a;
   --text-primary: #f5f5f5;
   --text-secondary: #d0d0d0;
-  --heading-blue: #7aaae1;
   --border-color: #505050;
   --navbar-bg: #0a1e3d;
   --footer-bg: #0a1e3d;
@@ -64,15 +62,6 @@ html, body, #root {
   background-color: var(--bg-card) !important;
   color: var(--text-primary) !important;
   border-bottom-color: var(--border-color) !important;
-}
-
-.card-header h1,
-.card-header h2,
-.card-header h3,
-.card-header h4,
-.card-header h5,
-.card-header h6 {
-  color: var(--heading-blue) !important;
 }
 
 /* Cards */
@@ -236,6 +225,7 @@ footer span {
 .slider-conversion .noUi-handle:hover {
   box-shadow: 0 2px 4px rgba(7, 25, 61, 0.4) !important;
 }
+
 
 
 

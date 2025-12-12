@@ -98,6 +98,26 @@ export const createScenario = async (projectId, scenarioName, order = null) => {
   }
 };
 
+/** newly added */
+/**
+ * Delete a project and all its scenarios
+ * @param {string} projectId - Project ID
+ * @returns {Promise} Success/error response
+ */
+export const deleteProject = async (projectId) => {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/projects/${projectId}`);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message,
+    };
+  }
+};
+
+
 /**
  * List all scenarios for a project
  * @param {string} projectId - Project ID

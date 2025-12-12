@@ -11,6 +11,7 @@ import {
   getScenario,
   updateScenario,
   deleteScenario as apiDeleteScenario,
+  deleteProject as apiDeleteProject,
 } from "../api/projectApi";
 
 const ProjectContext = createContext();
@@ -223,6 +224,43 @@ export const ProjectProvider = ({ children }) => {
     }
   }, [currentScenario, persistScenario]);
 
+  // Rename scenario
+  const renameScenario = useCallback(async (scenarioId, newName) => {
+    // Validate name
+    const trimmedName = newName?.trim();
+    if (!trimmedName || trimmedName.length === 0) {
+      return { success: false, error: "Scenario name cannot be empty" };
+    }
+    if (trimmedName.length > 100) {
+      return { success: false, error: "Scenario name must be 100 characters or less" };
+    }
+
+    setLoading(true);
+    try {
+      const result = await updateScenario(scenarioId, { scenario_name: trimmedName });
+      if (result.success) {
+        // Update scenarios list
+        setScenarios((prev) =>
+          prev.map((s) => (s.scenario_id === scenarioId ? result.data : s))
+        );
+
+        // Update current scenario if it's the one being renamed
+        if (currentScenario?.scenario_id === scenarioId) {
+          setCurrentScenario(result.data);
+          persistScenario(result.data);
+        }
+        return { success: true, scenario: result.data };
+    }
+    return result;
+  } catch (error) {
+    console.error("Error renaming scenario:", error);
+    return { success: false, error: error.message };
+  } finally {
+    setLoading(false);
+  }
+  
+}, [currentScenario, persistScenario]);
+
   // Clear project/scenario state (on logout)
   const clearProjectState = useCallback(() => {
     setCurrentProject(null);
@@ -305,6 +343,26 @@ export const ProjectProvider = ({ children }) => {
     }
   }, [currentProject, currentScenario, scenarios, persistScenario]);
 
+  const deleteProject = useCallback(async (projectId) => {
+  setLoading(true);
+  try {
+    const result = await apiDeleteProject(projectId);
+    if (result.success) {
+      // If deleted project was current, clear state
+      if (currentProject?.project_id === projectId) {
+        clearProjectState();
+      }
+      return { success: true };
+    }
+    return result;
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    return { success: false, error: error.message };
+  } finally {
+    setLoading(false);
+  }
+}, [currentProject, clearProjectState]);
+
   const value = useMemo(
     () => ({
       currentProject,
@@ -317,11 +375,13 @@ export const ProjectProvider = ({ children }) => {
       addScenario,
       switchScenario,
       updateCurrentScenario,
+      renameScenario,
       clearProjectState,
       refreshScenarios,
       toggleComparisonScenario,
       clearComparison,
       deleteScenario,
+      deleteProject,
     }),
     [
       currentProject,
@@ -334,9 +394,11 @@ export const ProjectProvider = ({ children }) => {
       addScenario,
       switchScenario,
       updateCurrentScenario,
+      renameScenario,
       clearProjectState,
       refreshScenarios,
       deleteScenario,
+      deleteProject,
     ]
   );
 

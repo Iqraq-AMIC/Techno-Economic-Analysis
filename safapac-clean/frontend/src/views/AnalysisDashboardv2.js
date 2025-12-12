@@ -12,6 +12,7 @@ import {
 } from "shards-react";
 import axios from "axios";
 import BreakevenBarChart from "../components/charts/BreakevenBarChart";
+import LcopCostChart from "../components/charts/LcopCostChart";
 import BiofuelForm from "../forms/BiofuelForm";
 import CashFlowTable from "../forms/CashFlowTable";
 import { useTheme } from "../contexts/ThemeContext";
@@ -276,10 +277,12 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const [table, setTable] = useState(mockCashFlowTable);
   const [chartData, setChartData] = useState(buildChartData(mockCashFlowTable));
   const [comparisonChartData, setComparisonChartData] = useState([]);
+  const [comparisonLcopData, setComparisonLcopData] = useState([]);
   const [openTable, setOpenTable] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [expandedStatDetails, setExpandedStatDetails] = useState({});
   const [maximizedKPI, setMaximizedKPI] = useState('processOutputs'); // 'processOutputs' or 'economicOutputs'
+  const [chartView, setChartView] = useState('breakeven'); // 'breakeven' or 'lcop'
   const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000";
 
   // Update ref when table changes (after table is declared)
@@ -379,6 +382,35 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
     fetchComparisonData();
   }, [comparisonScenarios, scenarios, currentScenario?.scenario_id]);
+
+  // Fetch LCOP comparison data for cost chart
+  useEffect(() => {
+    if (!comparisonScenarios || comparisonScenarios.length === 0) {
+      setComparisonLcopData([]);
+      return;
+    }
+
+    const lcopComparisonData = comparisonScenarios.map(scenarioId => {
+      const scenario = scenarios.find(s => s.scenario_id === scenarioId);
+      if (!scenario || !scenario.outputs) return null;
+
+      const outputs = scenario.outputs;
+
+      return {
+        scenarioName: scenario.scenario_name,
+        lcopData: {
+          capital: outputs.lcopCapital || 0,
+          feedstock: outputs.lcopFeedstock || 0,
+          hydrogen: outputs.lcopHydrogen || 0,
+          electricity: outputs.lcopElectricity || 0,
+          indirect: outputs.lcopIndirect || 0,
+          total: outputs.LCOP || outputs.lcop || 0
+        }
+      };
+    }).filter(d => d !== null);
+
+    setComparisonLcopData(lcopComparisonData);
+  }, [comparisonScenarios, scenarios]);
 
   const toggleStatDetail = (statKey) => {
     setExpandedStatDetails((prev) => ({
@@ -570,7 +602,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       csvRows.push(`Total Capital Investment,${te.total_capital_investment || 'N/A'},${selectedCurrency}`);
       csvRows.push(`Annual Production,${te.production || 'N/A'},t/yr`);
       csvRows.push(`Feedstock Consumption,${te.feedstock_consumption || 'N/A'},t/yr`);
-      csvRows.push(`Hydrogen Consumption,${te.hydrogen_consumption || 'N/A'},ton/yr`);
+      // csvRows.push(`Hydrogen Consumption,${te.hydrogen_consumption || 'N/A'},kg/yr`);
+      csvRows.push(`Hydrogen Consumption,${te.hydrogen_consumption || 'N/A'},ton/year`);
       csvRows.push(`Electricity Consumption,${te.electricity_consumption || 'N/A'},MWh/yr`);
       csvRows.push(`Total OPEX,${te.total_opex || 'N/A'},${selectedCurrency}/yr`);
       csvRows.push(`Total Direct OPEX,${te.total_direct_opex || 'N/A'},${selectedCurrency}/yr`);
@@ -798,10 +831,33 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         // Save outputs to current scenario
         if (currentScenario) {
           console.log("💾 Saving calculation outputs to scenario:", currentScenario.scenario_name);
+
+          // Calculate LCOP breakdown for saving
+          const annualCapacity = res.data?.technoEconomics?.production || inputs?.production_capacity || 0;
+          const safeCapacity = annualCapacity > 0 ? annualCapacity : null;
+          const totalCapitalInvestment = res.data?.technoEconomics?.total_capital_investment;
+          const feedstockCost = res.data?.technoEconomics?.feedstock_cost;
+          const hydrogenCost = res.data?.technoEconomics?.hydrogen_cost;
+          const electricityCost = res.data?.technoEconomics?.electricity_cost;
+          const totalIndirectOpex = res.data?.technoEconomics?.total_indirect_opex;
+          const discountRate = inputs?.discount_factor || 0.07;
+          const plantLifetime = inputs?.plant_lifetime || 20;
+          const crf = discountRate > 0
+            ? (discountRate * Math.pow(1 + discountRate, plantLifetime)) / (Math.pow(1 + discountRate, plantLifetime) - 1)
+            : 1 / plantLifetime;
+          const annualizedCapital = totalCapitalInvestment ? totalCapitalInvestment * crf : null;
+
           await updateCurrentScenario({
             outputs: {
               apiData: res.data,
               table: res.data.financials.cashFlowTable,
+              cash_flow_table: res.data.financials.cashFlowTable,
+              LCOP: res.data?.technoEconomics?.lcop || res.data?.technoEconomics?.LCOP,
+              lcopCapital: safeCapacity && annualizedCapital ? annualizedCapital / safeCapacity : 0,
+              lcopFeedstock: safeCapacity && feedstockCost ? feedstockCost / safeCapacity : 0,
+              lcopHydrogen: safeCapacity && hydrogenCost ? hydrogenCost / safeCapacity : 0,
+              lcopElectricity: safeCapacity && electricityCost ? electricityCost / safeCapacity : 0,
+              lcopIndirect: safeCapacity && totalIndirectOpex ? totalIndirectOpex / safeCapacity : 0,
             }
           });
         }
@@ -995,6 +1051,17 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const lcopPctHydrogen = lcopPct(lcopHydrogen);
   const lcopPctElectricity = lcopPct(lcopElectricity);
   const lcopPctIndirect = lcopPct(lcopIndirect);
+
+  // Prepare LCOP chart data for single scenario
+  const lcopChartData = {
+    capital: lcopCapital || 0,
+    feedstock: lcopFeedstock || 0,
+    hydrogen: lcopHydrogen || 0,
+    electricity: lcopElectricity || 0,
+    indirect: lcopIndirect || 0,
+    total: lcopValue || 0
+  };
+
   const lccaValue = toFiniteNumber(apiData?.technoEconomics?.lcca ?? apiData?.financials?.lcca);
   const productionOutput = toFiniteNumber(apiData?.technoEconomics?.production);
   const carbonIntensityPerProduct =
@@ -1238,7 +1305,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           }}
         >
           {/* Toggle Button - always visible */}
-          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "30px", height: "30px" }}>
+          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "36px", height: "36px" }}>
             <button
               onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
               style={{
@@ -1299,11 +1366,48 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         <div className="d-flex flex-column" style={{ flex: 1, height: "100%", minWidth: 0, minHeight: 0, transition: "all 0.3s ease" }}>
               <Card small className="flex-fill d-flex flex-column">
                 <CardHeader className="border-bottom d-flex justify-content-between align-items-center p-2">
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <h6 className="m-0" style={{ fontSize: "0.95rem", fontWeight: "700" }}>Breakeven Analysis</h6>
-                    <small style={{ fontSize: '0.7rem', fontWeight: 400, color: colors.textSecondary }}>
-                      Cumulative discounted cash flow across project lifetime; breakeven occurs
-                      where the curve first crosses zero.
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                      <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>
+                        {chartView === 'breakeven' ? 'Breakeven Analysis' : 'LCOP Cost Breakdown'}
+                      </h6>
+                      {selectedAccess === 'ROADSHOW' && (
+                        <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                          <Button
+                            size="sm"
+                            onClick={() => setChartView('breakeven')}
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '2px 8px',
+                              backgroundColor: chartView === 'breakeven' ? colors.oxfordBlue : colors.background,
+                              color: chartView === 'breakeven' ? '#fff' : colors.text,
+                              borderColor: colors.border,
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            Breakeven
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => setChartView('lcop')}
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '2px 8px',
+                              backgroundColor: chartView === 'lcop' ? colors.oxfordBlue : colors.background,
+                              color: chartView === 'lcop' ? '#fff' : colors.text,
+                              borderColor: colors.border,
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            Cost
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <small style={{ fontSize: '0.7rem', fontWeight: '400', color: colors.textSecondary }}>
+                      {chartView === 'breakeven'
+                        ? 'Cumulative discounted cash flow across project lifetime; breakeven occurs where the curve first crosses zero.'
+                        : 'Breakdown of levelized cost of production by component (TCI, feedstock, utilities, indirect OPEX).'}
                     </small>
                   </div>
                   <Button
@@ -1347,7 +1451,16 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
                   </Button>
                 </CardHeader>
                 <CardBody className="flex-fill" style={{ padding: "10px", minHeight: 0, flex: 1 }}>
-                  <BreakevenBarChart data={chartData} comparisonData={comparisonChartData} />
+                  {chartView === 'breakeven' ? (
+                    <BreakevenBarChart data={chartData} comparisonData={comparisonChartData} />
+                  ) : (
+                    <LcopCostChart
+                      lcopData={lcopChartData}
+                      comparisonData={comparisonLcopData}
+                      isComparison={comparisonScenarios.length > 0}
+                      colors={colors}
+                    />
+                  )}
                 </CardBody>
               </Card>
         </div>

@@ -4,10 +4,144 @@
  * Includes "Add Scenario" button (max 3 scenarios)
  */
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button, Badge } from "shards-react";
 import { useProject } from "../../contexts/ProjectContext";
 import { useTheme } from "../../contexts/ThemeContext";
+
+const EditableScenarioName = ({ scenario, isActive, onRename }) => {
+  const { colors } = useTheme();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(scenario.scenario_name);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  // Reset when scenario changes
+  useEffect(() => {
+    setEditValue(scenario.scenario_name);
+    setError(null);
+  }, [scenario.scenario_name]);
+
+  const handleDoubleClick = (e) => {
+    e.stopPropagation();
+    setIsEditing(true);
+    setEditValue(scenario.scenario_name);
+    setError(null);
+  };
+
+  const handleSave = async () => {
+    const trimmedValue = editValue.trim();
+
+    // Exit edit mode if unchanged
+    if (trimmedValue === scenario.scenario_name) {
+      setIsEditing(false);
+      return;
+    }
+
+    // Don't save if empty (validation will show error)
+    if (!trimmedValue) {
+      setError("Scenario name cannot be empty");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    const result = await onRename(scenario.scenario_id, trimmedValue);
+
+    if (result.success) {
+      setIsEditing(false);
+      setError(null);
+    } else {
+      setError(result.error || "Failed to rename scenario");
+    }
+    setSaving(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      // Escape cancels without saving
+      setIsEditing(false);
+      setEditValue(scenario.scenario_name);
+      setError(null);
+    }
+  };
+
+  const handleBlur = () => {
+    // Cancel edit when clicking outside (discard changes)
+    if (isEditing && !saving) {
+      setIsEditing(false);
+      setEditValue(scenario.scenario_name);
+      setError(null);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
+            onClick={(e) => e.stopPropagation()}
+            maxLength={100}
+            disabled={saving}
+            style={{
+              flex: 1,
+              padding: "0.2rem 0.4rem",
+              fontSize: "0.85rem",
+              border: error ? "1px solid #c4183c" : `1px solid ${colors.border}`,
+              borderRadius: "3px",
+              backgroundColor: isActive ? "rgba(255,255,255,0.9)" : colors.background,
+              color: isActive ? "#333" : colors.text,
+              outline: "none",
+            }}
+          />
+          {saving && (
+            <i className="material-icons" style={{ fontSize: "0.85rem", marginLeft: "0.3rem", opacity: 0.7 }}>
+              refresh
+            </i>
+          )}
+        </div>
+        {error && (
+          <small style={{ color: "#c4183c", fontSize: "0.7rem", marginTop: "0.2rem" }}>
+            {error}
+          </small>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <span
+      onDoubleClick={handleDoubleClick}
+      style={{
+        cursor: "text",
+        flex: 1,
+      }}
+      title="Double-click to rename"
+    >
+      {scenario.scenario_name}
+    </span>
+  );
+};
 
 const ScenarioTabs = () => {
   const { colors } = useTheme();
@@ -18,6 +152,7 @@ const ScenarioTabs = () => {
     switchScenario,
     addScenario,
     deleteScenario,
+    renameScenario,
     loading,
     comparisonScenarios,
     toggleComparisonScenario,
@@ -168,7 +303,11 @@ const ScenarioTabs = () => {
                   }}
                   title="Select for comparison"
                 />
-                <span>{scenario.scenario_name}</span>
+                <EditableScenarioName
+                  scenario={scenario}
+                  isActive={isActive}
+                  onRename={renameScenario}
+                />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                 {canDelete && (
