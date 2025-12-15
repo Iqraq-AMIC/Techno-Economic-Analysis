@@ -230,6 +230,7 @@ const BiofuelForm = ({
   onReset,
   onSave,
   isCalculating,
+  onMasterDataLoaded,
 }) => {
   const { colors } = useTheme();
   const [processes, setProcesses] = useState([]);
@@ -244,7 +245,7 @@ const BiofuelForm = ({
   });
   const [collapsedProducts, setCollapsedProducts] = useState({});
 
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000";
+  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000/api/v1";
 
   // Initialize all products as collapsed by default
   useEffect(() => {
@@ -266,10 +267,16 @@ const BiofuelForm = ({
   useEffect(() => {
     let isMounted = true;
     axios
-      .get(`${API_URL}/processes`)
+      .get(`${API_URL}/process-technologies`)
       .then((res) => {
         if (isMounted) {
-          setProcesses(res.data || []);
+          // Backend returns array of objects with 'id' and 'name' fields
+          const processData = res.data || [];
+          setProcesses(processData);
+          // Notify parent of loaded master data
+          if (onMasterDataLoaded) {
+            onMasterDataLoaded({ processes: processData });
+          }
         }
       })
       .catch((err) => {
@@ -278,7 +285,7 @@ const BiofuelForm = ({
     return () => {
       isMounted = false;
     };
-  }, [API_URL]);
+  }, [API_URL, onMasterDataLoaded]);
 
   useEffect(() => {
     if (!selectedProcess) {
@@ -287,10 +294,16 @@ const BiofuelForm = ({
     }
     let isMounted = true;
     axios
-      .get(`${API_URL}/feedstocks/${selectedProcess}`)
+      .get(`${API_URL}/feedstocks`)
       .then((res) => {
         if (isMounted) {
-          setFeedstocks(res.data || []);
+          // Backend returns array of objects with 'id' and 'name' fields
+          const feedstockData = res.data || [];
+          setFeedstocks(feedstockData);
+          // Notify parent of loaded master data
+          if (onMasterDataLoaded) {
+            onMasterDataLoaded({ feedstocks: feedstockData });
+          }
         }
       })
       .catch((err) => {
@@ -299,7 +312,7 @@ const BiofuelForm = ({
     return () => {
       isMounted = false;
     };
-  }, [API_URL, selectedProcess]);
+  }, [API_URL, selectedProcess, onMasterDataLoaded]);
 
   // const totalMassFraction = useMemo(
   //   () =>
@@ -1068,8 +1081,8 @@ const BiofuelForm = ({
                   >
                     <option value="">-- Select Process --</option>
                     {processes.map((process) => (
-                      <option key={process} value={process}>
-                        {process}
+                      <option key={process.id} value={process.name}>
+                        {process.name}
                       </option>
                     ))}
                   </FormSelect>
@@ -1087,8 +1100,8 @@ const BiofuelForm = ({
                     >
                       <option value="">-- Select Feedstock --</option>
                       {feedstocks.map((feedstock) => (
-                        <option key={feedstock} value={feedstock}>
-                          {feedstock}
+                        <option key={feedstock.id} value={feedstock.name}>
+                          {feedstock.name}
                         </option>
                       ))}
                     </FormSelect>
@@ -1423,6 +1436,7 @@ BiofuelForm.propTypes = {
   onReset: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,
   isCalculating: PropTypes.bool,
+  onMasterDataLoaded: PropTypes.func,
 };
 
 export default BiofuelForm;

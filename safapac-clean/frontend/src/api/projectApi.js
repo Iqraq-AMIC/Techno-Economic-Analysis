@@ -1,217 +1,177 @@
-/**
- * API utilities for Project and Scenario management
- */
-
 import axios from "axios";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+// Ensure this matches your FastAPI URL
+const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+
+// 1. Create specific client
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// 2. INTERCEPTOR: Automatically attach Token (Solves the 403 Error)
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem("access_token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// --- HELPER: Transform Backend Data to Frontend Shape ---
+const transformProject = (p) => ({
+  id: p.id, // Keep 'id' for components that use it directly
+  project_id: p.id, // Also provide project_id for ProjectContext compatibility
+  project_name: p.projectName,
+  scenario_count: p.scenarioCount,
+  created_at: p.createdAt,
+  scenarios: p.scenarios ? p.scenarios.map(transformScenario) : []
+});
+
+const transformScenario = (s) => ({
+  scenario_id: s.id,
+  project_id: s.projectId,
+  scenario_name: s.scenarioName,
+  scenario_order: s.scenarioOrder,
+  process: s.process,
+  feedstock: s.feedstock,
+  country: s.country,
+  // Map backend JSON blobs to frontend keys
+  inputs: s.userInputs || {}, 
+  outputs: s.technoEconomics || {},
+  financials: s.financialAnalysis || {}
+});
 
 // ==================== PROJECT API ====================
 
-/**
- * Create a new project
- * @param {string} userId - User ID
- * @param {string} projectName - Project name
- * @returns {Promise} Project data with auto-created Scenario 1
- */
 export const createProject = async (userId, projectName) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/projects/create`, {
-      user_id: userId,
+    // We ignore userId here because the Token identifies the user
+    const response = await apiClient.post("/projects", {
       project_name: projectName,
     });
-    return { success: true, data: response.data };
+
+    // Transform single project response
+    const transformed = transformProject(response.data);
+
+    // Backend creates Scenario 1 but doesn't return it in the response
+    // We need to fetch scenarios separately
+    const scenariosResponse = await apiClient.get(`/projects/${transformed.project_id}/scenarios`);
+    const scenarios = (scenariosResponse.data || []).map(transformScenario);
+
+    return {
+      success: true,
+      data: {
+        ...transformed,
+        scenarios: scenarios
+      }
+    };
   } catch (error) {
     console.error("Error creating project:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
 
-/**
- * List all projects for a user
- * @param {string} userId - User ID
- * @returns {Promise} Array of projects
- */
 export const listProjectsByUser = async (userId) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/projects/list-by-user`, {
-      params: { user_id: userId },
-    });
-    return { success: true, data: response.data };
+    // Backend gets user from Token, so no param needed
+    const response = await apiClient.get("/projects");
+    return { 
+      success: true, 
+      data: response.data.map(transformProject) 
+    };
   } catch (error) {
     console.error("Error listing projects:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
 
-/**
- * Get a single project by ID
- * @param {string} projectId - Project ID
- * @returns {Promise} Project data
- */
-export const getProject = async (projectId) => {
+export const deleteProject = async (projectId) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/projects/${projectId}`);
-    return { success: true, data: response.data };
+    await apiClient.delete(`/projects/${projectId}`);
+    return { success: true };
   } catch (error) {
-    console.error("Error getting project:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
 
 // ==================== SCENARIO API ====================
 
-/**
- * Create a new scenario in a project
- * @param {string} projectId - Project ID
- * @param {string} scenarioName - Scenario name (e.g., "Scenario 2")
- * @param {number} order - Display order
- * @returns {Promise} Scenario data
- */
 export const createScenario = async (projectId, scenarioName, order = null) => {
   try {
-    const payload = {
-      project_id: projectId,
+    // Backend expects POST /api/v1/projects/{project_id}/scenarios
+    const response = await apiClient.post(`/projects/${projectId}/scenarios`, {
       scenario_name: scenarioName,
-    };
-    if (order !== null) {
-      payload.order = order;
-    }
-
-    const response = await axios.post(`${API_BASE_URL}/scenarios/create`, payload);
-    return { success: true, data: response.data };
+      scenario_order: order
+    });
+    return { success: true, data: transformScenario(response.data) };
   } catch (error) {
     console.error("Error creating scenario:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
 
-/** newly added */
-/**
- * Delete a project and all its scenarios
- * @param {string} projectId - Project ID
- * @returns {Promise} Success/error response
- */
-export const deleteProject = async (projectId) => {
-  try {
-    const response = await axios.delete(`${API_BASE_URL}/projects/${projectId}`);
-    return { success: true, data: response.data };
-  } catch (error) {
-    console.error("Error deleting project:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
-  }
-};
-
-
-/**
- * List all scenarios for a project
- * @param {string} projectId - Project ID
- * @returns {Promise} Array of scenarios
- */
 export const listScenarios = async (projectId) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/scenarios/list`, {
-      params: { project_id: projectId },
-    });
-    return { success: true, data: response.data };
+    const response = await apiClient.get(`/projects/${projectId}/scenarios`);
+    return { success: true, data: response.data.map(transformScenario) };
   } catch (error) {
-    console.error("Error listing scenarios:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
 
-/**
- * Get a single scenario by ID
- * @param {string} scenarioId - Scenario ID
- * @returns {Promise} Scenario data with inputs and outputs
- */
 export const getScenario = async (scenarioId) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/scenarios/${scenarioId}`);
-    return { success: true, data: response.data };
+    const response = await apiClient.get(`/scenarios/${scenarioId}`);
+    return { success: true, data: transformScenario(response.data) };
   } catch (error) {
-    console.error("Error getting scenario:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
 
-/**
- * Update scenario inputs, outputs, or name
- * @param {string} scenarioId - Scenario ID
- * @param {object} updates - Object with optional fields: scenario_name, inputs, outputs
- * @returns {Promise} Updated scenario data
- */
 export const updateScenario = async (scenarioId, updates) => {
   try {
-    const response = await axios.put(
-      `${API_BASE_URL}/scenarios/${scenarioId}`,
-      updates
-    );
-    return { success: true, data: response.data };
+    // Only handles metadata updates (e.g., renaming)
+    // Does NOT trigger calculation - use calculateScenario() for that
+    const response = await apiClient.put(`/scenarios/${scenarioId}`, {
+      scenario_name: updates.scenario_name
+    });
+    return { success: true, data: transformScenario(response.data) };
   } catch (error) {
     console.error("Error updating scenario:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
 
-/**
- * Delete a scenario
- * @param {string} scenarioId - Scenario ID
- * @returns {Promise} Success/error response
- */
+// Explicit calculation - only called when user clicks "Calculate" button
+export const calculateScenario = async (scenarioId, inputs) => {
+  try {
+    const response = await apiClient.post(`/scenarios/${scenarioId}/calculate`, inputs);
+
+    // Calculate returns { technoEconomics, financials, resolvedInputs }
+    const result = response.data;
+    return {
+      success: true,
+      data: {
+        scenario_id: scenarioId,
+        inputs: result.resolvedInputs,
+        outputs: result.technoEconomics,
+        financials: result.financials,
+      }
+    };
+  } catch (error) {
+    console.error("Error calculating scenario:", error);
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+};
+
 export const deleteScenario = async (scenarioId) => {
   try {
-    const response = await axios.delete(`${API_BASE_URL}/scenarios/${scenarioId}`);
-    return { success: true, data: response.data };
+    await apiClient.delete(`/scenarios/${scenarioId}`);
+    return { success: true };
   } catch (error) {
-    console.error("Error deleting scenario:", error);
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message,
-    };
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
-};
-
-/**
- * Save scenario inputs (convenience wrapper for updateScenario)
- * @param {string} scenarioId - Scenario ID
- * @param {object} inputs - Input data object
- * @returns {Promise} Updated scenario data
- */
-export const saveScenarioInputs = async (scenarioId, inputs) => {
-  return updateScenario(scenarioId, { inputs });
-};
-
-/**
- * Save scenario outputs (convenience wrapper for updateScenario)
- * @param {string} scenarioId - Scenario ID
- * @param {object} outputs - Output data object
- * @returns {Promise} Updated scenario data
- */
-export const saveScenarioOutputs = async (scenarioId, outputs) => {
-  return updateScenario(scenarioId, { outputs });
 };

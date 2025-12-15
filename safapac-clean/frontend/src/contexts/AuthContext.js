@@ -1,142 +1,84 @@
-import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
+import React, { createContext, useContext, useMemo, useState } from "react";
 import axios from "axios";
 
 const AuthContext = createContext();
 
 const AUTH_STORAGE_KEY = "safapac-authenticated";
 const USER_STORAGE_KEY = "safapac-user";
-const LOGIN_HISTORY_KEY = "safapac-login-history";
+const TOKEN_STORAGE_KEY = "access_token"; // <--- NEW: Required for API calls
+
+// Ensure this matches your FastAPI URL
+const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
+    if (typeof window === "undefined") return false;
     return window.localStorage.getItem(AUTH_STORAGE_KEY) === "true";
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
+    if (typeof window === "undefined") return null;
     const storedUser = window.localStorage.getItem(USER_STORAGE_KEY);
     return storedUser ? JSON.parse(storedUser) : null;
   });
 
-  const persistAuthState = (nextState, user = null) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (nextState) {
+  const persistAuthState = (isAuth, user = null, token = null) => {
+    if (typeof window === "undefined") return;
+    
+    if (isAuth) {
       window.localStorage.setItem(AUTH_STORAGE_KEY, "true");
-      if (user) {
-        window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-      }
+      if (user) window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      if (token) window.localStorage.setItem(TOKEN_STORAGE_KEY, token); // Save JWT
     } else {
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
       window.localStorage.removeItem(USER_STORAGE_KEY);
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY); // Clear JWT
     }
-  };
-
-  const recordLoginHistory = (username, success) => {
-    if (typeof window === "undefined") return;
-
-    const history = JSON.parse(window.localStorage.getItem(LOGIN_HISTORY_KEY) || "[]");
-    history.push({
-      username,
-      timestamp: new Date().toISOString(),
-      success
-    });
-
-    // Keep only last 100 entries
-    if (history.length > 100) {
-      history.shift();
-    }
-
-    window.localStorage.setItem(LOGIN_HISTORY_KEY, JSON.stringify(history));
   };
 
   const login = async (username, password) => {
     try {
-      // Call backend to validate credentials against pw.csv
-      const response = await axios.post("http://localhost:8000/auth/login", {
-        username: username.trim(),
-        password: password.trim()
+      console.log("🚀 Sending Login Request to:", `${API_BASE_URL}/auth/login`);
+      
+      // 1. Send Request to Real Backend
+      // Note: Backend expects 'email', but UI might pass it as 'username' arg
+      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+        email: username, 
+        password: password
       });
 
-      if (response.data.success) {
-        const userData = response.data.user;
+      // 2. Handle Success (FastAPI returns 200 OK with token)
+      // Backend uses camelCase: { accessToken, tokenType, user }
+      const { accessToken, user } = response.data;
 
-        // Set authenticated immediately to allow redirect to TEA
-        setIsAuthenticated(true);
-        setCurrentUser(userData);
-        persistAuthState(true, userData);
-        recordLoginHistory(username, true);
+      // 3. Update State & Storage
+      setIsAuthenticated(true);
+      setCurrentUser(user);
+      persistAuthState(true, user, accessToken);
 
-        return { success: true, user: userData };
-      }
+      return { success: true, user: user };
 
-      recordLoginHistory(username, false);
-      return { success: false, message: response.data.message || "Invalid credentials" };
     } catch (error) {
-      console.error("Login error:", error);
-      recordLoginHistory(username, false);
-      return {
-        success: false,
-        message: error.response?.data?.detail || "Unable to connect to authentication server"
-      };
+      console.error("❌ Login Error:", error);
+      
+      // Handle FastAPI specific error messages (401 Unauthorized, 422 Validation)
+      const message = error.response?.data?.detail || "Unable to connect to server";
+      return { success: false, message: Array.isArray(message) ? message[0].msg : message };
     }
-  };
-
-  const completeLogin = () => {
-    // No longer needed - kept for compatibility
-    console.log("completeLogin called (no-op)");
   };
 
   const logout = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
     persistAuthState(false);
+    // Optional: Force reload to clear any memory states
+    window.location.href = "/"; 
   };
 
-  const signup = async (_username, _email, _password) => {
-    // TODO: Replace with actual API call to backend
-    // For now, return success to allow frontend testing
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: "Account created successfully. Please sign in."
-        });
-      }, 1000);
-    });
-  };
-
-  const forgotPassword = async (_email) => {
-    // TODO: Replace with actual API call to backend
-    // For now, return success to allow frontend testing
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: "If an account exists with this email, a password reset link has been sent."
-        });
-      }, 1000);
-    });
-  };
-
-  const resetPassword = async (_token, _newPassword) => {
-    // TODO: Replace with actual API call to backend
-    // For now, return success to allow frontend testing
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          message: "Password has been reset successfully. Please sign in."
-        });
-      }, 1000);
-    });
-  };
+  // ... (Keep signup/forgotPassword mocks or implement similarly if needed) ...
+  const signup = async () => ({ success: true });
+  const forgotPassword = async () => ({ success: true });
+  const resetPassword = async () => ({ success: true });
 
   const value = useMemo(
     () => ({
@@ -144,7 +86,6 @@ export const AuthProvider = ({ children }) => {
       currentUser,
       login,
       logout,
-      completeLogin,
       signup,
       forgotPassword,
       resetPassword,
@@ -156,4 +97,3 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
-

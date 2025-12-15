@@ -2,7 +2,7 @@
 
 import logging
 import math
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +16,7 @@ from app.schemas.scenario_schema import (
     ScenarioCreate, ScenarioResponse, ScenarioDetailResponse, ScenarioUpdate,
     UserInputsSchema, CalculationResponse
 )
+from app.schemas.base import CamelCaseBaseModel
 from app.models.user_project import User 
 from app.models.calculation_data import (
     Quantity, ProductData, FeedstockData, UtilityData, 
@@ -98,6 +99,69 @@ def run_calculation_internal(db_scenario, crud: BiofuelCRUD):
     return crud.run_scenario_calculation(db_scenario.id, clean_results)
 
 # ==================== SCENARIO CRUD ENDPOINTS ====================
+
+class ScenarioCreateSimple(CamelCaseBaseModel):
+    """Simple schema for creating a new scenario (without full inputs)."""
+    scenario_name: Optional[str] = None
+    scenario_order: Optional[int] = None
+
+@router.post("", response_model=ScenarioResponse, status_code=status.HTTP_201_CREATED)
+def create_scenario(
+    project_id: UUID,
+    scenario_in: ScenarioCreateSimple = None,
+    current_user: User = Depends(get_current_active_user),
+    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+):
+    """
+    Create a new scenario for a project.
+    Uses placeholder master data (like project creation does).
+    """
+    # Verify project access
+    db_project = crud.get_project_by_id(project_id)
+    if not db_project or db_project.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Extract values from body if provided
+    scenario_name = scenario_in.scenario_name if scenario_in else None
+    scenario_order = scenario_in.scenario_order if scenario_in else None
+
+    # Check scenario limit (max 3)
+    existing_scenarios = crud.get_scenarios_by_project(project_id)
+    if len(existing_scenarios) >= 3:
+        raise HTTPException(status_code=400, detail="Maximum 3 scenarios per project")
+
+    # Get placeholder IDs for required fields
+    processes = crud.get_process_technologies()
+    feedstocks = crud.get_feedstocks()
+    countries = crud.get_countries()
+
+    if not (processes and feedstocks and countries):
+        raise HTTPException(
+            status_code=500,
+            detail="Master data is empty. Cannot create scenario."
+        )
+
+    # Default scenario name and order
+    if not scenario_name:
+        scenario_name = f"Scenario {len(existing_scenarios) + 1}"
+    if not scenario_order:
+        scenario_order = len(existing_scenarios) + 1
+
+    # Create scenario with placeholder data
+    scenario_data = {
+        "project_id": project_id,
+        "scenario_name": scenario_name,
+        "process_id": processes[0].id,
+        "feedstock_id": feedstocks[0].id,
+        "country_id": countries[0].id,
+        "user_inputs": {},  # Empty JSON, waiting for calculation API input
+        "scenario_order": scenario_order
+    }
+
+    db_scenario = crud.create_scenario(scenario_data)
+    logger.info(f"✅ Scenario '{scenario_name}' created for project {project_id}")
+
+    return db_scenario
 
 @router.get("", response_model=List[ScenarioResponse])
 def get_project_scenarios(

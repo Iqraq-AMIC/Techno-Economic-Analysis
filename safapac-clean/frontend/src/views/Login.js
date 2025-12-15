@@ -142,15 +142,15 @@ const Login = ({ history }) => {
   return (
     <div
       style={{
-          height: "100vh",
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "2rem",
-          overflow: "hidden",
-        }}
-      >
+        height: "100vh",
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem",
+        overflow: "hidden",
+      }}
+    >
       {/* Blurred Background Image */}
       <div
         style={{
@@ -279,13 +279,15 @@ const Login = ({ history }) => {
             {activeTab === "signin" && (
               <Form onSubmit={handleSignIn}>
                 <FormGroup>
+                  {/* CHANGED: Label from Username to Email */}
                   <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
-                    Username
+                    Email Address
                   </label>
                   <FormInput
                     size="lg"
-                    placeholder="Enter your username"
-                    value={credentials.username}
+                    type="email"  // CHANGED: Force email keyboard/validation
+                    placeholder="name@example.com" // CHANGED: Email placeholder
+                    value={credentials.username} // We keep variable name 'username' to avoid breaking logic, but it holds email
                     onChange={handleChange("username")}
                     style={{
                       fontSize: "0.95rem",

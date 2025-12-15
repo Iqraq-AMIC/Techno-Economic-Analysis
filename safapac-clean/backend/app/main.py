@@ -56,6 +56,20 @@ app.include_router(master_data_router, prefix="/api/v1", tags=["Master Data"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(projects_router, prefix="/api/v1/projects", tags=["Projects"])
 app.include_router(scenarios_router, prefix="/api/v1/projects/{project_id}/scenarios", tags=["Scenarios"])
+# 1. KEEP this for hierarchical access (listing scenarios by project)
+app.include_router(
+    scenarios_router, 
+    prefix="/api/v1/projects/{project_id}/scenarios", 
+    tags=["Scenarios"]
+)
+
+# 2. ADD this for direct access (getting/updating a specific scenario by ID)
+# This matches the frontend expectation: axios.get(.../scenarios/${scenarioId})
+app.include_router(
+    scenarios_router, 
+    prefix="/api/v1/scenarios", 
+    tags=["Scenarios Direct"]
+)
 
 # Health check endpoint
 @app.get("/")

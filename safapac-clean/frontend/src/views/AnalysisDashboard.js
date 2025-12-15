@@ -10,7 +10,6 @@ import {
   Modal,
   ModalBody,
 } from "shards-react";
-import axios from "axios";
 import BreakevenBarChart from "../components/charts/BreakevenBarChart";
 import BiofuelForm from "../forms/BiofuelForm";
 import CashFlowTable from "../forms/CashFlowTable";
@@ -18,6 +17,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAccess } from "../contexts/AccessContext";
 import { useProject } from "../contexts/ProjectContext";
 import ProjectStartupModal from "../components/project/ProjectStartupModal";
+import { calculateScenario } from "../api/projectApi";
 
 // ✅ Mock data for fallback
 const mockCashFlowTable = [
@@ -272,6 +272,9 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const [selectedProcess, setSelectedProcess] = useState("");
   const [selectedFeedstock, setSelectedFeedstock] = useState("");
 
+  // Master data for ID lookups (processes and feedstocks with IDs)
+  const [masterData, setMasterData] = useState({ processes: [], feedstocks: [] });
+
   const [apiData, setApiData] = useState(null);
   const [table, setTable] = useState(mockCashFlowTable);
   const [chartData, setChartData] = useState(buildChartData(mockCashFlowTable));
@@ -287,25 +290,12 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     tableRef.current = table;
   }, [table]);
 
-  // Auto-save inputs to current scenario whenever they change
-  useEffect(() => {
-    if (currentScenario && inputs) {
-      const saveInputs = async () => {
-        const inputsToSave = {
-          ...inputs,
-          selected_process: selectedProcess,
-          selected_feedstock: selectedFeedstock,
-        };
+  // NOTE: Auto-save removed - calculation only happens when user clicks "Calculate" button
 
-        console.log("💾 Auto-saving inputs to scenario:", currentScenario.scenario_name);
-        await updateCurrentScenario({ inputs: inputsToSave });
-      };
-
-      // Debounce the save to avoid too many API calls
-      const timeoutId = setTimeout(saveInputs, 1000);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [inputs, selectedProcess, selectedFeedstock, currentScenario?.scenario_id]);
+  // Handle master data loaded from BiofuelForm (processes and feedstocks with IDs)
+  const handleMasterDataLoaded = React.useCallback((data) => {
+    setMasterData(prev => ({ ...prev, ...data }));
+  }, []);
 
   // Fetch comparison data when scenarios are selected for comparison
   useEffect(() => {
@@ -754,6 +744,11 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       return;
     }
 
+    if (!currentScenario?.scenario_id) {
+      console.warn("No scenario selected. Please select or create a project first.");
+      return;
+    }
+
     const totalMassFraction = (inputs.products || []).reduce(
       (acc, product) => acc + (Number(product.massFraction) || 0),
       0
@@ -763,51 +758,107 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       return;
     }
 
+    // Look up IDs from master data
+    const processObj = masterData.processes.find(p => p.name === selectedProcess);
+    const feedstockObj = masterData.feedstocks.find(f => f.name === selectedFeedstock);
+
+    if (!processObj || !feedstockObj) {
+      console.warn("Could not find process or feedstock ID. Please re-select process and feedstock.");
+      return;
+    }
+
+    // Default country ID (will need to be updated when country selection is implemented)
+    const countryId = 1; // Placeholder - should come from country selection
+
     setIsCalculating(true);
     try {
-        const structuredInputs = buildStructuredInputs();
-        const payload = {
-          inputs: structuredInputs,
-          process_technology: selectedProcess,
-          feedstock: selectedFeedstock,
-          product_key: "jet",
-        };
+      // Build payload matching backend UserInputsSchema
+      const payload = {
+        processId: processObj.id,
+        feedstockId: feedstockObj.id,
+        countryId: countryId,
+        conversionPlant: {
+          plantCapacity: {
+            value: inputs.production_capacity || 100,
+            unitId: 1 // ktpa unit ID
+          },
+          annualLoadHours: inputs.annual_load_hours || 8000,
+          ciProcessDefault: inputs.conversion_process_ci_default || 0
+        },
+        economicParameters: {
+          projectLifetimeYears: inputs.plant_lifetime || 20,
+          discountRatePercent: inputs.discount_factor || 10,
+          tciRefMusd: inputs.tci_ref || null,
+          referenceCapacityKtpa: inputs.capacity_ref || null,
+          tciScalingExponent: inputs.tci_scaling_exponent || 0.6,
+          workingCapitalTciRatio: inputs.wc_to_tci_ratio || 0.05,
+          indirectOpexTciRatio: inputs.indirect_opex_to_tci_ratio || 0.04
+        },
+        feedstockData: [{
+          name: selectedFeedstock,
+          price: { value: inputs.feedstock_price || 0, unitId: 2 },
+          carbonContent: inputs.feedstock_carbon_content || 0,
+          carbonIntensity: { value: inputs.feedstock_carbon_intensity || 0, unitId: 3 },
+          energyContent: inputs.feedstock_energy_content || 0,
+          yieldPercent: inputs.feedstock_yield || 0
+        }],
+        utilityData: [
+          {
+            name: "Hydrogen",
+            price: { value: inputs.hydrogen_price || 0, unitId: 4 },
+            carbonContent: 0,
+            carbonIntensity: { value: inputs.hydrogen_carbon_intensity || 0, unitId: 5 },
+            energyContent: 0,
+            yieldPercent: inputs.hydrogen_yield || 0
+          },
+          {
+            name: "Electricity",
+            price: { value: inputs.electricity_rate || 0, unitId: 6 },
+            carbonContent: 0,
+            carbonIntensity: { value: inputs.electricity_carbon_intensity || 0, unitId: 7 },
+            energyContent: 0,
+            yieldPercent: inputs.electricity_yield || 0
+          }
+        ],
+        productData: (inputs.products || []).map(product => ({
+          name: product.name,
+          price: { value: Number(product.price) || 0, unitId: 8 },
+          priceSensitivityToCi: Number(product.priceSensitivity) || 0,
+          carbonContent: Number(product.carbonContent) || 0,
+          energyContent: Number(product.energyContent) || 0,
+          yieldPercent: Number(product.yield) || 0,
+          productDensity: Number(product.density) || 0
+        }))
+      };
+
       console.log("=== API Request ===");
-      console.log("API_URL:", API_URL);
+      console.log("Scenario ID:", currentScenario.scenario_id);
       console.log("Payload:", payload);
 
-      const res = await axios.post(`${API_URL}/calculate`, payload);
+      // Use the calculateScenario API function
+      const result = await calculateScenario(currentScenario.scenario_id, payload);
 
       console.log("=== API Response ===");
-      console.log("Status:", res.status);
-      console.log("Full response data:", res.data);
-      console.log("Has financials?", res.data?.financials);
-      console.log("Has error?", res.data?.error);
-      console.log("Cash Flow Table length:", res.data?.financials?.cashFlowTable?.length);
-      console.log("First 3 rows:", res.data?.financials?.cashFlowTable?.slice(0, 3));
+      console.log("Result:", result);
 
-      setApiData(res.data);
-
-      if (res.data?.error) {
-        console.error("Backend returned error:", res.data.error);
+      if (!result.success) {
+        console.error("Calculation failed:", result.error);
         applyTableData(mockCashFlowTable);
-      } else if (res.data?.financials?.cashFlowTable?.length) {
-        applyTableData(res.data.financials.cashFlowTable);
-        console.log("Table updated with", res.data.financials.cashFlowTable.length, "rows of API data");
+        setApiData(null);
+        return;
+      }
 
-        // Save outputs to current scenario
-        if (currentScenario) {
-          console.log("💾 Saving calculation outputs to scenario:", currentScenario.scenario_name);
-          await updateCurrentScenario({
-            outputs: {
-              apiData: res.data,
-              table: res.data.financials.cashFlowTable,
-            }
-          });
-        }
+      const resData = result.data;
+      setApiData(resData);
+
+      if (resData?.outputs?.cashFlowTable?.length) {
+        applyTableData(resData.outputs.cashFlowTable);
+        console.log("Table updated with", resData.outputs.cashFlowTable.length, "rows of API data");
+      } else if (resData?.financials?.cashFlowTable?.length) {
+        applyTableData(resData.financials.cashFlowTable);
+        console.log("Table updated with", resData.financials.cashFlowTable.length, "rows of API data");
       } else {
         console.warn("No cash flow table in response, using mock data");
-        console.warn("Response structure:", Object.keys(res.data));
         applyTableData(mockCashFlowTable);
       }
     } catch (error) {
