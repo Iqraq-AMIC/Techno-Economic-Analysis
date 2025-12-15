@@ -6,7 +6,7 @@ import { DefaultLayout } from "./layouts";
 
 // Route Views
 import Tables from "./views/Tables";
-import AnalysisDashboard from "./views/AnalysisDashboard";
+import AnalysisDashboardv2 from "./views/AnalysisDashboardv2";
 import Login from "./views/Login";
 
 export default [
@@ -33,7 +33,7 @@ export default [
   {
     path: "/TEA",
     layout: DefaultLayout,
-    component: AnalysisDashboard,
+    component: AnalysisDashboardv2,
     private: true
   }
 ];

@@ -21,17 +21,6 @@ import {
 } from "shards-react";
 import { useTheme } from "../contexts/ThemeContext";
 import ScenarioTabs from "../components/project/ScenarioTabs";
-// Heroicons via react-icons
-// Install: npm i react-icons
-// Fallback emoji icons (remove if using react-icons). If you want Heroicons,
-// install `react-icons` and import from 'react-icons/hi' or 'react-icons/hi2'.
-const EmojiIcon = {
-  plant: <span role="img" aria-label="plant" style={{ fontSize: 16, lineHeight: 0 }}>🏭</span>,
-  leaf: <span role="img" aria-label="leaf" style={{ fontSize: 16, lineHeight: 0 }}>🌿</span>,
-  bolt: <span role="img" aria-label="bolt" style={{ fontSize: 16, lineHeight: 0 }}>⚡</span>,
-  cube: <span role="img" aria-label="cube" style={{ fontSize: 16, lineHeight: 0 }}>📦</span>,
-  trend: <span role="img" aria-label="trend" style={{ fontSize: 16, lineHeight: 0 }}>📈</span>,
-};
 
 const formatNumber = (num, decimals = 0) => {
   if (num === null || num === undefined || Number.isNaN(num)) {
@@ -1027,21 +1016,6 @@ const BiofuelForm = ({
           "slider-feedstock"
         )}
       </div>
-    </div>
-  );
-
-  const feedstockUtilitiesPlaceholder = (
-    <div
-      style={{
-        padding: "12px",
-        borderRadius: "6px",
-        backgroundColor: colors.cardBackground,
-        border: `1px dashed ${colors.border}`,
-        fontSize: "0.75rem",
-        color: colors.textSecondary,
-      }}
-    >
-      The selected feedstock data will be used automatically. Choose <strong>Full Customization</strong> to override these settings directly.
     </div>
   );
 

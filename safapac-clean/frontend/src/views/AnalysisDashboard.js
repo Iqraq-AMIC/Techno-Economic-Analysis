@@ -1341,6 +1341,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
                 onReset={handleReset}
                 onSave={handleSave}
                 isCalculating={isCalculating}
+                onMasterDataLoaded={handleMasterDataLoaded}
               />
             </div>
           )}
