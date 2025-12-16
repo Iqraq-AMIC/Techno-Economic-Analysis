@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.env.local
+
+# OS
+Thumbs.db
+.DS_Store
+
+
+backend/venv/
+backend/.venv/
+backend/test_venv/
+backend/__pycache__/
+backend/**/*.pyc
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.next/
+frontend/.cache/
+frontend/.env*
+backend-20251104-130321.tar.gz
+backend-deployment.zip
+backend.zip
+patch_4.0_alpha.md

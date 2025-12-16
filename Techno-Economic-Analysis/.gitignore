@@ -1,0 +1,6 @@
+/*
+!.gitignore
+!/safapac-clean/
+!/safapac-clean/**
+
+.venv/
