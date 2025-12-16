@@ -270,6 +270,32 @@ export const ProjectProvider = ({ children }) => {
     persistScenario(null);
   }, [persistProject, persistScenario]);
 
+  // Update scenario outputs locally (after calculation completes)
+  const updateScenarioOutputs = useCallback((scenarioId, outputs, financials) => {
+    // Update in scenarios list
+    setScenarios((prev) =>
+      prev.map((s) =>
+        s.scenario_id === scenarioId
+          ? { ...s, outputs: outputs || s.outputs, financials: financials || s.financials }
+          : s
+      )
+    );
+
+    // Update current scenario if it matches
+    setCurrentScenario((prev) => {
+      if (prev && prev.scenario_id === scenarioId) {
+        const updated = {
+          ...prev,
+          outputs: outputs || prev.outputs,
+          financials: financials || prev.financials
+        };
+        persistScenario(updated);
+        return updated;
+      }
+      return prev;
+    });
+  }, [persistScenario]);
+
   // Refresh scenarios list
   const refreshScenarios = useCallback(async () => {
     if (!currentProject) return;
@@ -375,6 +401,7 @@ export const ProjectProvider = ({ children }) => {
       addScenario,
       switchScenario,
       updateCurrentScenario,
+      updateScenarioOutputs,
       renameScenario,
       clearProjectState,
       refreshScenarios,
@@ -394,6 +421,7 @@ export const ProjectProvider = ({ children }) => {
       addScenario,
       switchScenario,
       updateCurrentScenario,
+      updateScenarioOutputs,
       renameScenario,
       clearProjectState,
       refreshScenarios,

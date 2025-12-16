@@ -152,12 +152,16 @@ export const calculateScenario = async (scenarioId, inputs) => {
 
     // Calculate returns { technoEconomics, financials, resolvedInputs }
     const result = response.data;
+
+    // Return data in the format that AnalysisDashboard expects:
+    // - apiData.technoEconomics for production/cost metrics
+    // - apiData.financials for NPV, IRR, payback, cashFlowTable
     return {
       success: true,
       data: {
         scenario_id: scenarioId,
-        inputs: result.resolvedInputs,
-        outputs: result.technoEconomics,
+        resolvedInputs: result.resolvedInputs,
+        technoEconomics: result.technoEconomics,
         financials: result.financials,
       }
     };
