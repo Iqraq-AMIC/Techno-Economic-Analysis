@@ -29,49 +29,21 @@ class BiofuelEconomics:
         Compute full techno-economics for a selected process technology + feedstock.
         """
 
-        # Fetch reference data using the CRUD object, which talks to the SQLAlchemy session
+        # Fetch reference data using the CRUD object
         row = self.crud.get_project_reference_data(process_id, feedstock_id, country_id)
         
         if row is None:
             raise ValueError(f"No reference data found for process '{process_id}' with feedstock '{feedstock_id}'")
         
-        # DEBUG: Check the structure of row before conversion
-        print("DEBUG: Raw reference data structure:")
-        print(f"  - Products type: {type(row.get('products'))}")
-        print(f"  - Products value: {row.get('products')}")
-        print(f"  - Mass fractions type: {type(row.get('mass_fractions'))}")
-        print(f"  - Mass fractions value: {row.get('mass_fractions')}")
-
-        # NEW: Convert database format to calculation format
+        # Convert database format to calculation format
         ref = self.data_bridge.db_to_calc_format(row)
         
         # Add process key for calculations
         ref["process_key"] = process_id
         ref["feedstock_key"] = feedstock_id
 
-        print("DEBUG: After conversion:")
-        print(f"  - Mass fractions type: {type(ref.get('mass_fractions'))}")
-        print(f"  - Mass fractions value: {ref.get('mass_fractions')}")
-
-        # DEBUG: Check what keys we have
-        print("DEBUG: ref keys:", list(ref.keys()))
-        print("DEBUG: ref['tci_ref']:", ref.get('tci_ref', 'MISSING'))
-        print("DEBUG: ref['conversion_process_ci']:", ref.get('conversion_process_ci', 'MISSING'))
-        print("DEBUG: ref['ci_process_default']:", ref.get('ci_process_default', 'MISSING'))
-        print("DEBUG: inputs_flat keys:", list(self.inputs_flat.keys()))
-        print("DEBUG: inputs_flat products:", self.inputs_flat.get('products', 'MISSING'))
-        print("DEBUG: ref mass_fractions type:", type(ref.get('mass_fractions')))
-        print("DEBUG: ref mass_fractions value:", ref.get('mass_fractions', 'MISSING'))
-
         # Layer 1: Core Parameters
         layer1_results = self.layer1.compute(ref, self.inputs_flat)
-
-        # Add after layer1_results
-        print("DEBUG: Production Verification:")
-        print(f"  - Plant Capacity: {layer1_results.get('plant_capacity', 0):,.0f} tons/year")
-        print(f"  - Product Yield: {layer1_results.get('product_yield', 0):.4f}")
-        print(f"  - Actual Production: {layer1_results.get('production', 0):,.0f} tons/year")
-        print(f"  - Expected Production (Capacity × Yield): {layer1_results.get('plant_capacity', 0) * layer1_results.get('product_yield', 0):,.0f} tons/year")
 
         # Layer 2: Cost Calculation
         layer2_results = self.layer2.compute(layer1_results, ref, self.inputs_flat)
@@ -89,37 +61,6 @@ class BiofuelEconomics:
             discount_rate, lifetime
         )
         
-        print("🔍 DEBUG YIELD CHECK:")
-        print(f"   User feedstock yield: {self.inputs_flat.get('feedstock_yield')}")
-        print(f"   Reference feedstock yield: {ref.get('Yield_biomass')}")
-        print(f"   Final feedstock yield used: {ref.get('Yield_biomass')}")
-
-        print("🔍 DEBUG UNIT CHECK:")
-        print(f"   Plant capacity input: {self.inputs_flat['plant_total_liquid_fuel_capacity']}")
-        print(f"   Expected units: KTA (thousand tons per year)")
-
-        # DEBUG: Check what calculation results we have
-        print("DEBUG: Layer1 results keys:", list(layer1_results.keys()))
-        print("DEBUG: Layer4 results keys:", list(layer4_results.keys()))
-
-        # DEBUG: Check financial inputs
-        print("DEBUG: Financial Inputs - TCI:", layer1_results.get("total_capital_investment", 0))
-        print("DEBUG: Financial Inputs - Revenue:", layer2_results.get("revenue", 0))
-        print("DEBUG: Financial Inputs - Total OPEX:", layer4_results.get("total_opex", 0))
-        print("DEBUG: Financial Inputs - Project Lifetime:", self.inputs_flat.get("project_lifetime_years", 20))
-        print("DEBUG: Financial Inputs - Discount Rate:", self.inputs_flat.get("discount_rate", 0.07))
-
-        print("DEBUG: LCOP Calculation Details:")
-        print("  - Feedstock Cost:", layer2_results.get("feedstock_cost", 0))
-        print("  - Hydrogen Cost:", layer2_results.get("hydrogen_cost", 0))
-        print("  - Electricity Cost:", layer2_results.get("electricity_cost", 0))
-        print("  - Indirect OPEX:", layer2_results.get("total_indirect_opex", 0))
-        print("  - Capital Investment:", layer1_results.get("total_capital_investment", 0))
-        print("  - Plant Capacity:", layer1_results.get("plant_capacity", 0))
-        print("  - Discount Rate:", self.inputs_flat.get("discount_rate", 0.07))
-        print("  - Project Lifetime:", self.inputs_flat.get("project_lifetime_years", 20))
-
-
         # INTEGRATE FINANCIAL ANALYSIS
         try:
             fa = FinancialAnalysis(discount_rate=discount_rate)
@@ -128,7 +69,6 @@ class BiofuelEconomics:
             annual_revenue = layer2_results.get("revenue", 0)
             annual_manufacturing_cost = layer4_results.get("total_opex", 0)
             
-            # This now returns the SAFE table + your metrics
             financial_results = fa.calculate_financial_metrics(
                 tci_usd, annual_revenue, annual_manufacturing_cost, int(lifetime)
             )
@@ -161,9 +101,28 @@ class BiofuelEconomics:
         for p in layer1_results.get("products", []):
             name = p["name"].lower()
             product_breakdown[name] = p["amount_of_product"]
-
-        # Calculate total CO2 emissions across all products
+        
+        # Calculate TOTALS by summing the product breakdowns
+        # This ensures Total = Jet + Diesel + Naphtha
         total_co2_emissions_products = sum(product_co2_emissions.values())
+        
+        # Total Carbon Intensity (kg CO2e/ton)
+        # Sum of specific product intensities (since they are weighted by yield in Layer 2)
+        total_carbon_intensity_sum = sum(product_carbon_intensity.values())
+        
+        # Total Carbon Conversion Efficiency (%)
+        # Sum of specific product efficiencies (since they are weighted by yield in Layer 1/2)
+        total_cce_sum = sum(product_carbon_conversion_efficiency.values())
+
+        # --- NEW LOGIC: Prepare Revenue Breakdown ---
+        product_revenue_breakdown = {}
+        # layer2_results['product_revenues'] is a list of objects calculated in Layer 2
+        for item in layer2_results.get("product_revenues", []):
+            name = item.get("name", "").lower()
+            product_revenue_breakdown[name] = item.get("revenue", 0)
+
+        # Get Total Revenue
+        total_revenue = layer2_results.get("revenue", 0)
 
         # Restructure output
         final_result = {
@@ -172,24 +131,22 @@ class BiofuelEconomics:
                 "feedstock": feedstock_id,
                 "LCOP": layer4_results.get("lcop", 0),
                 "total_capital_investment": layer1_results.get("total_capital_investment", 0),
+                "total_revenue": total_revenue,
+                "product_revenue_breakdown": product_revenue_breakdown,
                 "production": layer1_results.get("production", 0),
                 "feedstock_consumption": layer1_results.get("feedstock_consumption", 0),
                 "total_opex": layer4_results.get("total_opex", 0),
-                "total_co2_emissions": total_co2_emissions_products,
-                "carbon_intensity": layer4_results.get("carbon_intensity", 0),
                 "utility_consumption": {
                     "hydrogen": layer1_results.get("hydrogen_consumption", 0),
                     "electricity": layer1_results.get("electricity_consumption", 0)
                 },
                 "product_breakdown": product_breakdown,
-                "carbon_conversion_efficiency": layer1_results.get("carbon_conversion_efficiency_percent", 0),
                 "opex_breakdown": {
                     "feedstock": layer2_results.get("feedstock_cost", 0),
                     "hydrogen": layer2_results.get("hydrogen_cost", 0),
                     "electricity": layer2_results.get("electricity_cost", 0),
                     "indirect_opex": layer2_results.get("total_indirect_opex", 0)
                 },
-                # New carbon metrics (kg CO2e/ton)
                 "carbon_intensity_breakdown": {
                     "feedstock": layer2_results.get("carbon_intensity_feedstock_kgco2_ton", 0),
                     "hydrogen": layer2_results.get("carbon_intensity_hydrogen_kgco2_ton", 0),
@@ -197,16 +154,25 @@ class BiofuelEconomics:
                     "process": layer2_results.get("carbon_intensity_process_kgco2_ton", 0),
                     "total": layer2_results.get("carbon_intensity_total_kgco2_ton", 0)
                 },
-                "product_carbon_intensity": product_carbon_intensity,
-                "product_carbon_conversion_efficiency": product_carbon_conversion_efficiency,
+                
+                # --- UPDATED FIELDS ---
+                "total_co2_emissions": total_co2_emissions_products,
                 "product_co2_emissions": product_co2_emissions,
-                "total_carbon_conversion_efficiency": layer2_results.get("total_carbon_conversion_efficiency_percent", 0)
+                
+                # Now returns the SUM of product intensities (kg CO2e/ton)
+                "carbon_intensity": total_carbon_intensity_sum, 
+                "product_carbon_intensity": product_carbon_intensity,
+                
+                # Now returns the SUM of product efficiencies (%)
+                "carbon_conversion_efficiency": total_cce_sum, 
+                "total_carbon_conversion_efficiency": total_cce_sum,
+                "product_carbon_conversion_efficiency": product_carbon_conversion_efficiency,
             },
             "financials": {
                 "npv": npv,
                 "irr": irr,
                 "payback_period": payback,
-                "cashFlowTable": cash_flow_table # <--- Passed safely here
+                "cashFlowTable": cash_flow_table
             },
             "resolved_inputs": {
                 "process_technology": process_id,

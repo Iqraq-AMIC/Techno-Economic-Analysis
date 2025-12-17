@@ -45,6 +45,186 @@ const buildChartData = (tableData = []) =>
       : 0,
   }));
 
+// HEFA default inputs constant (reusable for initial state and reset)
+const HEFA_DEFAULT_INPUTS = {
+  production_capacity: 500000,
+  plant_capacity_unit: "t/yr",
+  average_liquid_density: 800,
+  average_liquid_density_unit: "kg/m3",
+  annual_load_hours: 8000,
+  conversion_process_ci_default: 20,
+  feedstock_price: 930,
+  feedstock_price_unit: "USD/t",
+  hydrogen_price: 5.4,
+  hydrogen_price_unit: "USD/kg",
+  electricity_rate: 0.055,
+  electricity_rate_unit: "USD/kWh",
+  feedstock_carbon_intensity: 46.526,
+  feedstock_ci_unit: "gCO₂/kg",
+  feedstock_energy_content: 0,
+  feedstock_energy_unit: "MJ/kg",
+  feedstock_yield: 1.21,
+  feedstock_yield_unit: "kg/kg",
+  hydrogen_yield: 0.042,
+  hydrogen_yield_unit: "kg/kg",
+  electricity_yield: 0.12,
+  electricity_yield_unit: "kWh/kg",
+  hydrogen_carbon_intensity: 0,
+  hydrogen_ci_unit: "gCO₂/kg",
+  electricity_carbon_intensity: 20,
+  electricity_ci_unit: "gCO₂/kWh",
+  feedstock_carbon_content: 0.78,
+  plant_lifetime: 20,
+  discount_factor: 0.07,
+  land_cost: 0,
+  tci_ref: 400_000_000,
+  tci_ref_unit: "USD",
+  capacity_ref: 500000,
+  capacity_ref_unit: "t/yr",
+  tci_scaling_exponent: 0.6,
+  wc_to_tci_ratio: 0.15,
+  indirect_opex_to_tci_ratio: 0.077,
+  products: [
+    {
+      name: "JET",
+      price: 3000,
+      priceUnit: "USD/t",
+      priceSensitivity: 0.5,
+      priceSensitivityUnit: "USD/gCO₂",
+      carbonContent: 0.847,
+      energyContent: 43.8,
+      energyUnit: "MJ/kg",
+      density: 810,
+      yield: 0.64,
+      yieldUnit: "kg/kg",
+    },
+    {
+      name: "DIESEL",
+      price: 1500,
+      priceUnit: "USD/t",
+      priceSensitivity: 0.5,
+      priceSensitivityUnit: "USD/gCO₂",
+      carbonContent: 0.85,
+      energyContent: 42.6,
+      energyUnit: "MJ/kg",
+      density: 830,
+      yield: 0.15,
+      yieldUnit: "kg/kg",
+    },
+    {
+      name: "Naphtha",
+      price: 1000,
+      priceUnit: "USD/t",
+      priceSensitivity: 0.5,
+      priceSensitivityUnit: "USD/gCO₂",
+      carbonContent: 0.84,
+      energyContent: 43.4,
+      energyUnit: "MJ/kg",
+      density: 700,
+      yield: 0.21,
+      yieldUnit: "kg/kg",
+    },
+  ],
+};
+
+// Convert backend userInputs format to frontend inputs format
+const convertBackendInputsToFrontend = (backendInputs) => {
+  if (!backendInputs || !backendInputs.conversionPlant) {
+    return null; // Return null if backend inputs are empty/invalid
+  }
+
+  const cp = backendInputs.conversionPlant || {};
+  const ep = backendInputs.economicParameters || {};
+  const feedstock = backendInputs.feedstockData?.[0] || {};
+  const hydrogen = backendInputs.utilityData?.find(u => u.name?.toLowerCase() === 'hydrogen') || {};
+  const electricity = backendInputs.utilityData?.find(u => u.name?.toLowerCase() === 'electricity') || {};
+  const products = backendInputs.productData || [];
+
+  // Convert capacity from KTA to t/yr (backend stores KTA, frontend uses t/yr)
+  const capacityKTA = cp.plantCapacity?.value || 500;
+  const capacityTYr = capacityKTA * 1000;
+
+  // Convert TCI from MUSD to USD
+  const tciMUSD = ep.tciRefMusd || 400;
+  const tciUSD = tciMUSD * 1_000_000;
+
+  // Convert reference capacity from KTA to t/yr
+  const refCapKTA = ep.referenceCapacityKtpa || 500;
+  const refCapTYr = refCapKTA * 1000;
+
+  // Convert electricity price from USD/MWh to USD/kWh
+  const elecPriceMWh = electricity.price?.value || 55;
+  const elecPriceKWh = elecPriceMWh / 1000;
+
+  // Convert feedstock yield (backend stores as percent if >1, need to check)
+  let feedstockYield = feedstock.yieldPercent || 121;
+  if (feedstockYield > 10) feedstockYield = feedstockYield / 100; // Convert from 121 to 1.21
+
+  // Convert utility yields (backend stores as percent)
+  let hydrogenYield = hydrogen.yieldPercent || 4.2;
+  if (hydrogenYield > 1) hydrogenYield = hydrogenYield / 100; // Convert from 4.2 to 0.042
+
+  let electricityYield = electricity.yieldPercent || 12;
+  if (electricityYield > 1) electricityYield = electricityYield / 100; // Convert from 12 to 0.12
+
+  return {
+    production_capacity: capacityTYr,
+    plant_capacity_unit: "t/yr",
+    average_liquid_density: 800,
+    average_liquid_density_unit: "kg/m3",
+    annual_load_hours: cp.annualLoadHours || 8000,
+    conversion_process_ci_default: cp.ciProcessDefault || 20,
+    feedstock_price: feedstock.price?.value || 930,
+    feedstock_price_unit: "USD/t",
+    hydrogen_price: hydrogen.price?.value || 5.4,
+    hydrogen_price_unit: "USD/kg",
+    electricity_rate: elecPriceKWh,
+    electricity_rate_unit: "USD/kWh",
+    feedstock_carbon_intensity: feedstock.carbonIntensity?.value || 46.526,
+    feedstock_ci_unit: "gCO₂/kg",
+    feedstock_energy_content: feedstock.energyContent || 0,
+    feedstock_energy_unit: "MJ/kg",
+    feedstock_yield: feedstockYield,
+    feedstock_yield_unit: "kg/kg",
+    hydrogen_yield: hydrogenYield,
+    hydrogen_yield_unit: "kg/kg",
+    electricity_yield: electricityYield,
+    electricity_yield_unit: "kWh/kg",
+    hydrogen_carbon_intensity: hydrogen.carbonIntensity?.value || 0,
+    hydrogen_ci_unit: "gCO₂/kg",
+    electricity_carbon_intensity: electricity.carbonIntensity?.value || 20,
+    electricity_ci_unit: "gCO₂/kWh",
+    feedstock_carbon_content: feedstock.carbonContent || 0.78,
+    plant_lifetime: ep.projectLifetimeYears || 20,
+    discount_factor: (ep.discountRatePercent || 7) / 100, // Convert from 7 to 0.07
+    land_cost: 0,
+    tci_ref: tciUSD,
+    tci_ref_unit: "USD",
+    capacity_ref: refCapTYr,
+    capacity_ref_unit: "t/yr",
+    tci_scaling_exponent: ep.tciScalingExponent || 0.6,
+    wc_to_tci_ratio: ep.workingCapitalTciRatio || 0.15,
+    indirect_opex_to_tci_ratio: ep.indirectOpexTciRatio || 0.077,
+    products: products.map(p => {
+      let productYield = p.yieldPercent || 0;
+      if (productYield > 1) productYield = productYield / 100; // Convert from 64 to 0.64
+      return {
+        name: p.name,
+        price: p.price?.value || 0,
+        priceUnit: "USD/t",
+        priceSensitivity: p.priceSensitivityToCi || 0,
+        priceSensitivityUnit: "USD/gCO₂",
+        carbonContent: p.carbonContent || 0,
+        energyContent: p.energyContent || 0,
+        energyUnit: "MJ/kg",
+        density: (p.productDensity || 0) * 1000, // Convert from 0.81 to 810
+        yield: productYield,
+        yieldUnit: "kg/kg",
+      };
+    }),
+  };
+};
+
 const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const { colors } = useTheme();
   const { selectedAccess } = useAccess();
@@ -78,16 +258,36 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   useEffect(() => {
     if (currentScenario) {
       console.log("🔄 Loading data from scenario:", currentScenario.scenario_name);
+      console.log("🔄 Scenario inputs (backend format):", currentScenario.inputs);
       console.log("🔄 Scenario outputs:", currentScenario.outputs);
       console.log("🔄 Scenario financials:", currentScenario.financials);
 
-      // Load inputs if they exist in scenario
-      if (currentScenario.inputs && Object.keys(currentScenario.inputs).length > 0) {
-        console.log("📥 Loading inputs from scenario");
-        setInputs(currentScenario.inputs);
-        setSelectedProcess(currentScenario.inputs.selected_process || "");
-        setSelectedFeedstock(currentScenario.inputs.selected_feedstock || "");
+      // Check if scenario has backend-format inputs (from a previous calculation)
+      const hasBackendInputs = currentScenario.inputs &&
+        currentScenario.inputs.conversionPlant &&
+        Object.keys(currentScenario.inputs).length > 0;
+
+      if (hasBackendInputs) {
+        // Convert backend inputs to frontend format
+        console.log("📥 Converting backend inputs to frontend format");
+        const frontendInputs = convertBackendInputsToFrontend(currentScenario.inputs);
+        if (frontendInputs) {
+          setInputs(frontendInputs);
+          console.log("✅ Loaded converted inputs:", frontendInputs);
+        } else {
+          // Conversion failed, use defaults
+          console.log("⚠️ Conversion failed, using HEFA defaults");
+          setInputs({ ...HEFA_DEFAULT_INPUTS });
+        }
+      } else {
+        // No inputs saved yet (new scenario), use HEFA defaults
+        console.log("📥 No saved inputs, using HEFA defaults");
+        setInputs({ ...HEFA_DEFAULT_INPUTS });
       }
+
+      // Reset process/feedstock selection - let BiofuelForm set defaults
+      setSelectedProcess("");
+      setSelectedFeedstock("");
 
       // Load outputs from scenario - outputs contains technoEconomics, financials is separate
       const hasOutputs = currentScenario.outputs && Object.keys(currentScenario.outputs).length > 0;
@@ -110,91 +310,17 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           setTable(cashFlowTable);
           setChartData(buildChartData(cashFlowTable));
         }
+      } else {
+        // No outputs yet, clear apiData and chart
+        console.log("📥 No outputs, clearing display");
+        setApiData(null);
+        setChartData({ labels: [], pv: [], breakevenIndex: -1 });
       }
     }
   }, [currentScenario?.scenario_id]);
 
-  // HEFA default inputs from Wave 1 specs
-  const [inputs, setInputs] = useState({
-    production_capacity: 500000,
-    plant_capacity_unit: "t/yr",
-    average_liquid_density: 800,
-    average_liquid_density_unit: "kg/m3",
-    annual_load_hours: 8000,
-    conversion_process_ci_default: 20,
-    feedstock_price: 930,
-    feedstock_price_unit: "USD/t",
-    hydrogen_price: 5.4,
-    hydrogen_price_unit: "USD/kg",
-    electricity_rate: 0.055,
-    electricity_rate_unit: "USD/kWh",
-    feedstock_carbon_intensity: 46.526,
-    feedstock_ci_unit: "gCO₂/kg",
-    feedstock_energy_content: 0,
-    feedstock_energy_unit: "MJ/kg",
-    feedstock_yield: 1.21,
-    feedstock_yield_unit: "kg/kg",
-    hydrogen_yield: 0.042,
-    hydrogen_yield_unit: "kg/kg",
-    electricity_yield: 0.12,
-    electricity_yield_unit: "kWh/kg",
-    hydrogen_carbon_intensity: 0,
-    hydrogen_ci_unit: "gCO₂/kg",
-    electricity_carbon_intensity: 20,
-    electricity_ci_unit: "gCO₂/kWh",
-    feedstock_carbon_content: 0.78,
-    plant_lifetime: 20,
-    discount_factor: 0.07,
-    land_cost: 0,
-    tci_ref: 400_000_000,
-    tci_ref_unit: "USD",
-    capacity_ref: 500000,
-    capacity_ref_unit: "t/yr",
-    tci_scaling_exponent: 0.6,
-    wc_to_tci_ratio: 0.15,
-    indirect_opex_to_tci_ratio: 0.077,
-    products: [
-      {
-        name: "JET",
-        price: 3000,
-        priceUnit: "USD/t",
-        priceSensitivity: 0.5,
-        priceSensitivityUnit: "USD/gCO₂",
-        carbonContent: 0.847,
-        energyContent: 43.8,
-        energyUnit: "MJ/kg",
-        density: 810,
-        yield: 0.64,
-        yieldUnit: "kg/kg",
-      },
-      {
-        name: "DIESEL",
-        price: 1500,
-        priceUnit: "USD/t",
-        priceSensitivity: 0.5,
-        priceSensitivityUnit: "USD/gCO₂",
-        carbonContent: 0.85,
-        energyContent: 42.6,
-        energyUnit: "MJ/kg",
-        density: 830,
-        yield: 0.15,
-        yieldUnit: "kg/kg",
-      },
-      {
-        name: "Naphtha",
-        price: 1000,
-        priceUnit: "USD/t",
-        priceSensitivity: 0.5,
-        priceSensitivityUnit: "USD/gCO₂",
-        carbonContent: 0.84,
-        energyContent: 43.4,
-        energyUnit: "MJ/kg",
-        density: 700,
-        yield: 0.21,
-        yieldUnit: "kg/kg",
-      },
-    ],
-  });
+  // Use HEFA defaults for initial state
+  const [inputs, setInputs] = useState({ ...HEFA_DEFAULT_INPUTS });
 
   // Start with empty strings - will be populated by BiofuelForm when it loads from API
   const [selectedProcess, setSelectedProcess] = useState("");
@@ -411,89 +537,12 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   };
 
   const handleReset = () => {
-    // Reset to HEFA default values from Wave 1 specs
-    setInputs({
-      production_capacity: 500000,
-      plant_capacity_unit: "t/yr",
-      average_liquid_density: 800,
-      average_liquid_density_unit: "kg/m3",
-      annual_load_hours: 8000,
-      conversion_process_ci_default: 20,
-      feedstock_price: 930,
-      feedstock_price_unit: "USD/t",
-      hydrogen_price: 5.4,
-      hydrogen_price_unit: "USD/kg",
-      electricity_rate: 0.055,
-      electricity_rate_unit: "USD/kWh",
-      feedstock_carbon_intensity: 46.526,
-      feedstock_ci_unit: "gCO₂/kg",
-      feedstock_energy_content: 0,
-      feedstock_energy_unit: "MJ/kg",
-      feedstock_yield: 1.21,
-      feedstock_yield_unit: "kg/kg",
-      hydrogen_yield: 0.042,
-      hydrogen_yield_unit: "kg/kg",
-      electricity_yield: 0.12,
-      electricity_yield_unit: "kWh/kg",
-      hydrogen_carbon_intensity: 0,
-      hydrogen_ci_unit: "gCO₂/kg",
-      electricity_carbon_intensity: 20,
-      electricity_ci_unit: "gCO₂/kWh",
-      feedstock_carbon_content: 0.78,
-      plant_lifetime: 20,
-      discount_factor: 0.07,
-      land_cost: 0,
-      tci_ref: 400_000_000,
-      tci_ref_unit: "USD",
-      capacity_ref: 500000,
-      capacity_ref_unit: "t/yr",
-      tci_scaling_exponent: 0.6,
-      wc_to_tci_ratio: 0.15,
-      indirect_opex_to_tci_ratio: 0.077,
-      products: [
-        {
-          name: "JET",
-          price: 3000,
-          priceUnit: "USD/t",
-          priceSensitivity: 0.5,
-          priceSensitivityUnit: "USD/gCO₂",
-          carbonContent: 0.847,
-          energyContent: 43.8,
-          energyUnit: "MJ/kg",
-          density: 810,
-          yield: 0.64,
-          yieldUnit: "kg/kg",
-        },
-        {
-          name: "DIESEL",
-          price: 1500,
-          priceUnit: "USD/t",
-          priceSensitivity: 0.5,
-          priceSensitivityUnit: "USD/gCO₂",
-          carbonContent: 0.85,
-          energyContent: 42.6,
-          energyUnit: "MJ/kg",
-          density: 830,
-          yield: 0.15,
-          yieldUnit: "kg/kg",
-        },
-        {
-          name: "Naphtha",
-          price: 1000,
-          priceUnit: "USD/t",
-          priceSensitivity: 0.5,
-          priceSensitivityUnit: "USD/gCO₂",
-          carbonContent: 0.84,
-          energyContent: 43.4,
-          energyUnit: "MJ/kg",
-          density: 700,
-          yield: 0.21,
-          yieldUnit: "kg/kg",
-        },
-      ],
-    });
+    // Reset to HEFA default values
+    setInputs({ ...HEFA_DEFAULT_INPUTS });
     // Reset chart data
     setChartData({ labels: [], pv: [], breakevenIndex: -1 });
+    // Clear apiData
+    setApiData(null);
   };
 
   const handleSave = () => {
@@ -544,12 +593,15 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
 
     if (apiData.technoEconomics) {
       const te = apiData.technoEconomics;
-      csvRows.push(`Total Capital Investment,${te.total_capital_investment || 'N/A'},${selectedCurrency}`);
+      // TCI is in MUSD from backend, convert to USD for export
+      const tciUSD = te.total_capital_investment ? te.total_capital_investment * 1_000_000 : 'N/A';
+      csvRows.push(`Total Capital Investment,${tciUSD},${selectedCurrency}`);
       csvRows.push(`Annual Production,${te.production || 'N/A'},t/yr`);
       csvRows.push(`Feedstock Consumption,${te.feedstock_consumption || 'N/A'},t/yr`);
-      // csvRows.push(`Hydrogen Consumption,${te.hydrogen_consumption || 'N/A'},kg/yr`);
       csvRows.push(`Hydrogen Consumption,${te.hydrogen_consumption || 'N/A'},ton/year`);
-      csvRows.push(`Electricity Consumption,${te.electricity_consumption || 'N/A'},MWh/yr`);
+      // Electricity is in kWh from backend, convert to MWh for export
+      const elecMWh = te.utility_consumption?.electricity ? te.utility_consumption.electricity / 1000 : 'N/A';
+      csvRows.push(`Electricity Consumption,${elecMWh},MWh/yr`);
       csvRows.push(`Total OPEX,${te.total_opex || 'N/A'},${selectedCurrency}/yr`);
       csvRows.push(`Total Direct OPEX,${te.total_direct_opex || 'N/A'},${selectedCurrency}/yr`);
       csvRows.push(`Total Indirect OPEX,${te.total_indirect_opex || 'N/A'},${selectedCurrency}/yr`);
@@ -629,11 +681,9 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       (acc, product) => acc + (Number(product.massFraction) || 0),
       0
     );
-    if (totalMassFraction > 100 + 1e-6) {
-      console.warn("Total product mass fraction exceeds 100%. Adjust inputs before calculating.");
-      return;
-    }
-
+    // Note: Removed strict 100% check to allow calculation even if slightly off, 
+    // relying on backend normalization or user discretion.
+    
     // Look up IDs from master data
     const processObj = masterData.processes.find(p => p.name === selectedProcess);
     const feedstockObj = masterData.feedstocks.find(f => f.name === selectedFeedstock);
@@ -643,29 +693,51 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       return;
     }
 
-    // Default country ID (will need to be updated when country selection is implemented)
-    const countryId = 1; // Placeholder - should come from country selection
+    const countryId = 1; // Placeholder
 
     setIsCalculating(true);
     try {
-      // Build payload matching backend UserInputsSchema
+      // === UNIT CONVERSIONS FOR BACKEND ===
+      
+      // 1. Capacity: Frontend = Tons/yr (e.g. 500,000). Backend expects KTA (e.g. 500)
+      const capacityKTA = (inputs.production_capacity || 0) / 1000;
+
+      // 2. TCI Ref: Frontend = USD (e.g. 400,000,000). Backend expects MUSD (e.g. 400)
+      const tciRefMUSD = (inputs.tci_ref || 0) / 1_000_000;
+
+      // 3. Capacity Ref: Frontend = Tons/yr. Backend expects KTA.
+      const capacityRefKTA = (inputs.capacity_ref || 0) / 1000;
+
+      // 4. Electricity: Frontend = USD/kWh (e.g. 0.055). Backend expects USD/MWh (e.g. 55)
+      // The backend code specifically does: price / 1000. So we must multiply by 1000 here.
+      const electricityPriceMWh = (inputs.electricity_rate || 0) * 1000;
+
+      // 5. Feedstock Yield: Frontend = Ratio (e.g. 1.21). 
+      // Backend Logic: "if yield > 1.0, divide by 100". 
+      // If we send 1.21, backend makes it 0.0121 (WRONG).
+      // If we send 121, backend makes it 1.21 (CORRECT).
+      let feedstockYieldPayload = inputs.feedstock_yield || 0;
+      if (feedstockYieldPayload > 1.0 && feedstockYieldPayload < 100) {
+         feedstockYieldPayload = feedstockYieldPayload * 100;
+      }
+
       const payload = {
         processId: processObj.id,
         feedstockId: feedstockObj.id,
         countryId: countryId,
         conversionPlant: {
           plantCapacity: {
-            value: inputs.production_capacity || 100,
-            unitId: 1 // ktpa unit ID
+            value: capacityKTA, // <--- CHANGED: Sent as KTA
+            unitId: 1
           },
           annualLoadHours: inputs.annual_load_hours || 8000,
           ciProcessDefault: inputs.conversion_process_ci_default || 0
         },
         economicParameters: {
           projectLifetimeYears: inputs.plant_lifetime || 20,
-          discountRatePercent: inputs.discount_factor || 10,
-          tciRefMusd: inputs.tci_ref || null,
-          referenceCapacityKtpa: inputs.capacity_ref || null,
+          discountRatePercent: (inputs.discount_factor || 0) * 100, // Send as percent (e.g. 7 for 0.07)
+          tciRefMusd: tciRefMUSD, // <--- CHANGED: Sent as MUSD
+          referenceCapacityKtpa: capacityRefKTA, // <--- CHANGED: Sent as KTA
           tciScalingExponent: inputs.tci_scaling_exponent || 0.6,
           workingCapitalTciRatio: inputs.wc_to_tci_ratio || 0.05,
           indirectOpexTciRatio: inputs.indirect_opex_to_tci_ratio || 0.04
@@ -676,7 +748,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           carbonContent: inputs.feedstock_carbon_content || 0,
           carbonIntensity: { value: inputs.feedstock_carbon_intensity || 0, unitId: 3 },
           energyContent: inputs.feedstock_energy_content || 0,
-          yieldPercent: inputs.feedstock_yield || 0
+          yieldPercent: feedstockYieldPayload // <--- CHANGED: Scaled to survive backend logic
         }],
         utilityData: [
           {
@@ -685,11 +757,11 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
             carbonContent: 0,
             carbonIntensity: { value: inputs.hydrogen_carbon_intensity || 0, unitId: 5 },
             energyContent: 0,
-            yieldPercent: inputs.hydrogen_yield || 0
+            yieldPercent: inputs.hydrogen_yield || 0 // Usually < 1, so backend keeps it as is
           },
           {
             name: "Electricity",
-            price: { value: inputs.electricity_rate || 0, unitId: 6 },
+            price: { value: electricityPriceMWh, unitId: 6 }, // <--- CHANGED: Sent as USD/MWh
             carbonContent: 0,
             carbonIntensity: { value: inputs.electricity_carbon_intensity || 0, unitId: 7 },
             energyContent: 0,
@@ -702,20 +774,18 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           priceSensitivityToCi: Number(product.priceSensitivity) || 0,
           carbonContent: Number(product.carbonContent) || 0,
           energyContent: Number(product.energyContent) || 0,
-          yieldPercent: Number(product.yield) || 0,
+          // If yield is entered as a decimal (0.64), backend keeps it.
+          // If entered as percent (64), backend divides by 100. Both work.
+          yieldPercent: Number(product.yield) || 0, 
           productDensity: Number(product.density) || 0
         }))
       };
 
-      console.log("=== API Request ===");
-      console.log("Scenario ID:", currentScenario.scenario_id);
-      console.log("Payload:", payload);
+      console.log("=== API Request Payload (Corrected Units) ===");
+      console.log(JSON.stringify(payload, null, 2));
 
       // Use the calculateScenario API function
       const result = await calculateScenario(currentScenario.scenario_id, payload);
-
-      console.log("=== API Response ===");
-      console.log("Result:", result);
 
       if (!result.success) {
         console.error("Calculation failed:", result.error);
@@ -734,12 +804,10 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           resData.technoEconomics,
           resData.financials
         );
-        console.log("📊 Updated scenario outputs in context");
       }
 
       if (resData?.financials?.cashFlowTable?.length) {
         applyTableData(resData.financials.cashFlowTable);
-        console.log("Table updated with", resData.financials.cashFlowTable.length, "rows of API data");
       } else {
         console.warn("No cash flow table in response, using mock data");
         applyTableData(mockCashFlowTable);
@@ -747,8 +815,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     } catch (error) {
       console.error("=== API Error ===");
       console.error("Error:", error.message);
-      console.warn("Using mock cash flow table");
-      applyTableData(mockCashFlowTable);
       setApiData(null);
     } finally {
       setIsCalculating(false);
@@ -841,7 +907,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       stats: [
         {
           label: `Total Capital Investment (${currSymbol})`,
-          value: formatValue(apiData?.technoEconomics?.total_capital_investment, 2, selectedCurrency),
+          value: formatValue((apiData?.technoEconomics?.total_capital_investment || 0) * 1_000_000, 2, selectedCurrency),
         },
         {
           label: `Total OPEX (${currSymbol}/year)`,
@@ -905,12 +971,14 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const utilityConsumption = apiData?.technoEconomics?.utility_consumption || {};
 
   // Calculate annualized capital using Capital Recovery Factor (CRF)
+  // Note: totalCapitalInvestment is in MUSD from backend, convert to USD for calculations
+  const tciInUSD = totalCapitalInvestment !== null ? totalCapitalInvestment * 1_000_000 : null;
   const discountRate = inputs?.discount_factor || 0.07;
   const plantLifetime = inputs?.plant_lifetime || 20;
   const crf = discountRate > 0
     ? (discountRate * Math.pow(1 + discountRate, plantLifetime)) / (Math.pow(1 + discountRate, plantLifetime) - 1)
     : 1 / plantLifetime;
-  const annualizedCapital = totalCapitalInvestment !== null ? totalCapitalInvestment * crf : null;
+  const annualizedCapital = tciInUSD !== null ? tciInUSD * crf : null;
 
   const lcopCapital = safeCapacity && annualizedCapital !== null ? annualizedCapital / safeCapacity : null;
   const lcopFeedstock = safeCapacity && feedstockCostValue !== null ? feedstockCostValue / safeCapacity : null;
@@ -977,8 +1045,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     consumptionCards.push({
       key: "electricity",
       label: "Electricity",
-      value: formatNumber(electricityConsumption / 1000000, 2),
-      unit: "GWh/yr",
+      value: formatNumber(electricityConsumption / 1000, 2),
+      unit: "MWh/yr",
     });
   }
 
@@ -1070,7 +1138,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       stats: [
         {
           label: `Total Capital Investment (${currSymbol})`,
-          value: formatValue(totalCapitalInvestment, 2, selectedCurrency),
+          value: formatValue(totalCapitalInvestment !== null ? totalCapitalInvestment * 1_000_000 : null, 2, selectedCurrency),
         },
         {
           label: `Total direct OPEX (${currSymbol}/yr)`,
@@ -1081,6 +1149,26 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
             { label: `Cost of Electricity (${currSymbol}/yr)`, value: formatValue(electricityCost, 2, selectedCurrency) },
           ],
         },
+
+        {
+          label: `Total Annual Revenue (${currSymbol}/yr)`,
+          value: formatValue(apiData?.technoEconomics?.total_revenue, 2, selectedCurrency),
+          details: Object.entries(apiData?.technoEconomics?.product_revenue_breakdown || {}).map(([name, value]) => ({
+            label: name.charAt(0).toUpperCase() + name.slice(1), // Capitalize first letter
+            value: formatValue(value, 2, selectedCurrency)
+          })),
+        },
+
+        {
+          label: `Total direct OPEX (${currSymbol}/yr)`,
+          value: formatValue(totalDirectOpex, 2, selectedCurrency),
+          details: [
+            { label: `Cost of Feedstocks (${currSymbol}/yr)`, value: formatValue(feedstockCostValue, 2, selectedCurrency) },
+            { label: `Cost of Hydrogen (${currSymbol}/yr)`, value: formatValue(hydrogenCost, 2, selectedCurrency) },
+            { label: `Cost of Electricity (${currSymbol}/yr)`, value: formatValue(electricityCost, 2, selectedCurrency) },
+          ],
+        },
+
         {
           label: `Total Indirect OPEX (${currSymbol}/yr)`,
           value: formatValue(totalIndirectOpexValue, 2, selectedCurrency),

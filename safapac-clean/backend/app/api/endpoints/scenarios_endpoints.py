@@ -163,13 +163,13 @@ def create_scenario(
 
     return db_scenario
 
-@router.get("", response_model=List[ScenarioResponse])
+@router.get("", response_model=List[ScenarioDetailResponse])
 def get_project_scenarios(
     project_id: UUID,
     current_user: User = Depends(get_current_active_user),
     crud: BiofuelCRUD = Depends(get_biofuel_crud)
 ):
-    """Get all scenarios for a project."""
+    """Get all scenarios for a project (includes inputs and calculation results)."""
     db_project = crud.get_project_by_id(project_id)
     if not db_project or db_project.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Project not found")
