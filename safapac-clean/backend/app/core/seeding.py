@@ -12,12 +12,9 @@ from uuid import UUID
 import bcrypt  # Add bcrypt for password hashing
 
 
-# Import all necessary models
-from app.models.master_data import (
-    Country, DefaultParameterSet, Feedstock, ProcessFeedstockRef,
-    ProcessTechnology, ProcessUtilityConsumptionRef, Product,
-    ProductReferenceBreakdown, Utility
-)
+# Import all necessary models - REMOVE UnitRatio import
+
+from app.models.master_data import Country, DefaultParameterSet, Feedstock, ProcessFeedstockRef, ProcessTechnology, ProcessUtilityConsumptionRef, Product, ProductReferenceBreakdown, Utility, UtilityCountryPriceDefaults
 
 from app.core.database import SessionLocal, create_tables
 from app.core.security import get_password_hash
@@ -34,68 +31,94 @@ logger = logging.getLogger(__name__)
 
 REFERENCE_DATA_SEED: Dict[str, Any] = {
     # --- Master Data ---
-    # Note: Only names are required. Technical properties are provided by user inputs.
-    "processes": ["HEFA", "FT-BtL", "ATJ", "CHJ"],
+    "processes": ["HEFA", "FT-BtL", "ATJ", "FT", "SIP", "FT-SKA", "ATJ-SPK", "CHJ", "HC-HEFA-SPK", "ATJ-SKA"],
     "countries": ["USA", "Malaysia"],
-    "products": ["Jet", "Diesel", "Gasoline", "Propane", "Naphtha"],  # Names only - properties from user
+    "products": [
+        {"name": "Jet", "carbon_content_kg_c_per_kg": 0.847, "energy_content_mj_per_kg": 43.8, "density_ref": 0.81},
+        {"name": "Diesel", "carbon_content_kg_c_per_kg": 0.850, "energy_content_mj_per_kg": 42.6, "density_ref": 0.83},
+        {"name": "Gasoline", "carbon_content_kg_c_per_kg": 0.840, "energy_content_mj_per_kg": 43.4, "density_ref": 0.74},
+        {"name": "Propane", "carbon_content_kg_c_per_kg": 0.818, "energy_content_mj_per_kg": 46.3, "density_ref": 0.51},
+        {"name": "Naphtha", "carbon_content_kg_c_per_kg": 0.849, "energy_content_mj_per_kg": 43.1, "density_ref": 0.70},
+    ],
     "feedstocks": [
-        # Keep: name, carbon_content (used if user doesn't provide), yield_ref (default yield)
-        # Removed: energy_content_mj_per_kg (unused), price_ref_usd_per_unit (user provides)
-        {"name": "UCO", "carbon_content_kg_c_per_kg": 0.77, "yield_ref": 1.2048},
-        {"name": "Lignocellulosic Biomass", "carbon_content_kg_c_per_kg": 0.52, "yield_ref": 4.5},
-        {"name": "Animal Manure", "carbon_content_kg_c_per_kg": 0.40, "yield_ref": 8.5},
+        {"name": "UCO", "carbon_content_kg_c_per_kg": 0.77, "energy_content_mj_per_kg": 37.0, "ci_ref_gco2e_per_mj": 20.0, "price_ref_usd_per_unit": 930.0, "yield_ref": 1.2048},
+        {"name": "Lignocellulosic Biomass", "carbon_content_kg_c_per_kg": 0.52, "energy_content_mj_per_kg": 18.0, "ci_ref_gco2e_per_mj": 5.0, "price_ref_usd_per_unit": 50.0, "yield_ref": 4.5},
+        {"name": "Animal Manure", "carbon_content_kg_c_per_kg": 0.40, "energy_content_mj_per_kg": 15.0, "ci_ref_gco2e_per_mj": 15.0, "price_ref_usd_per_unit": 10.0, "yield_ref": 8.5},
+        {"name": "Animal Fats", "carbon_content_kg_c_per_kg": 0.76, "energy_content_mj_per_kg": 39.0, "ci_ref_gco2e_per_mj": 35.0, "price_ref_usd_per_unit": 1100.0, "yield_ref": 1.2048},
+        {"name": "Algae Oil", "carbon_content_kg_c_per_kg": 0.75, "energy_content_mj_per_kg": 36.0, "ci_ref_gco2e_per_mj": 45.0, "price_ref_usd_per_unit": 1500.0, "yield_ref": 1.2048},
+        {"name": "Yellow Grease", "carbon_content_kg_c_per_kg": 0.77, "energy_content_mj_per_kg": 37.5, "ci_ref_gco2e_per_mj": 25.0, "price_ref_usd_per_unit": 850.0, "yield_ref": 1.2048},
+        {"name": "MSW", "carbon_content_kg_c_per_kg": 0.35, "energy_content_mj_per_kg": 10.0, "ci_ref_gco2e_per_mj": 12.0, "price_ref_usd_per_unit": 30.0, "yield_ref": 3.2258},
+        {"name": "Forest Residues", "carbon_content_kg_c_per_kg": 0.50, "energy_content_mj_per_kg": 18.5, "ci_ref_gco2e_per_mj": 7.0, "price_ref_usd_per_unit": 65.0, "yield_ref": 5.5555},
+        {"name": "Agriculture Residues", "carbon_content_kg_c_per_kg": 0.45, "energy_content_mj_per_kg": 17.0, "ci_ref_gco2e_per_mj": 10.0, "price_ref_usd_per_unit": 60.0, "yield_ref": 7.1429},
+        {"name": "Sugarcane", "carbon_content_kg_c_per_kg": 0.42, "energy_content_mj_per_kg": 16.0, "ci_ref_gco2e_per_mj": 30.0, "price_ref_usd_per_unit": 40.0, "yield_ref": 28.7356},
+        {"name": "Bagasse", "carbon_content_kg_c_per_kg": 0.48, "energy_content_mj_per_kg": 17.5, "ci_ref_gco2e_per_mj": 8.0, "price_ref_usd_per_unit": 55.0, "yield_ref": 20.1532},
+        {"name": "Molasses", "carbon_content_kg_c_per_kg": 0.40, "energy_content_mj_per_kg": 14.0, "ci_ref_gco2e_per_mj": 40.0, "price_ref_usd_per_unit": 180.0, "yield_ref": 1.938},
+        {"name": "Wheat Straw", "carbon_content_kg_c_per_kg": 0.46, "energy_content_mj_per_kg": 17.2, "ci_ref_gco2e_per_mj": 9.0, "price_ref_usd_per_unit": 70.0, "yield_ref": 6.6934},
+        {"name": "Palm Kernel Shell", "carbon_content_kg_c_per_kg": 0.53, "energy_content_mj_per_kg": 19.0, "ci_ref_gco2e_per_mj": 14.0, "price_ref_usd_per_unit": 85.0, "yield_ref": 5.0},
+        {"name": "Coconut Husks", "carbon_content_kg_c_per_kg": 0.49, "energy_content_mj_per_kg": 18.2, "ci_ref_gco2e_per_mj": 11.0, "price_ref_usd_per_unit": 50.0, "yield_ref": 4.5},
+        {"name": "Rice Husk", "carbon_content_kg_c_per_kg": 0.38, "energy_content_mj_per_kg": 15.5, "ci_ref_gco2e_per_mj": 12.0, "price_ref_usd_per_unit": 45.0, "yield_ref": 5.5},
+        {"name": "Corn Stover", "carbon_content_kg_c_per_kg": 0.47, "energy_content_mj_per_kg": 17.8, "ci_ref_gco2e_per_mj": 10.5, "price_ref_usd_per_unit": 75.0, "yield_ref": 6.0},
+        {"name": "Soybean Oil", "carbon_content_kg_c_per_kg": 0.77, "energy_content_mj_per_kg": 39.5, "ci_ref_gco2e_per_mj": 55.0, "price_ref_usd_per_unit": 1200.0, "yield_ref": 1.1},
+        {"name": "Ethanol", "carbon_content_kg_c_per_kg": 0.52, "energy_content_mj_per_kg": 26.8, "ci_ref_gco2e_per_mj": 60.0, "price_ref_usd_per_unit": 650.0, "yield_ref": 2.5},
+        {"name": "Corn Residues", "carbon_content_kg_c_per_kg": 0.46, "energy_content_mj_per_kg": 17.5, "ci_ref_gco2e_per_mj": 11.0, "price_ref_usd_per_unit": 68.0, "yield_ref": 6.8},
+        {"name": "Rice Straw", "carbon_content_kg_c_per_kg": 0.41, "energy_content_mj_per_kg": 16.0, "ci_ref_gco2e_per_mj": 13.0, "price_ref_usd_per_unit": 55.0, "yield_ref": 7.2},
+        {"name": "Waste CO2", "carbon_content_kg_c_per_kg": 0.27, "energy_content_mj_per_kg": 0.0, "ci_ref_gco2e_per_mj": -100.0, "price_ref_usd_per_unit": 40.0, "yield_ref": 0.8},
+        {"name": "Wood Chips", "carbon_content_kg_c_per_kg": 0.50, "energy_content_mj_per_kg": 19.0, "ci_ref_gco2e_per_mj": 8.5, "price_ref_usd_per_unit": 90.0, "yield_ref": 5.2}
     ],
     "utilities": [
-        # Keep: name, consumption ratio comes from p_f_references
-        # Removed: carbon_content, energy_content, ci_ref, yield_ref (all unused or user-provided)
-        {"name": "Hydrogen"},
-        {"name": "Electricity"},
+        {"name": "Hydrogen", "carbon_content_kg_c_per_kg": 0.0, "energy_content_mj_per_kg": 120.0, "ci_ref_gco2e_per_mj": 10.0, "yield_ref": 0},
+        {"name": "Electricity", "carbon_content_kg_c_per_kg": 0.0, "energy_content_mj_per_kg": 0.0, "ci_ref_gco2e_per_mj": 150.0, "yield_ref": 0},
     ],
-
-    # --- Reference Data (P+F) ---
+    
+    # --- Reference Data (P+F, P+F+C, U+C) ---
     "p_f_references": [
         # HEFA + UCO (P+F)
         {
-            "process": "HEFA", "feedstock": "UCO",
-            # Removed: average_product_density_ref (unused)
+            "process": "HEFA", "feedstock": "UCO", 
+            "average_product_density_ref": 0.79, 
             "utilities": [
                 {"utility": "Hydrogen", "consumption_ratio": 0.042},
                 {"utility": "Electricity", "consumption_ratio": 0.12},
             ],
-            # Keep only yield - price/sensitivity provided by user
             "products": [
-                {"name": "Jet", "yield": 69.0},
-                {"name": "Diesel", "yield": 0.0},
-                {"name": "Gasoline", "yield": 31.0},
+                {"name": "Jet", "yield": 69.0, "price": 1.2, "sensitivity": 0.05},
+                {"name": "Diesel", "yield": 0.0, "price": 1.1, "sensitivity": 0.05},
+                {"name": "Gasoline", "yield": 31.0, "price": 1.0, "sensitivity": 0.05},
             ],
             "default_params": {
-                # Removed: annual_load_hours_ref, p_steps, nnp_steps (unused in calculations)
-                "general": {"ci_process_default_gco2_mj": 20.0, "tci_scaling_exponent": 0.6},
-                "USA": {"plant_capacity_ktpa_ref": 500, "tci_ref_musd": 400, "discount_rate_percent": 10.0, "project_lifetime_years": 25},
-                "Malaysia": {"plant_capacity_ktpa_ref": 500, "tci_ref_musd": 380, "discount_rate_percent": 8.5, "project_lifetime_years": 25},
+                "general": {"annual_load_hours_ref": 8000, "ci_process_default_gco2_mj": 20.0, "tci_scaling_exponent": 0.6},
+                "USA": {"plant_capacity_ktpa_ref": 500, "tci_ref_musd": 400, "discount_rate_percent": 10.0, "project_lifetime_years": 25, "p_steps": 3, "nnp_steps": 28},
+                "Malaysia": {"plant_capacity_ktpa_ref": 500, "tci_ref_musd": 380, "discount_rate_percent": 8.5, "project_lifetime_years": 25, "p_steps": 3, "nnp_steps": 28},
             }
         },
         # FT-BtL + Lignocellulosic Biomass (P+F)
         {
-            "process": "FT-BtL", "feedstock": "Lignocellulosic Biomass",
+            "process": "FT-BtL", "feedstock": "Lignocellulosic Biomass", 
+            "average_product_density_ref": 0.78, 
             "utilities": [
                 {"utility": "Hydrogen", "consumption_ratio": 0.08},
                 {"utility": "Electricity", "consumption_ratio": 0.30},
             ],
             "products": [
-                {"name": "Jet", "yield": 72.0},
-                {"name": "Diesel", "yield": 0.0},
-                {"name": "Naphtha", "yield": 28.0},
+                {"name": "Jet", "yield": 72.0, "price": 1.3, "sensitivity": 0.05},
+                {"name": "Diesel", "yield": 0.0, "price": 1.2, "sensitivity": 0.05},
+                {"name": "Naphtha", "yield": 28.0, "price": 1.1, "sensitivity": 0.05},
             ],
             "default_params": {
-                "general": {"ci_process_default_gco2_mj": 18.0, "tci_scaling_exponent": 0.65},
-                "USA": {"plant_capacity_ktpa_ref": 100, "tci_ref_musd": 900, "discount_rate_percent": 10.0, "project_lifetime_years": 30},
-                "Malaysia": {"plant_capacity_ktpa_ref": 100, "tci_ref_musd": 850, "discount_rate_percent": 8.0, "project_lifetime_years": 30},
+                "general": {"annual_load_hours_ref": 7884, "ci_process_default_gco2_mj": 18.0, "tci_scaling_exponent": 0.65},
+                "USA": {"plant_capacity_ktpa_ref": 100, "tci_ref_musd": 900, "discount_rate_percent": 10.0, "project_lifetime_years": 30, "p_steps": 5, "nnp_steps": 35},
+                "Malaysia": {"plant_capacity_ktpa_ref": 100, "tci_ref_musd": 850, "discount_rate_percent": 8.0, "project_lifetime_years": 30, "p_steps": 5, "nnp_steps": 35},
             }
         },
     ],
-
-    # Removed: u_c_prices - User always provides utility prices directly
+    
+    # Utility Prices (U+C)
+    "u_c_prices": [
+        {"utility": "Hydrogen", "country": "USA", "price_ref_usd_per_unit": 5.0},
+        {"utility": "Hydrogen", "country": "Malaysia", "price_ref_usd_per_unit": 6.5},
+        {"utility": "Electricity", "country": "USA", "price_ref_usd_per_unit": 0.12},
+        {"utility": "Electricity", "country": "Malaysia", "price_ref_usd_per_unit": 0.08},
+    ]
 }
 
 # --- UNIT MASTER DATA DEFINITIONS ---
@@ -236,46 +259,76 @@ def seed_master_data(db: Session, seed_data: Dict[str, Any]) -> Dict[str, Dict[s
         logger.info(f"{len(seed_data['countries'])} Countries seeded.")
     id_maps['country'] = get_id_map(db, Country)
 
-    # Seed Products (Name only - properties provided by user)
+    # Seed Products (Name only)
     if db.execute(select(Product)).first() is None:
-        for name in seed_data["products"]:
-            db.add(Product(name=name))
+        for data in seed_data["products"]:
+            db.add(Product(name=data["name"])) 
         db.commit()
         logger.info(f"{len(seed_data['products'])} Products seeded.")
     id_maps['product'] = get_id_map(db, Product)
 
-    # Seed Feedstocks (name, carbon_content, yield_ref only)
+    # Seed Feedstocks
     if db.execute(select(Feedstock)).first() is None:
         for data in seed_data["feedstocks"]:
             db.add(Feedstock(
                 name=data["name"],
-                carbon_content_kg_c_per_kg=data.get("carbon_content_kg_c_per_kg", 0.0),
-                yield_ref=data.get("yield_ref", 1.0)
+                carbon_content_kg_c_per_kg=data["carbon_content_kg_c_per_kg"],
+                energy_content_mj_per_kg=data["energy_content_mj_per_kg"],
+                ci_ref_gco2e_per_mj=data["ci_ref_gco2e_per_mj"],
+                price_ref_usd_per_unit=data["price_ref_usd_per_unit"],
+                yield_ref=data["yield_ref"]
             ))
         db.commit()
         logger.info(f"{len(seed_data['feedstocks'])} Feedstocks seeded.")
     id_maps['feedstock'] = get_id_map(db, Feedstock)
 
-    # Seed Utilities (name only - consumption ratios in p_f_references)
+    # Seed Utilities
     if db.execute(select(Utility)).first() is None:
         for data in seed_data["utilities"]:
-            db.add(Utility(name=data["name"]))
+            db.add(Utility(
+                name=data["name"],
+                carbon_content_kg_c_per_kg=data["carbon_content_kg_c_per_kg"],
+                energy_content_mj_per_kg=data["energy_content_mj_per_kg"],
+                ci_ref_gco2e_per_mj=data["ci_ref_gco2e_per_mj"],
+                yield_ref=data["yield_ref"]
+            ))
         db.commit()
         logger.info(f"{len(seed_data['utilities'])} Utilities seeded.")
     id_maps['utility'] = get_id_map(db, Utility)
-
+    
     return id_maps
 
 
 def seed_utility_prices(db: Session, seed_data: Dict[str, Any], id_maps: Dict[str, Dict[str, int]]) -> None:
-    """DEPRECATED: User provides utility prices directly. Kept for API compatibility."""
-    # Skip - utility prices are now provided by user inputs, not reference data
-    _ = db, seed_data, id_maps  # Suppress unused parameter warnings
-    logger.info("Skipping UtilityCountryPriceDefaults seeding - user provides prices directly.")
+    """Seeds UtilityCountryPriceDefaults (U+C) data."""
+    if db.execute(select(UtilityCountryPriceDefaults)).first() is not None:
+        logger.info("UtilityCountryPriceDefaults already populated. Skipping.")
+        return
+
+    utility_map = id_maps['utility']
+    country_map = id_maps['country']
+
+    count = 0
+    for data in seed_data["u_c_prices"]:
+        utility_id = utility_map.get(data['utility'])
+        country_id = country_map.get(data['country'])
+        
+        if utility_id and country_id:
+            db.add(UtilityCountryPriceDefaults(
+                utility_id=utility_id,
+                country_id=country_id,
+                price_ref_usd_per_unit=data['price_ref_usd_per_unit']
+            ))
+            count += 1
+        else:
+            logger.error(f"Missing ID for utility price: {data}")
+            
+    db.commit()
+    logger.info(f"{count} UtilityCountryPriceDefaults records seeded.")
 
 
 def seed_p_f_references(db: Session, seed_data: Dict[str, Any], id_maps: Dict[str, Dict[str, int]]) -> None:
-    """Seeds ProcessFeedstockRef, UtilityConsumption, ProductBreakdown (yield only), and DefaultParameterSet."""
+    """Seeds ProcessFeedstockRef, its children (UtilityConsumption, ProductBreakdown) and DefaultParameterSet."""
     if db.execute(select(ProcessFeedstockRef)).first() is not None:
         logger.info("ProcessFeedstockRef and associated tables already populated. Skipping.")
         return
@@ -285,30 +338,32 @@ def seed_p_f_references(db: Session, seed_data: Dict[str, Any], id_maps: Dict[st
     utility_map = id_maps['utility']
     product_map = id_maps['product']
     country_map = id_maps['country']
-
+    
+    products_master_data = {p['name']: p for p in seed_data["products"]}
     p_f_ref_count = 0
-
+    
     for p_f_ref_data in seed_data["p_f_references"]:
         process_name = p_f_ref_data['process']
         feedstock_name = p_f_ref_data['feedstock']
-
+        
         process_id = process_map.get(process_name)
         feedstock_id = feedstock_map.get(feedstock_name)
-
+        
         if not process_id or not feedstock_id:
             logger.error(f"Missing ID for P-F Reference: {process_name}/{feedstock_name}. Skipping.")
             continue
 
-        # 1. Seed ProcessFeedstockRef (P+F) - no density, it's unused
+        # 1. Seed ProcessFeedstockRef (P+F)
         p_f_ref = ProcessFeedstockRef(
             process_id=process_id,
-            feedstock_id=feedstock_id
+            feedstock_id=feedstock_id,
+            average_product_density_ref=p_f_ref_data['average_product_density_ref']
         )
         db.add(p_f_ref)
-        db.flush()  # Flush to get p_f_ref.id
+        db.flush() # Flush to get p_f_ref.id
         p_f_ref_count += 1
 
-        # 2. Seed ProcessUtilityConsumptionRef (P+F + U) - consumption ratios only
+        # 2. Seed ProcessUtilityConsumptionRef (P+F + U)
         for util_data in p_f_ref_data['utilities']:
             utility_id = utility_map.get(util_data['utility'])
             if utility_id:
@@ -318,21 +373,29 @@ def seed_p_f_references(db: Session, seed_data: Dict[str, Any], id_maps: Dict[st
                     consumption_ratio_ref_unit_per_kg_fuel=util_data['consumption_ratio']
                 ))
 
-        # 3. Seed ProductReferenceBreakdown (P+F + Product) - yield only, other props from user
+        # 3. Seed ProductReferenceBreakdown (P+F + Product)
         for prod_data in p_f_ref_data['products']:
             product_name = prod_data['name']
             product_id = product_map.get(product_name)
+            full_prod_data = products_master_data.get(product_name)
 
-            if product_id:
+            if product_id and full_prod_data:
                 db.add(ProductReferenceBreakdown(
                     ref_id=p_f_ref.id,
                     product_id=product_id,
-                    product_yield_ref=prod_data['yield'] / 100.0,  # Convert % yield to fraction
+                    # Technical properties from master data
+                    carbon_content_kg_c_per_kg=full_prod_data['carbon_content_kg_c_per_kg'],
+                    energy_content_mj_per_kg=full_prod_data['energy_content_mj_per_kg'],
+                    product_density=full_prod_data['density_ref'],
+                    # Default Economic properties from P+F ref data
+                    price_ref_usd_per_unit=prod_data['price'],
+                    price_sensitivity_ref=prod_data['sensitivity'],
+                    product_yield_ref=prod_data['yield'] / 100.0, # Convert % yield to fraction
                 ))
             else:
-                logger.error(f"Missing Product ID for: {product_name}")
+                logger.error(f"Missing ID or data for Product Breakdown: {product_name}")
 
-        # 4. Seed DefaultParameterSet (P+F + Country) - only essential params
+        # 4. Seed DefaultParameterSet (P+F + Country)
         general_defaults = p_f_ref_data['default_params']['general']
         country_defaults = {k: v for k, v in p_f_ref_data['default_params'].items() if k != 'general'}
 
@@ -343,20 +406,27 @@ def seed_p_f_references(db: Session, seed_data: Dict[str, Any], id_maps: Dict[st
                     process_id=process_id,
                     feedstock_id=feedstock_id,
                     country_id=country_id,
-
-                    # Essential defaults (used in TCI formula)
+                    
+                    # Conversion Plant Defaults
                     plant_capacity_ktpa_ref=defaults['plant_capacity_ktpa_ref'],
+                    annual_load_hours_ref=general_defaults['annual_load_hours_ref'],
                     ci_process_default_gco2_mj=general_defaults['ci_process_default_gco2_mj'],
-                    tci_ref_musd=defaults['tci_ref_musd'],
-                    tci_scaling_exponent=general_defaults['tci_scaling_exponent'],
-
-                    # Financial defaults
+                    
+                    # Economic Parameter Defaults
                     project_lifetime_years=defaults['project_lifetime_years'],
                     discount_rate_percent=defaults['discount_rate_percent'],
+                    tci_ref_musd=defaults['tci_ref_musd'],
+                    tci_scaling_exponent=general_defaults['tci_scaling_exponent'],
+                    working_capital_tci_ratio=0.10, 
+                    indirect_opex_tci_ratio=0.03,
+                    
+                    # Additional Parameters
+                    p_steps=defaults['p_steps'],
+                    nnp_steps=defaults['nnp_steps']
                 ))
             else:
                 logger.error(f"Missing Country ID for Default Parameter Set: {country_name}")
-
+                
     db.commit()
     logger.info(f"{p_f_ref_count} Process-Feedstock references and associated default data seeded successfully.")
 

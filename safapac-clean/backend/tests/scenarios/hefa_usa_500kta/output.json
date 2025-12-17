@@ -179,17 +179,17 @@
   },
   "financial_outputs": {
     "irr": {
-      "value": 1.20,
+      "value": 0.96,
       "unit": "ratio",
       "description": "Internal Rate of Return"
     },
     "npv": {
-      "value": 3532017806,
+      "value": 3495748626,
       "unit": "USD",
       "description": "Net Present Value"
     },
     "payback_period": {
-      "value": 1,
+      "value": 2,
       "unit": "years"
     }
   }

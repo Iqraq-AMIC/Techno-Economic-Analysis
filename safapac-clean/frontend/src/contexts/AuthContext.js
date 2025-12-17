@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from "react";
 import axios from "axios";
 
 const AuthContext = createContext();
@@ -10,14 +10,49 @@ const TOKEN_STORAGE_KEY = "access_token"; // <--- NEW: Required for API calls
 // Ensure this matches your FastAPI URL
 const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
 
+// Helper: Decode JWT and get expiration time
+const getTokenExpiration = (token) => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp ? payload.exp * 1000 : null; // Convert to milliseconds
+  } catch {
+    return null;
+  }
+};
+
+// Helper: Check if token is expired
+const isTokenExpired = (token) => {
+  const exp = getTokenExpiration(token);
+  if (!exp) return true;
+  return Date.now() >= exp;
+};
+
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(AUTH_STORAGE_KEY) === "true";
+
+    // Check if token exists and is not expired
+    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    const authFlag = window.localStorage.getItem(AUTH_STORAGE_KEY) === "true";
+
+    if (authFlag && token && isTokenExpired(token)) {
+      // Token expired - clear auth state
+      window.localStorage.removeItem(AUTH_STORAGE_KEY);
+      window.localStorage.removeItem(USER_STORAGE_KEY);
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      return false;
+    }
+
+    return authFlag && token && !isTokenExpired(token);
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
     if (typeof window === "undefined") return null;
+
+    // Don't return user if token is expired
+    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token || isTokenExpired(token)) return null;
+
     const storedUser = window.localStorage.getItem(USER_STORAGE_KEY);
     return storedUser ? JSON.parse(storedUser) : null;
   });
@@ -67,13 +102,56 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  // Memoized logout to use in useEffect without causing re-renders
+  const handleLogout = useCallback((redirect = true) => {
     setIsAuthenticated(false);
     setCurrentUser(null);
     persistAuthState(false);
-    // Optional: Force reload to clear any memory states
-    window.location.href = "/"; 
+    if (redirect) {
+      window.location.href = "/";
+    }
+  }, []);
+
+  const logout = () => {
+    handleLogout(true);
   };
+
+  // Listen for auth:logout event from API interceptor
+  useEffect(() => {
+    const handleAuthLogout = (event) => {
+      console.log("Auth logout event received:", event.detail?.reason);
+      // State already cleared by interceptor, just update React state
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+    };
+
+    window.addEventListener("auth:logout", handleAuthLogout);
+    return () => window.removeEventListener("auth:logout", handleAuthLogout);
+  }, []);
+
+  // Periodic token expiration check (every 60 seconds)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const checkTokenExpiration = () => {
+      const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (!token || isTokenExpired(token)) {
+        console.warn("Token expired during session. Logging out...");
+        // Clear storage
+        window.localStorage.removeItem(AUTH_STORAGE_KEY);
+        window.localStorage.removeItem(USER_STORAGE_KEY);
+        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+        // Update state and redirect
+        handleLogout(true);
+      }
+    };
+
+    // Check immediately and then every 60 seconds
+    checkTokenExpiration();
+    const interval = setInterval(checkTokenExpiration, 60000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, handleLogout]);
 
   // ... (Keep signup/forgotPassword mocks or implement similarly if needed) ...
   const signup = async () => ({ success: true });

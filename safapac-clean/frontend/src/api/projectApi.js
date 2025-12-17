@@ -20,6 +20,33 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// 3. RESPONSE INTERCEPTOR: Handle 401 Unauthorized (Token Expired)
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid - trigger logout
+      console.warn("Token expired or unauthorized. Logging out...");
+
+      // Clear all auth data from localStorage
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("safapac-authenticated");
+      localStorage.removeItem("safapac-user");
+
+      // Dispatch custom event for AuthContext to handle
+      window.dispatchEvent(new CustomEvent("auth:logout", {
+        detail: { reason: "token_expired" }
+      }));
+
+      // Redirect to login page
+      if (window.location.pathname !== "/") {
+        window.location.href = "/";
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // --- HELPER: Transform Backend Data to Frontend Shape ---
 const transformProject = (p) => ({
   id: p.id, // Keep 'id' for components that use it directly
