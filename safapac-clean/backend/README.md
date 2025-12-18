@@ -1,295 +1,336 @@
 # SAFAPAC Backend
 
-FastAPI‑based backend for the SAFAPAC platform, providing RESTful APIs for techno‑economic analysis (TEA) of sustainable aviation fuel (SAF) pathways, financial modeling, and project/scenario management.
+FastAPI-based backend for the SAFAPAC platform, providing RESTful APIs for techno-economic analysis (TEA) of sustainable aviation fuel (SAF) pathways, financial modeling, user authentication, and project/scenario management.
 
-This backend is designed so that a JSON‑file “mock database” can later be replaced by a real relational database (SQLite/PostgreSQL) without breaking the API used by the frontend.
+---
+
+## Prerequisites
+
+Before running the backend, ensure you have the following installed:
+
+| Software | Version | Download Link |
+|----------|---------|---------------|
+| Python | 3.10+ | https://www.python.org/downloads/ |
+| PostgreSQL | 17.x | https://www.postgresql.org/download/ |
+| pgAdmin 4 | Latest | https://www.pgadmin.org/download/ (optional, for DB management) |
+
+---
+
+## Quick Start
+
+### 1. Create PostgreSQL Database
+
+The backend requires a PostgreSQL database to exist before running. **Tables and seed data are created automatically on startup.**
+
+Using pgAdmin or psql, create a new database:
+
+```sql
+-- Connect to PostgreSQL as superuser (e.g., postgres)
+CREATE DATABASE safapac_db;
+```
+
+Or via command line:
+
+```bash
+psql -U postgres -c "CREATE DATABASE safapac_db;"
+```
+
+### 2. Set Up Environment Variables
+
+Create a `.env` file in the `backend/` directory:
+
+```env
+# Database Configuration (REQUIRED)
+DB_USER=postgres
+DB_PASSWORD=your_postgres_password
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=safapac_db
+
+# JWT Configuration (Optional - defaults provided)
+SECRET_KEY=your-secret-key-change-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+```
+
+### 3. Create Virtual Environment & Install Dependencies
+
+```bash
+cd backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 4. Run the Backend
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+On startup, the backend will automatically:
+1. **Create all database tables** (if they don't exist)
+2. **Seed master data** (processes, feedstocks, utilities, countries, products, etc.)
+3. **Seed user accounts** from `app/core/pw.csv`
+
+The API will be available at `http://127.0.0.1:8000`
+
+### 5. Verify Installation
+
+- **API Health Check**: http://127.0.0.1:8000/health
+- **Swagger UI (API Docs)**: http://127.0.0.1:8000/docs
+- **ReDoc**: http://127.0.0.1:8000/redoc
 
 ---
 
 ## Architecture Overview
 
-Top‑level layout (under `backend/`):
-
-- `app/`
-  - `main.py` – FastAPI app, routing, middleware, authentication, and project/scenario endpoints.
-  - `economics.py` – core TEA engine (`BiofuelEconomics`).
-  - `financial_analysis.py` – cash‑flow table + NPV/IRR/payback metrics (`FinancialAnalysis`).
-  - `models.py` – Pydantic models, especially `UserInputs` used by `/calculate`.
-  - `database.py` – process & feedstock database (`BiofuelDatabase`), serves `/processes` and `/feedstocks`.
-  - `feature_calculations.py` – additional calculation helpers.
-  - `mock_database.py` – JSON‑file‑backed “database” (`MockDatabase`) for users/projects/scenarios.
-  - `project_models.py` – Pydantic schemas for project/scenario APIs.
-  - `__init__.py` – package init.
-- `data/`
-  - `users.json` – user accounts for mock DB.
-  - `projects.json` – project metadata.
-  - `scenarios.json` – scenario records (inputs + outputs per scenario).
-  - `scenarios.json.backup` – backup of `scenarios.json`.
-- Root files
-  - `access.json` – mapping of input/output features to CORE/ADVANCE/ROADSHOW tiers.
-  - `requirements.txt` – backend dependencies.
-  - `pytest.ini`, `tests/` – test configuration and suite.
-  - `pw.csv` – credential source for login (/auth/login).
-
----
-
-## Core Modules
-
-### `app/main.py`
-
-- Creates the FastAPI application and configures CORS.
-- Adds simple request logging middleware.
-- Wires up the main services:
-  - `BiofuelDatabase` for process & feedstock metadata.
-  - `BiofuelEconomics` and `FinancialAnalysis` for TEA.
-  - `MockDatabase` (from `mock_database.py`) as the persistence layer.
-- Exposes endpoints:
-  - Authentication:
-    - `POST /auth/login`
-  - TEA metadata:
-    - `GET /processes`
-    - `GET /feedstocks/{process}`
-    - `GET /feedstock/{feedstock_name}`
-  - TEA calculation:
-    - `POST /calculate`
-  - Projects:
-    - `POST /projects/create`
-    - `GET /projects/list-by-user`
-    - `GET /projects/{project_id}`
-  - Scenarios:
-    - `POST /scenarios/create`
-    - `GET /scenarios/list`
-    - `GET /scenarios/{scenario_id}`
-    - `PUT /scenarios/{scenario_id}`
-    - `DELETE /scenarios/{scenario_id}`
-
-### `app/economics.py`
-
-- Implements `BiofuelEconomics`, the core techno‑economic model.
-- Given structured inputs (plant, feedstocks, utilities, products, economics), computes:
-  - Total capital investment (TCI).
-  - OPEX components (feedstock, utilities, indirect OPEX).
-  - Production volumes, SAF production.
-  - Levelized costs (LCOP, LCCA).
-  - Carbon intensity metrics and CO₂ emissions.
-
-### `app/financial_analysis.py`
-
-- Provides `FinancialAnalysis` to build a cash‑flow table and financial KPIs:
-  - Cash‑flow table over plant lifetime (CAPEX year, operating years).
-  - Net present value (NPV).
-  - Internal rate of return (IRR).
-  - Payback period.
-- Used by `/calculate` to augment techno‑economics with financial outputs.
-
-### `app/models.py`
-
-- Defines Pydantic models for request/response validation.
-- `UserInputs` is the key model:
-  - `from_dict()` – builds structured inputs from the JSON payload.
-  - `to_flat_dict()` – flattens structured inputs for simpler parameter access (e.g., discount rate, lifetime).
-
-### `app/database.py`
-
-- `BiofuelDatabase` loads and manages process & feedstock data (typically from CSV).
-- Used by:
-  - `GET /processes` – list process technologies.
-  - `GET /feedstocks/{process}` – feedstocks for a process.
-  - `GET /feedstock/{feedstock_name}` – detailed feedstock data (yields, energy content, etc.).
-
-### `app/mock_database.py`
-
-- `MockDatabase` is a simple JSON‑file backed persistence layer:
-  - `users.json` – users keyed by username.
-  - `projects.json` – projects keyed by `project_id`.
-  - `scenarios.json` – scenarios keyed by `scenario_id`.
-- Provides methods:
-  - Users: `get_user_by_username`, `get_user_by_id`.
-  - Projects: `create_project`, `get_project`, `list_projects_by_user`, `update_project`, `delete_project`.
-  - Scenarios: `create_scenario`, `get_scenario`, `list_scenarios_by_project`, `count_scenarios_by_project`, `update_scenario`, `delete_scenario`.
-- `main.py` imports the global `db` instance from here and uses it in all project/scenario endpoints.
-- This is the main abstraction point to swap JSON persistence for a real SQL database.
-
-### `app/project_models.py`
-
-- Pydantic models that define the shape of project/scenario API payloads:
-  - `ProjectCreate`, `ProjectResponse`, `ProjectListItem`, `ProjectCreateResponse`.
-  - `ScenarioCreate`, `ScenarioResponse`, `ScenarioDetailResponse`, `ScenarioUpdate`.
-- These models define the public API contract consumed by the frontend.
-
-### `backend/access.json`
-
-- Describes which input/output features belong to CORE, ADVANCE, and ROADSHOW tiers.
-- The frontend has a parallel configuration (`frontend/src/config/access.json`), and the `AccessContext` uses that to show/hide features.
-
----
-
-## Development “Database” (JSON Files)
-
-All persistent state is stored as JSON in `backend/data/`:
-
-- `users.json`
-  - Map: `username → { user_id, username, email, name, role, created_at, ... }`.
-  - Used by authentication and project ownership logic.
-- `projects.json`
-  - Map: `project_id → { project_id, user_id, project_name, scenario_count, created_at, updated_at }`.
-- `scenarios.json`
-  - Map: `scenario_id → { scenario_id, project_id, scenario_name, order, inputs, outputs, created_at, updated_at }`.
-  - `inputs` mirrors the TEA input object from the frontend (plant, feedstocks, utilities, products, economics).
-  - `outputs` contains TEA results (technoEconomics, financials, and cash‑flow table).
-- `scenarios.json.backup`
-  - Backup copy of `scenarios.json`, for recovery.
-
-`MockDatabase` reads and writes these files on every operation. There is no in‑memory cache beyond the lifetime of a single method call, which keeps behavior simple and transparent for development.
-
----
-
-## Authentication & `pw.csv`
-
-Authentication uses `backend/pw.csv` as the source of valid credentials.
-
-- `load_valid_credentials()` in `app/main.py`:
-  - Reads `pw.csv` (tab‑delimited) with headers like `Suggested Password`, `Email Address`, `Staff Name`.
-  - Builds a dict keyed by the “Suggested Password” (treated as the login password and logical username).
-  - For each row it constructs:
-    - A stable `user_id` (hash of email, or row index fallback).
-    - `username` (same as password), `email`, `name`, `role`.
-- `POST /auth/login`:
-  - Request: `{ "username": "...", "password": "..." }`.
-  - Looks up `password` in the credentials dict; if found, authenticates.
-  - Ensures a matching user exists in `users.json` (creating one if necessary).
-  - Returns JSON: `{ success: true|false, user?, message }`.
-
-The frontend currently calls this endpoint directly and stores the returned `user` object in its auth context.
-
----
-
-## API Surface & Data Flow
-
-### TEA Metadata & Calculation
-
-- `GET /processes`
-  - Returns a list of available process technologies.
-- `GET /feedstocks/{process}`
-  - Returns feedstock names for the selected process.
-- `GET /feedstock/{feedstock_name}`
-  - Returns detailed feedstock information (yield, energy content, carbon intensity, etc.).
-- `POST /calculate`
-  - Request body (`CalculationRequest`):
-    - `inputs`: structured TEA inputs (plant, feedstocks, utilities, products, economics).
-    - `process_technology`: string.
-    - `feedstock`: string.
-    - `product_key`: string (e.g. `"jet"`).
-  - Behavior:
-    - Validates and converts `inputs` into `UserInputs`.
-    - Runs `BiofuelEconomics` to compute techno‑economics.
-    - Runs `FinancialAnalysis` to compute NPV/IRR/payback and cash‑flow table.
-  - Response:
-
-    ```json
-    {
-      "technoEconomics": { ... },
-      "financials": {
-        "npv": ...,
-        "irr": ...,
-        "paybackPeriod": ...,
-        "cashFlowTable": [ ... ]
-      },
-      "resolvedInputs": {
-        "structured": { ... },
-        "flattened": { ... }
-      }
-    }
-    ```
-
-### Projects & Scenarios
-
-These endpoints are used by the frontend’s `ProjectContext` and `projectApi.js`:
-
-- `POST /projects/create`
-  - Body: `{ "user_id": "...", "project_name": "..." }`.
-  - Creates a project + auto‑creates “Scenario 1”.
-  - Returns `ProjectCreateResponse` with project info and the first scenario.
-- `GET /projects/list-by-user?user_id=...`
-  - Returns all projects owned by a user, sorted by `updated_at` descending.
-- `GET /projects/{project_id}`
-  - Returns a single project record.
-
-- `POST /scenarios/create`
-  - Body: `{ "project_id": "...", "scenario_name": "...", "order"?: int }`.
-  - Ensures project exists and that there are fewer than 3 scenarios.
-  - Creates a new scenario; updates `scenario_count` on the project.
-- `GET /scenarios/list?project_id=...`
-  - Lists all scenarios for a project, sorted by `order`.
-- `GET /scenarios/{scenario_id}`
-  - Returns the full scenario including `inputs` and `outputs`.
-- `PUT /scenarios/{scenario_id}`
-  - Body: `{ "scenario_name"?: str, "inputs"?: dict, "outputs"?: dict }`.
-  - Merges updates into the existing `inputs`/`outputs` and updates timestamps.
-- `DELETE /scenarios/{scenario_id}`
-  - Deletes a scenario (except when it’s the only scenario in a project).
-
-The frontend:
-
-- Auto‑saves TEA inputs into `scenario.inputs` via `PUT /scenarios/{id}`.
-- Saves TEA outputs (`apiData`, `cashFlowTable`) into `scenario.outputs` after `/calculate` completes.
-
----
-
-## Replacing JSON with a Real Database
-
-The design of `MockDatabase` is intentionally simple so you can swap it out with a real database without changing the API used by the frontend.
-
-Recommended steps:
-
-1. **Keep the HTTP contract stable**
-   - Do not change endpoint paths, methods, or response shapes for:
-     - `/auth/login`
-     - `/processes`, `/feedstocks/*`, `/feedstock/*`
-     - `/calculate`
-     - `/projects/*`, `/scenarios/*`
-2. **Implement a DB‑backed service with the same interface as `MockDatabase`**
-   - Create a new class, e.g. `SqlDatabase`, with methods:
-     - Users: `get_user_by_username`, `get_user_by_id`.
-     - Projects: `create_project`, `get_project`, `list_projects_by_user`, `update_project`, `delete_project`.
-     - Scenarios: `create_scenario`, `get_scenario`, `list_scenarios_by_project`, `count_scenarios_by_project`, `update_scenario`, `delete_scenario`.
-   - Internally use an ORM (SQLAlchemy, etc.) or raw SQL against SQLite/PostgreSQL.
-3. **Swap the global database instance in `main.py`**
-   - Replace `from app.mock_database import db as mock_db` with your new implementation.
-4. **Migrate JSON data to the DB**
-   - Use `users.json`, `projects.json`, and `scenarios.json` as the schema reference.
-   - Migrate existing entries into tables:
-     - `users`, `projects`, `scenarios` (with JSON or structured columns for `inputs` and `outputs`).
-
-As long as your DB implementation preserves the `MockDatabase` method behavior and the API contract, the frontend will continue to work without modification.
-
----
-
-## Running the Backend
-
-From `backend/`:
-
-```bash
-python -m venv venv
-venv\Scripts\activate  # Windows
-# or: source venv/bin/activate  # macOS/Linux
-
-pip install -r requirements.txt
-
-cd app
-uvicorn main:app --reload
+```
+backend/
+├── app/
+│   ├── main.py                 # FastAPI app entry point, middleware, startup events
+│   ├── api/
+│   │   └── endpoints/
+│   │       ├── auth.py         # Authentication (login, register)
+│   │       ├── master_data.py  # Process, feedstock, utility, country APIs
+│   │       ├── projects_endpoints.py    # Project CRUD
+│   │       └── scenarios_endpoints.py   # Scenario CRUD + calculations
+│   ├── core/
+│   │   ├── config.py           # Environment configuration
+│   │   ├── database.py         # SQLAlchemy engine, session, table creation
+│   │   ├── base_model.py       # SQLAlchemy Base declarative
+│   │   ├── security.py         # JWT token handling, password hashing
+│   │   ├── seeding.py          # Database seeding logic
+│   │   └── pw.csv              # User credentials for seeding
+│   ├── models/
+│   │   ├── master_data.py      # ORM models: Process, Feedstock, Utility, etc.
+│   │   ├── user_project.py     # ORM models: User, UserProject, Scenario
+│   │   ├── unit_mgmt.py        # ORM models: Units of measure
+│   │   └── calculation_data.py # Calculation-related models
+│   ├── schemas/
+│   │   ├── base.py             # CamelCase base schema
+│   │   ├── user_schema.py      # Auth request/response schemas
+│   │   ├── project_schema.py   # Project schemas
+│   │   ├── scenario_schema.py  # Scenario schemas
+│   │   └── master_data_schema.py # Master data schemas
+│   ├── services/
+│   │   ├── economics.py        # BiofuelEconomics TEA engine
+│   │   ├── financial_analysis.py # NPV, IRR, payback calculations
+│   │   ├── data_bridge.py      # Data transformation utilities
+│   │   └── feature_calculations.py # Additional calculation helpers
+│   └── crud/
+│       └── biofuel_crud.py     # Database query utilities
+└── requirements.txt
 ```
 
-The API will be available at `http://127.0.0.1:8000`. Interactive docs:
+---
 
-- Swagger UI: `http://127.0.0.1:8000/docs`
-- ReDoc: `http://127.0.0.1:8000/redoc`
+## API Reference
+
+Base URL: `http://127.0.0.1:8000/api/v1`
+
+### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/login` | User login with email/password, returns JWT token |
+| POST | `/auth/register` | New user registration |
+
+**Login Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Login Response:**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "tokenType": "bearer",
+  "user": {
+    "id": "uuid",
+    "name": "User Name",
+    "email": "user@example.com",
+    "accessLevel": "CORE",
+    "occupation": "researcher"
+  }
+}
+```
+
+**Register Request:**
+```json
+{
+  "name": "New User",
+  "email": "newuser@example.com",
+  "password": "password123",
+  "occupation": "student"  // or "researcher"
+}
+```
+
+### Master Data
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/master-data` | Get all master data in one call |
+| GET | `/process-technologies` | List all SAF process technologies |
+| GET | `/feedstocks` | List all feedstock types |
+| GET | `/countries` | List supported countries |
+| GET | `/utilities` | List utilities (hydrogen, electricity) |
+| GET | `/products` | List output products (jet, diesel, etc.) |
+| GET | `/units` | List units of measure |
+
+### Projects (Requires Authentication)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects` | Create new project |
+| GET | `/projects` | List user's projects |
+| GET | `/projects/{project_id}` | Get project with scenarios |
+| PUT | `/projects/{project_id}` | Update project |
+| DELETE | `/projects/{project_id}` | Delete project |
+
+### Scenarios (Requires Authentication)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{project_id}/scenarios` | Create scenario in project |
+| GET | `/projects/{project_id}/scenarios` | List scenarios in project |
+| GET | `/scenarios/{scenario_id}` | Get scenario details |
+| PUT | `/scenarios/{scenario_id}` | Update scenario |
+| DELETE | `/scenarios/{scenario_id}` | Delete scenario |
+| POST | `/scenarios/{scenario_id}/calculate` | Run TEA calculation |
+
+**Calculate Request:**
+```json
+{
+  "processId": 1,
+  "feedstockId": 1,
+  "countryId": 1,
+  "plantCapacityKtpa": 500,
+  "annualLoadHours": 8000,
+  "projectLifetimeYears": 25,
+  "discountRatePercent": 10.0,
+  // ... other inputs
+}
+```
+
+**Calculate Response:**
+```json
+{
+  "technoEconomics": {
+    "totalCapitalInvestment": 400000000,
+    "annualFeedstockCost": 50000000,
+    "lcop": 1.25,
+    // ...
+  },
+  "financials": {
+    "npv": 150000000,
+    "irr": 15.5,
+    "paybackPeriod": 7.2,
+    "cashFlowTable": [...]
+  },
+  "resolvedInputs": {...}
+}
+```
 
 ---
 
-## Running Tests
+## Database Schema
 
-From `backend/`:
+### Master Data Tables
+- `process_technologies` - SAF conversion processes (HEFA, FT-BtL, ATJ, etc.)
+- `feedstock` - Input materials (UCO, biomass, etc.)
+- `utility` - Utilities (hydrogen, electricity)
+- `country` - Supported countries with price defaults
+- `product` - Output products (jet fuel, diesel, etc.)
+
+### Reference Data Tables
+- `process_feedstock_ref` - Process-feedstock combinations
+- `process_utility_consumption_ref` - Utility consumption rates
+- `utility_country_price_defaults` - Country-specific utility prices
+- `product_reference_breakdown` - Product yields and prices
+- `default_parameter_set` - Default economic parameters per process/feedstock/country
+
+### User & Project Tables
+- `users` - User accounts (id, name, email, password_hash, access_level, occupation)
+- `user_projects` - User projects
+- `scenarios` - Project scenarios with inputs/outputs (JSONB)
+
+### Unit Management Tables
+- `unit_groups` - Unit categories (mass, volume, energy, etc.)
+- `unit_of_measure` - Individual units
+- `unit_conversions` - Conversion factors between units
+
+---
+
+## User Credentials (Seeded Data)
+
+The backend seeds user accounts from `app/core/pw.csv`. Default seeded users:
+
+| Email | Password | Access Level |
+|-------|----------|--------------|
+| admin@example.com | adminsaf1234 | ADVANCE |
+| liew@amic.my | liewsaf1234 | ADVANCE |
+| iqraq@amic.my | iqraqsaf1234 | ROADSHOW |
+
+Access levels determine feature availability:
+- **CORE** - Basic features
+- **ADVANCE** - Full features
+- **ROADSHOW** - Limited demo features
+
+---
+
+## JWT Authentication
+
+The API uses JWT Bearer token authentication:
+
+1. Login via `POST /api/v1/auth/login` to get `accessToken`
+2. Include token in subsequent requests:
+   ```
+   Authorization: Bearer <accessToken>
+   ```
+3. Token expires after 60 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
+4. On 401 Unauthorized, frontend should redirect to login
+
+---
+
+## Development Notes
+
+### Adding New Users
+
+Edit `app/core/pw.csv`:
+```csv
+Staff Name,Email Address,Suggested Password,Access Level,Occupation
+New User,newuser@example.com,newpassword123,CORE,researcher
+```
+
+Then restart the backend - new users will be seeded automatically.
+
+### Database Reset
+
+To reset the database and reseed all data:
+
+```sql
+-- Drop all tables (WARNING: destroys all data)
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+```
+
+Then restart the backend.
+
+### Running Tests
 
 ```bash
 pytest tests/ -v
@@ -299,9 +340,32 @@ pytest tests/ -v
 
 ## Dependencies
 
-See `requirements.txt` for the full list. Key libraries include:
+Key libraries (see `requirements.txt` for full list):
 
-- **FastAPI** – web framework.
-- **Uvicorn** – ASGI server.
-- **Pydantic** – data validation.
-- **Pandas**, **NumPy** – data processing and numerical calculations.
+- **FastAPI** - Web framework
+- **Uvicorn** - ASGI server
+- **SQLAlchemy** - ORM
+- **psycopg2-binary** - PostgreSQL adapter
+- **Pydantic** - Data validation
+- **python-jose** - JWT handling
+- **bcrypt** - Password hashing
+- **Pandas/NumPy** - Data processing
+- **numpy-financial** - NPV/IRR calculations
+
+---
+
+## Troubleshooting
+
+### "Missing required environment variable"
+Ensure `.env` file exists in `backend/` with all required variables.
+
+### "Connection refused" to database
+1. Verify PostgreSQL is running
+2. Check `DB_HOST`, `DB_PORT` in `.env`
+3. Ensure database exists: `psql -U postgres -c "\l"` should list `safapac_db`
+
+### "Table already exists" errors
+This is normal on restart - SQLAlchemy's `create_all` skips existing tables.
+
+### Password/login issues
+Passwords are hashed with bcrypt. Check `pw.csv` has correct plaintext passwords and restart to reseed.

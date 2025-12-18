@@ -15,10 +15,11 @@ from app.core.base_model import Base
 class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, nullable=False) 
+    name = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     password_hash = Column(String, nullable=False, default='placeholder')
     access_level = Column(String, nullable=False)
+    occupation = Column(String, nullable=True)  # student/researcher
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships

@@ -14,8 +14,12 @@ from app.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 # --- MODIFIED IMPORTS ---
-from app.schemas.user_schema import LoginRequest, LoginResponse, UserSchema
-from app.models.user_project import User # Corrected model import
+from app.schemas.user_schema import (
+    LoginRequest, LoginResponse, UserSchema,
+    RegisterRequest, RegisterResponse
+)
+from app.models.user_project import User
+from app.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
 
@@ -80,4 +84,62 @@ def login(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login failed"
+        )
+
+
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
+def register(
+    register_data: RegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """User registration endpoint."""
+    try:
+        # Check if email already exists
+        stmt = select(User).where(User.email == register_data.email)
+        existing_user = db.execute(stmt).scalar_one_or_none()
+
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already registered"
+            )
+
+        # Hash the password
+        password_hash = get_password_hash(register_data.password)
+
+        # Create new user
+        new_user = User(
+            name=register_data.name,
+            email=register_data.email,
+            password_hash=password_hash,
+            access_level="CORE",  # Default access level for new registrations
+            occupation=register_data.occupation
+        )
+
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        # Create user schema for response
+        user_schema = UserSchema(
+            id=new_user.id,
+            name=new_user.name,
+            email=new_user.email,
+            access_level=new_user.access_level,
+            occupation=new_user.occupation
+        )
+
+        return RegisterResponse(
+            message="Registration successful",
+            user=user_schema
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Registration error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed"
         )

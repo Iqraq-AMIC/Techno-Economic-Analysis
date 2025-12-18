@@ -446,22 +446,24 @@ def load_users_from_csv() -> List[Dict[str, str]]:
         return [{
             "id": "00000000-0000-0000-0000-000000000001",
             "name": "Admin User",
-            "email": "admin@example.com", 
+            "email": "admin@example.com",
             "password": "adminsaf1234",
-            "access_level": "ADVANCE" 
+            "access_level": "ADVANCE",
+            "occupation": "researcher"
         }]
     
     users = []
     valid_levels = ["CORE", "ADVANCE", "ROADSHOW"]
+    valid_occupations = ["student", "researcher"]
     try:
         with open(csv_path, 'r', encoding='utf-8') as file:
             # Read content to sniff delimiter
             content = file.read()
             file.seek(0)
             delimiter = '\t' if '\t' in content else ','
-            
+
             reader = csv.DictReader(file, delimiter=delimiter)
-            
+
             # Normalize headers (strip spaces)
             reader.fieldnames = [name.strip() for name in reader.fieldnames]
 
@@ -470,27 +472,35 @@ def load_users_from_csv() -> List[Dict[str, str]]:
                 name = row.get("Staff Name", f"User {i+1}").strip()
                 email = row.get("Email Address", "").strip()
                 password = row.get("Suggested Password", "password123").strip()
-                
+
                 # SAFE ACCESS LEVEL EXTRACTION
                 # 1. Get value, default to CORE
                 raw_access = row.get("Access Level", "CORE")
                 # 2. Handle None/Empty
-                if not raw_access: 
+                if not raw_access:
                     raw_access = "CORE"
                 # 3. Normalize
                 access_level = raw_access.strip().upper()
-                
+
                 # 4. Validate
                 if access_level not in valid_levels:
                     logger.warning(f"Invalid access level '{access_level}' for user {email}. Defaulting to CORE.")
                     access_level = "CORE"
+
+                # SAFE OCCUPATION EXTRACTION
+                raw_occupation = row.get("Occupation", "")
+                occupation = raw_occupation.strip().lower() if raw_occupation else None
+                if occupation and occupation not in valid_occupations:
+                    logger.warning(f"Invalid occupation '{occupation}' for user {email}. Setting to None.")
+                    occupation = None
 
                 if email: # Only add if email exists
                     users.append({
                         "name": name,
                         "email": email,
                         "password": password,
-                        "access_level": access_level
+                        "access_level": access_level,
+                        "occupation": occupation
                     })
         
         logger.info(f"Loaded {len(users)} users from CSV")
@@ -524,7 +534,8 @@ def seed_database(db: Session):
                     name=data["name"],
                     email=data["email"],
                     password_hash=get_password_hash(password),
-                    access_level=data["access_level"], # <--- CRITICAL FIX: Actually passing the value
+                    access_level=data["access_level"],
+                    occupation=data.get("occupation"),  # New field
                     created_at=datetime.utcnow()
                 ))
             

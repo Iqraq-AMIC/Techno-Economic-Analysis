@@ -1,7 +1,7 @@
-Staff Name,Email Address,Suggested Password,Access Level
-Dr. Liew Kan Ern,liew@amic.my,liewsaf1234,ADVANCE
-Sivadas A/L Chandra Sekaran,sivadas@amic.my,sivadassaf1234,CORE
-Iqraq Kamal,iqraq@amic.my,iqraqsaf1234,ROADSHOW
-Zoe Tay Hui Yee,zoe.thy@amic.my,zoesaf1234,CORE
-Admin User,admin@example.com,adminsaf1234,ADVANCE
-Hydar Hafiz Hydzelan,hydar.hafiz@amic.my,hydarsaf1234,CORE
+Staff Name,Email Address,Suggested Password,Access Level,Occupation
+Dr. Liew Kan Ern,liew@amic.my,liewsaf1234,ADVANCE,researcher
+Sivadas A/L Chandra Sekaran,sivadas@amic.my,sivadassaf1234,CORE,researcher
+Iqraq Kamal,iqraq@amic.my,iqraqsaf1234,ROADSHOW,researcher
+Zoe Tay Hui Yee,zoe.thy@amic.my,zoesaf1234,CORE,researcher
+Admin User,admin@example.com,adminsaf1234,ADVANCE,researcher
+Hydar Hafiz Hydzelan,hydar.hafiz@amic.my,hydarsaf1234,CORE,student
