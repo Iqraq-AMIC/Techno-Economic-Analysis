@@ -93,6 +93,7 @@ class ScenarioResponse(ScenarioBase):
     project_id: UUID
     scenario_name: str
     scenario_order: int
+    status: str  # "draft" or "calculated"
     process: ProcessTechnologySchema
     feedstock: FeedstockSchema
     country: CountrySchema
@@ -139,5 +140,28 @@ class ReferenceDataResponse(CamelCaseBaseModel):
     average_product_density_ref: float
     products: List[Dict[str, Any]]
     utilities: Dict[str, Any]
+
+# ==================== DRAFT SAVING SCHEMAS ====================
+
+class DraftSaveRequest(CamelCaseBaseModel):
+    """
+    Schema for saving partial/incomplete scenario data without validation.
+    All fields are optional to support incremental saving.
+    """
+    process_id: Optional[int] = None
+    feedstock_id: Optional[int] = None
+    country_id: Optional[int] = None
+    conversion_plant: Optional[Dict[str, Any]] = None
+    economic_parameters: Optional[Dict[str, Any]] = None
+    feedstock_data: Optional[List[Dict[str, Any]]] = None
+    utility_data: Optional[List[Dict[str, Any]]] = None
+    product_data: Optional[List[Dict[str, Any]]] = None
+
+class DraftSaveResponse(CamelCaseBaseModel):
+    """Response after saving draft."""
+    id: UUID
+    status: str
+    message: str
+    user_inputs: Dict[str, Any]
 
 # REMOVED: The circular import and update_forward_refs call

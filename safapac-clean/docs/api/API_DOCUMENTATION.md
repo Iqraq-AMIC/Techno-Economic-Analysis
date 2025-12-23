@@ -2,7 +2,7 @@
 
 **API Version**: 2.0.0
 **Base URL**: `http://localhost:8000` (Development) | `https://[aws-domain]` (Production - TBD)
-**Last Updated**: December 1, 2025
+**Last Updated**: December 23, 2025
 
 ---
 
@@ -152,7 +152,8 @@ User authentication and JWT token generation.
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "name": "John Doe",
     "email": "user@example.com",
-    "access_level": "ADVANCE"
+    "accessLevel": "ADVANCE",
+    "occupation": "researcher"
   }
 }
 ```
@@ -166,7 +167,64 @@ User authentication and JWT token generation.
 - Passwords are hashed using bcrypt
 - Failed login attempts are logged
 
-**Location**: backend/app/api/endpoints/projects.py:565
+**Location**: backend/app/api/endpoints/auth.py:30
+
+---
+
+#### POST `/api/v1/auth/register`
+
+User registration endpoint.
+
+**Authentication**: Not required
+
+**Request Body**:
+```json
+{
+  "name": "John Doe",
+  "email": "user@example.com",
+  "password": "securepassword123",
+  "occupation": "student"
+}
+```
+
+**Request Field Validation**:
+- `name`: 1-100 characters, required
+- `email`: Valid email format (EmailStr), required, must be unique
+- `password`: 8-72 characters, required
+- `occupation`: Must be "student" or "researcher", required
+
+**Response** (201 Created):
+```json
+{
+  "message": "Registration successful",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "John Doe",
+    "email": "user@example.com",
+    "accessLevel": "CORE",
+    "occupation": "student"
+  }
+}
+```
+
+**Behavior**:
+- New users are created with "CORE" access level by default
+- Password is hashed using bcrypt before storage
+- Email must be unique (checked against existing users)
+- User can immediately login after registration
+
+**Error Responses**:
+- `409 Conflict`: Email already registered
+- `422 Unprocessable Entity`: Validation errors (invalid email format, password too short, invalid occupation)
+- `500 Internal Server Error`: Registration system failure
+
+**Notes**:
+- Password is automatically hashed with bcrypt
+- Passwords are truncated to 72 characters (bcrypt limit)
+- No email verification is currently implemented
+- New users must be upgraded to "ADVANCE" or "ROADSHOW" access levels by an administrator
+
+**Location**: backend/app/api/endpoints/auth.py:90
 
 ---
 
@@ -626,7 +684,78 @@ Delete a scenario.
 - This operation cannot be undone
 - Consider updating `scenario_order` for remaining scenarios after deletion
 
-**Location**: backend/app/api/endpoints/projects.py:480
+**Location**: backend/app/api/endpoints/scenarios_endpoints.py:214
+
+---
+
+#### PATCH `/api/v1/scenarios/{scenario_id}/draft`
+
+Save partial/incomplete scenario data as a draft without running calculations.
+
+**Authentication**: Required
+
+**Path Parameters**:
+- `scenario_id` (UUID): Scenario identifier
+
+**Request Body** (all fields optional):
+```json
+{
+  "processId": 1,
+  "feedstockId": 2,
+  "countryId": 1,
+  "conversionPlant": {
+    "plantCapacity": {
+      "value": 500,
+      "unitId": 3
+    },
+    "annualLoadHours": 8000
+  },
+  "economicParameters": {
+    "projectLifetimeYears": 20
+  },
+  "feedstockData": [...],
+  "utilityData": [...],
+  "productData": [...]
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "660e8400-e29b-41d4-a716-446655440000",
+  "status": "draft",
+  "message": "Draft saved successfully",
+  "userInputs": {
+    "processId": 1,
+    "feedstockId": 2,
+    "countryId": 1,
+    "conversionPlant": {...},
+    "economicParameters": {...}
+  }
+}
+```
+
+**Behavior**:
+- Accepts partial/incomplete data
+- All fields are optional - only provided fields are updated
+- Merges new data with existing user_inputs
+- Does NOT run calculation engine
+- Does NOT validate data completeness
+- Sets scenario status to "draft"
+- Preserves existing data for unprovided fields
+
+**Use Cases**:
+- Saving work-in-progress scenarios
+- Incremental form filling
+- Auto-save functionality
+- Preserving user input before navigation
+
+**Error Responses**:
+- `404 Not Found`: Scenario not found or access denied
+- `400 Bad Request`: Failed to save draft
+- `401 Unauthorized`: Missing or invalid authentication token
+
+**Location**: backend/app/api/endpoints/scenarios_endpoints.py:231
 
 ---
 
@@ -759,7 +888,59 @@ Update scenario inputs and run TEA calculation.
     "annual_saf_production_t": 605000.0,
     "total_annual_opex_usd": 710150000.0,
     "lcop_usd_per_t": 1173.8,
-    "ci_final_gco2e_per_mj": 31.2
+    "ci_final_gco2e_per_mj": 31.2,
+    "LCOP_traceable": {
+      "value": 1173.8,
+      "unit": "USD/t",
+      "formula": "LCOP = (TCI_annual + OPEX_total - Revenue_byproducts) / SAF_production",
+      "components": [
+        {
+          "name": "Annualized TCI",
+          "value": 58500000,
+          "unit": "USD/year",
+          "description": "Total capital investment annualized using capital recovery factor"
+        },
+        {
+          "name": "Total Operating Expenses",
+          "value": 710150000,
+          "unit": "USD/year",
+          "description": "Total annual operating expenses"
+        },
+        {
+          "name": "Byproduct Revenue",
+          "value": 250000000,
+          "unit": "USD/year",
+          "description": "Revenue from byproducts"
+        },
+        {
+          "name": "SAF Production",
+          "value": 605000,
+          "unit": "t/year",
+          "description": "Annual SAF production"
+        }
+      ],
+      "metadata": {
+        "discount_rate_percent": 7.0,
+        "project_lifetime_years": 20,
+        "capital_recovery_factor": 0.0944,
+        "npv_usd": 3532017806,
+        "irr_percent": 119.7
+      }
+    },
+    "total_opex_traceable": {
+      "value": 710150000,
+      "unit": "USD/year",
+      "formula": "Total OPEX = Feedstock_cost + Hydrogen_cost + Electricity_cost + Indirect_OPEX",
+      "components": [...],
+      "metadata": {...}
+    },
+    "total_capital_investment_traceable": {
+      "value": 400,
+      "unit": "MUSD",
+      "formula": "TCI = TCI_ref × (Capacity / Capacity_ref)^scaling_exponent × (1 + working_capital_ratio)",
+      "components": [...],
+      "metadata": {...}
+    }
   },
   "financials": {
     "npv_usd": 3532017806.0,
@@ -772,12 +953,15 @@ Update scenario inputs and run TEA calculation.
 ```
 
 **Behavior**:
-1. Validates process, feedstock, and country names
+1. Validates process, feedstock, and country IDs
 2. Updates relational columns (process_id, feedstock_id, country_id)
 3. Updates user_inputs JSON blob in database
-4. Runs 4-layer TEA calculation engine
-5. Saves results to database (techno_economics, financial_analysis)
-6. Returns calculation results
+4. **Normalizes all input values to base units** (e.g., kt → kg, MWh → kWh)
+5. Runs 4-layer TEA calculation engine with normalized inputs
+6. Generates **traceable calculation results** for key KPIs (TCI, OPEX, LCOP)
+7. Saves results to database (techno_economics, financial_analysis)
+8. Sets scenario status to "calculated"
+9. Returns calculation results with formulas, components, and metadata
 
 **Error Responses**:
 - `404 Not Found`: Scenario not found or access denied
@@ -874,9 +1058,63 @@ Represents a value with a unit of measure:
 ```json
 {
   "value": 500,
-  "unit_id": 3
+  "unitId": 3
 }
 ```
+
+**Note**: All quantity values are automatically normalized to base units during calculation:
+- Mass: kg (kilograms)
+- Energy: MJ (megajoules)
+- Volume: L (liters)
+- Power: kWh (kilowatt-hours)
+
+Example: If you submit `{"value": 500, "unitId": 3}` where unit 3 is "kt" (kilotons), the system converts to base unit "kg" using the conversion factor from `GET /api/v1/units`.
+
+---
+
+#### TraceableValue
+
+Represents a calculated value with full transparency (formula, components, metadata):
+
+```json
+{
+  "value": 1173.8,
+  "unit": "USD/t",
+  "formula": "LCOP = (TCI_annual + OPEX_total - Revenue_byproducts) / SAF_production",
+  "components": [
+    {
+      "name": "Annualized TCI",
+      "value": 58500000,
+      "unit": "USD/year",
+      "description": "Total capital investment annualized using capital recovery factor"
+    },
+    {
+      "name": "Total Operating Expenses",
+      "value": 710150000,
+      "unit": "USD/year"
+    }
+  ],
+  "metadata": {
+    "discount_rate_percent": 7.0,
+    "project_lifetime_years": 20,
+    "capital_recovery_factor": 0.0944
+  }
+}
+```
+
+**Fields**:
+- `value`: Final calculated value (float)
+- `unit`: Unit of measurement (string)
+- `formula`: Human-readable calculation formula (string)
+- `components`: Array of component values that contributed to the result
+- `metadata`: Additional context (assumptions, parameters, related metrics)
+
+**Available Traceable KPIs**:
+- `total_capital_investment_traceable`: TCI with scaling formula
+- `total_opex_traceable`: OPEX with cost breakdown
+- `LCOP_traceable`: Levelized Cost of Production with full breakdown
+
+---
 
 #### User Inputs Structure
 
@@ -1132,6 +1370,27 @@ For API support or bug reports:
 
 ---
 
-**Last Updated**: December 1, 2025
-**Document Version**: 1.0
+**Last Updated**: December 23, 2025
+**Document Version**: 1.1
 **API Version**: 2.0.0
+
+---
+
+## Change Log
+
+For a complete history of API changes and version updates, see [API_CHANGELOG.md](API_CHANGELOG.md).
+
+**Recent Changes** (December 23, 2025):
+
+**v2.1.0** (Latest):
+- Added draft saving endpoint: `PATCH /api/v1/scenarios/{id}/draft`
+- Added scenario `status` field ("draft" or "calculated")
+- Implemented automatic unit normalization to base units
+- Added calculation transparency with TraceableValue objects for TCI, OPEX, LCOP
+- Enhanced calculation results with formulas, components, and metadata
+- Updated `/api/v1/units` endpoint to include `conversion_factor` for each unit
+
+**v2.0.0**:
+- Added user registration endpoint: `POST /api/v1/auth/register`
+- Added `occupation` field to user schema ("student" or "researcher")
+- Enhanced user authentication responses to include occupation

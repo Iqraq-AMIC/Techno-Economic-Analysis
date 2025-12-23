@@ -57,11 +57,12 @@ class Scenario(Base):
     __tablename__ = "scenarios"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(UUID(as_uuid=True), ForeignKey("user_projects.id"), nullable=False)
-    
+
     # Scenario metadata
     scenario_name = Column(String, nullable=False)
     scenario_order = Column(Integer, nullable=False, default=0)
-    
+    status = Column(String, nullable=False, default="draft")  # "draft" or "calculated"
+
     # Core selections (Foreign Keys point to tables defined in master_data.py)
     process_id = Column(Integer, ForeignKey("process_technologies.id"), nullable=False)
     feedstock_id = Column(Integer, ForeignKey("feedstock.id"), nullable=False)

@@ -11,10 +11,12 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.crud.biofuel_crud import BiofuelCRUD
 from app.core.security import get_current_active_user
-from app.services.economics import BiofuelEconomics 
+from app.services.economics import BiofuelEconomics
+from app.services.traceable_economics import TraceableEconomics
+from app.services.unit_normalizer import UnitNormalizer 
 from app.schemas.scenario_schema import (
     ScenarioCreate, ScenarioResponse, ScenarioDetailResponse, ScenarioUpdate,
-    UserInputsSchema, CalculationResponse
+    UserInputsSchema, CalculationResponse, DraftSaveRequest, DraftSaveResponse
 )
 from app.schemas.base import CamelCaseBaseModel
 from app.models.user_project import User 
@@ -85,9 +87,13 @@ def run_calculation_internal(db_scenario, crud: BiofuelCRUD):
         product_data=product_data
     )
 
-    # Run Calculation
-    economics = BiofuelEconomics(user_inputs, crud)
-    
+    # Normalize units to base units before calculation
+    normalizer = UnitNormalizer(crud)
+    normalized_inputs = normalizer.normalize_user_inputs(user_inputs)
+
+    # Run Calculation with traceability
+    economics = TraceableEconomics(normalized_inputs, crud)
+
     # CHANGED: Pass IDs to run()
     results = economics.run(
         process_id=db_scenario.process_id,
@@ -206,7 +212,7 @@ def update_scenario(
         raise HTTPException(status_code=404, detail="Scenario not found")
 
     # Exclude unset fields so we don't accidentally overwrite data with None
-    update_data = scenario_update.dict(exclude_unset=True)
+    update_data = scenario_update.model_dump(exclude_unset=True)
 
     updated_scenario = crud.update_scenario(scenario_id, update_data)
     return updated_scenario
@@ -225,6 +231,71 @@ def delete_scenario(
     success = crud.delete_scenario(scenario_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete scenario")
+
+# ==================== DRAFT SAVING ENDPOINT ====================
+
+@router.patch("/{scenario_id}/draft", response_model=DraftSaveResponse)
+def save_draft(
+    scenario_id: UUID,
+    draft_data: DraftSaveRequest,
+    current_user: User = Depends(get_current_active_user),
+    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+):
+    """
+    Save partial/incomplete scenario data as a draft.
+
+    This endpoint:
+    - Accepts partial data (all fields optional)
+    - Bypasses strict validation
+    - Does NOT run the calculation engine
+    - Simply merges the provided data with existing user_inputs
+    - Sets scenario status to "draft"
+    """
+    # Verify access
+    db_scenario = crud.get_scenario_by_id(scenario_id)
+    if not db_scenario or db_scenario.project.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    try:
+        # Get existing user_inputs or start with empty dict
+        existing_inputs = db_scenario.user_inputs or {}
+
+        # Merge new draft data with existing inputs (preserve existing data)
+        draft_dict = draft_data.model_dump(exclude_unset=True)
+
+        # Merge at top level
+        for key, value in draft_dict.items():
+            if value is not None:
+                existing_inputs[key] = value
+
+        # Update scenario with merged inputs and draft status
+        update_data = {
+            "user_inputs": existing_inputs,
+            "status": "draft"
+        }
+
+        # Update relational columns if provided
+        if draft_data.process_id is not None:
+            update_data["process_id"] = draft_data.process_id
+        if draft_data.feedstock_id is not None:
+            update_data["feedstock_id"] = draft_data.feedstock_id
+        if draft_data.country_id is not None:
+            update_data["country_id"] = draft_data.country_id
+
+        updated_scenario = crud.update_scenario(scenario_id, update_data)
+
+        logger.info(f"Draft saved for scenario {scenario_id}")
+
+        return DraftSaveResponse(
+            id=updated_scenario.id,
+            status=updated_scenario.status,
+            message="Draft saved successfully",
+            user_inputs=updated_scenario.user_inputs
+        )
+
+    except Exception as e:
+        logger.error(f"Draft save error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Failed to save draft: {str(e)}")
 
 # ==================== CALCULATION ENDPOINT ====================
 
@@ -253,7 +324,8 @@ def calculate_scenario(
             "process_id": inputs_in.process_id,
             "feedstock_id": inputs_in.feedstock_id,
             "country_id": inputs_in.country_id,
-            "user_inputs": inputs_in.dict() # 3. Update JSON Blob
+            "user_inputs": inputs_in.model_dump(),  # 3. Update JSON Blob
+            "status": "calculated"  # Mark as calculated when running full calculation
         })
 
         # 4. Refresh & Calculate

@@ -1,425 +1,579 @@
 # SAFAPAC API Changelog
 
-This document tracks all changes to the SAFAPAC API endpoints, request/response formats, and breaking changes.
-
-**Current Version**: 2.0.0
-**Last Updated**: December 1, 2025
+**API Version**: 2.0.0
+**Last Updated**: December 23, 2025
 
 ---
 
-## Version 2.0.0 (Current)
+## Table of Contents
 
-**Release Date**: November 2025
+1. [Version 2.0.0 - Current](#version-200---current)
+2. [Breaking Changes](#breaking-changes)
+3. [Migration Guide](#migration-guide)
+
+---
+
+## Version 2.0.0 - Current
+
+**Release Date**: December 18, 2025
 **Status**: Active Development
 
-### Major Features
+### New Features
 
-#### Authentication System Overhaul
-- **BREAKING CHANGE**: Migrated from CSV-based authentication to JWT tokens
-- Added `POST /api/v1/auth/login` endpoint
-- Implemented bearer token authentication for all protected endpoints
-- Added auto-logout functionality (60-minute token expiration)
-- Password hashing with bcrypt
-- Three-tier access level system (CORE, ADVANCE, ROADSHOW)
+#### User Registration Endpoint (December 18, 2025)
 
-**Migration Impact**: Frontend must implement JWT token storage and header injection
+**Added**: `POST /api/v1/auth/register`
 
-#### Auto-Calculation on Create
-- **NEW**: Projects automatically create and calculate "Scenario 1" on creation
-- **NEW**: Scenarios are automatically calculated immediately after creation
-- **BEHAVIOR CHANGE**: No longer need to call `/calculate` endpoint after creating scenarios
-- Calculation failures no longer block resource creation (logged as warnings)
+New user registration system with occupation tracking.
 
-**Impact**: Reduces API calls from 2 (create + calculate) to 1 (create)
-
-#### Improved Error Handling
-- **NEW**: Calculation errors are caught separately from creation errors
-- **NEW**: NaN and Infinity sanitization for JSON responses
-- **IMPROVED**: More descriptive error messages with context
-- **IMPROVED**: Consistent error response format across all endpoints
-
-#### Master Data Consolidation
-- **NEW**: `GET /api/v1/master-data` endpoint returns all master data in single request
-- **IMPROVED**: Individual master data endpoints moved to `/api/v1/` namespace
-- Reduces initial page load from 6+ API calls to 1 call
-
-#### UUID Migration
-- **BREAKING CHANGE**: User, Project, and Scenario IDs changed from Integer to UUID
-- **IMPROVED**: Better security and distributed system compatibility
-- **MIGRATION REQUIRED**: Frontend must handle UUID strings instead of integers
-
-#### JSONB Field Renaming
-- **BREAKING CHANGE**: Database columns renamed for consistency:
-  - `user_inputs_json` → `user_inputs`
-  - `techno_economics_json` → `techno_economics`
-  - `financial_analysis_json` → `financial_analysis`
-- **NO API IMPACT**: Response field names unchanged
-
-### New Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/auth/login` | JWT authentication |
-| `GET` | `/api/v1/master-data` | All master data in one request |
-| `POST` | `/api/v1/calculate/quick` | Calculation without saving |
-| `GET` | `/api/v1/reference-data/{process}/{feedstock}/{country}` | Reference data for combination |
-
-### Modified Endpoints
-
-#### POST /api/v1/projects
-- **CHANGED**: Auto-creates and auto-calculates Scenario 1
-- **RESPONSE**: Now includes initial scenario data
-
-#### POST /api/v1/projects/{project_id}/scenarios
-- **CHANGED**: Auto-calculates scenario immediately after creation
-- **RESPONSE**: Now includes calculation results
-- **ERROR HANDLING**: Calculation failure returns scenario without results (no error)
-
-#### POST /api/v1/scenarios/{scenario_id}/calculate
-- **CHANGED**: Now updates relational columns (process_id, feedstock_id, country_id)
-- **VALIDATION**: Validates process, feedstock, country names before calculation
-- **ERROR**: Returns 400 if invalid names provided
-
-### Removed Endpoints
-
-None in this version.
-
-### Deprecated Endpoints
-
-None in this version.
-
----
-
-## Version 1.x (Legacy)
-
-**Status**: Deprecated
-**End of Life**: November 2025
-
-### Authentication
-- CSV-based user authentication (deprecated)
-- No JWT tokens
-- Simple password verification
-
-### Projects and Scenarios
-- Integer-based IDs for users, projects, scenarios
-- Manual calculation required after creation
-- Separate create and calculate operations
-
-### Master Data
-- Individual endpoints only (no consolidated endpoint)
-- Required 6+ API calls for initialization
-
----
-
-## Breaking Changes Summary
-
-### v2.0.0
-
-1. **Authentication Method**
-   - **Old**: CSV-based authentication
-   - **New**: JWT bearer token authentication
-   - **Action Required**: Frontend must implement token storage and Authorization header
-
-2. **ID Format Change**
-   - **Old**: Integer IDs (e.g., `123`)
-   - **New**: UUID strings (e.g., `"550e8400-e29b-41d4-a716-446655440000"`)
-   - **Action Required**: Update frontend ID handling and validation
-
-3. **Auto-Calculation Behavior**
-   - **Old**: Must call `/calculate` after creating projects/scenarios
-   - **New**: Calculation happens automatically on creation
-   - **Action Required**: Remove redundant calculation calls from frontend
-
-4. **Process/Feedstock/Country Updates**
-   - **Old**: Could update user_inputs JSON without updating relational columns
-   - **New**: `/calculate` endpoint now syncs relational columns from input names
-   - **Action Required**: Ensure process/feedstock/country names in JSON match master data
-
----
-
-## Migration Guide: v1.x → v2.0
-
-### Step 1: Update Authentication
-
-**Old Code**:
-```javascript
-// v1.x - CSV authentication (example)
-const response = await fetch('/api/v1/login', {
-  method: 'POST',
-  body: JSON.stringify({ email, password })
-});
-```
-
-**New Code**:
-```javascript
-// v2.0 - JWT authentication
-const response = await fetch('/api/v1/auth/login', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email, password })
-});
-
-const data = await response.json();
-localStorage.setItem('access_token', data.access_token);
-
-// Include token in subsequent requests
-const apiResponse = await fetch('/api/v1/projects', {
-  headers: {
-    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-  }
-});
-```
-
-### Step 2: Update ID Handling
-
-**Old Code**:
-```javascript
-// v1.x - Integer IDs
-const projectId = 123;
-const url = `/api/v1/projects/${projectId}`;
-```
-
-**New Code**:
-```javascript
-// v2.0 - UUID strings
-const projectId = "550e8400-e29b-41d4-a716-446655440000";
-const url = `/api/v1/projects/${projectId}`;
-
-// Validation
-function isValidUUID(uuid) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid);
+**Request Schema**:
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securepassword123",
+  "occupation": "student"
 }
 ```
 
-### Step 3: Remove Redundant Calculation Calls
-
-**Old Code**:
-```javascript
-// v1.x - Create then calculate
-const createResponse = await fetch('/api/v1/projects', {
-  method: 'POST',
-  body: JSON.stringify(projectData)
-});
-const project = await createResponse.json();
-
-// Separate calculation call needed
-const calcResponse = await fetch(`/api/v1/scenarios/${scenarioId}/calculate`, {
-  method: 'POST',
-  body: JSON.stringify(inputs)
-});
-```
-
-**New Code**:
-```javascript
-// v2.0 - Auto-calculated on create
-const createResponse = await fetch('/api/v1/projects', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify(projectData)
-});
-const project = await createResponse.json();
-// Scenario 1 is already calculated! No second call needed.
-```
-
-### Step 4: Use Consolidated Master Data Endpoint
-
-**Old Code**:
-```javascript
-// v1.x - Multiple API calls
-const [processes, feedstocks, countries, utilities, products] = await Promise.all([
-  fetch('/api/v1/process-technologies').then(r => r.json()),
-  fetch('/api/v1/feedstocks').then(r => r.json()),
-  fetch('/api/v1/countries').then(r => r.json()),
-  fetch('/api/v1/utilities').then(r => r.json()),
-  fetch('/api/v1/products').then(r => r.json())
-]);
-```
-
-**New Code**:
-```javascript
-// v2.0 - Single consolidated call
-const response = await fetch('/api/v1/master-data', {
-  headers: { 'Authorization': `Bearer ${token}` }
-});
-const masterData = await response.json();
-
-// Access all data from single response
-const processes = masterData.process_technologies;
-const feedstocks = masterData.feedstocks;
-const countries = masterData.countries;
-const utilities = masterData.utilities;
-const products = masterData.products;
-const units = masterData.units;
-```
-
----
-
-## Upcoming Changes (Future Versions)
-
-### Planned for v2.1
-
-#### Pagination Support
-- `GET /api/v1/projects` will support query parameters:
-  - `page` (default: 1)
-  - `page_size` (default: 20)
-- Response will include metadata:
-  ```json
-  {
-    "items": [...],
-    "total": 150,
-    "page": 1,
-    "page_size": 20,
-    "total_pages": 8
+**Response** (201 Created):
+```json
+{
+  "message": "Registration successful",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "accessLevel": "CORE",
+    "occupation": "student"
   }
-  ```
+}
+```
 
-#### Rate Limiting
-- Authentication endpoints: 5 requests/minute
-- Calculation endpoints: 10 requests/minute
-- General endpoints: 100 requests/minute
-- Headers:
-  - `X-RateLimit-Limit`
-  - `X-RateLimit-Remaining`
-  - `X-RateLimit-Reset`
+**Features**:
+- Email validation using Pydantic EmailStr
+- Password requirements: 8-72 characters (bcrypt limit)
+- Occupation field: Must be "student" or "researcher"
+- Default access level: "CORE" for new registrations
+- Email uniqueness validation (returns 409 Conflict if email exists)
+- Automatic password hashing with bcrypt
 
-#### Enhanced Filtering
-- `GET /api/v1/projects?filter=name:contains:SAF&sort=-created_at`
-- Support for filtering and sorting on list endpoints
+**Error Responses**:
+- `409 Conflict`: Email already registered
+- `422 Unprocessable Entity`: Invalid input data (validation errors)
+- `500 Internal Server Error`: Registration system failure
 
-### Under Consideration for v3.0
-
-#### GraphQL Support
-- Alternative GraphQL endpoint alongside REST API
-- Single query for complex nested data
-- Reduced over-fetching
-
-#### Webhooks
-- Calculation completion webhooks
-- Project update notifications
-- User activity webhooks
-
-#### Batch Operations
-- `POST /api/v1/scenarios/batch` for creating multiple scenarios
-- `DELETE /api/v1/projects/batch` for bulk deletions
-
-#### Versioned API URLs
-- Explicit version in URL: `/api/v2/projects`
-- Support for multiple API versions simultaneously
-- Gradual migration path for breaking changes
+**Location**: [backend/app/api/endpoints/auth.py:90](backend/app/api/endpoints/auth.py#L90)
 
 ---
 
-## Deprecation Policy
+### Modified Features
 
-### Timeline
-1. **Announcement**: Breaking changes announced 60 days before release
-2. **Deprecation**: Old endpoint marked as deprecated in documentation
-3. **Support Period**: Deprecated endpoints supported for 90 days
-4. **Removal**: Deprecated endpoints removed in next major version
+#### User Schema Enhancement (December 18, 2025)
 
-### Current Deprecations
+**Modified**: User data model and schemas
 
-None.
+**Changes**:
+1. Added `occupation` field to User model
+   - Type: Optional String
+   - Allowed values: "student", "researcher"
+   - Database column: nullable
+
+2. Updated `UserSchema` response
+   - Added `occupation` field (optional)
+   - Included in login and registration responses
+
+3. Database Migration Required
+   - New column: `users.occupation`
+   - Existing users will have `NULL` occupation
+
+**Before**:
+```json
+{
+  "id": "...",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "accessLevel": "CORE"
+}
+```
+
+**After**:
+```json
+{
+  "id": "...",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "accessLevel": "CORE",
+  "occupation": "student"
+}
+```
+
+**Impact**:
+- Non-breaking: occupation is optional in responses
+- Frontend can now display/use occupation information
+- Login endpoint now returns occupation field
+
+**Locations**:
+- Model: [backend/app/models/user_project.py:22](backend/app/models/user_project.py#L22)
+- Schema: [backend/app/schemas/user_schema.py:15](backend/app/schemas/user_schema.py#L15)
+- Auth endpoint: [backend/app/api/endpoints/auth.py:129](backend/app/api/endpoints/auth.py#L129)
 
 ---
 
-## API Versioning Strategy
+### Database Schema Changes
 
-### Current Strategy (v2.0)
-- Major version in application version (`/api/v1` prefix)
-- Breaking changes increment major version
-- Backward-compatible changes released as minor versions
+#### Users Table Update (December 18, 2025)
 
-### Future Strategy (v3.0+)
-- Move to URL-based versioning: `/api/v2/`, `/api/v3/`
-- Support N-1 versions (current + one previous major version)
-- Semantic versioning for API spec (OpenAPI)
+**Table**: `users`
+
+**Added Column**:
+```sql
+ALTER TABLE users ADD COLUMN occupation VARCHAR NULL;
+```
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `occupation` | `String` | NULLABLE | User occupation ("student" or "researcher") |
+
+**Migration Script** (if using Alembic):
+```python
+def upgrade():
+    op.add_column('users', sa.Column('occupation', sa.String(), nullable=True))
+
+def downgrade():
+    op.drop_column('users', 'occupation')
+```
+
+**Backward Compatibility**:
+- ✅ Existing users: occupation will be NULL
+- ✅ API responses: occupation field is optional
+- ✅ No data migration required for existing users
 
 ---
 
-## Changelog Best Practices
+### Security Enhancements
 
-### Adding New Endpoint
-```markdown
-#### POST /api/v1/new-endpoint
-- **NEW**: Brief description of what this endpoint does
-- **REQUEST**: Example request body
-- **RESPONSE**: Example response
-- **USE CASE**: When to use this endpoint
+#### Password Validation (December 18, 2025)
+
+**Enhanced**: Password handling and validation
+
+**Changes**:
+1. **Registration Password Requirements**
+   - Minimum length: 8 characters
+   - Maximum length: 72 characters (bcrypt limit enforced at Pydantic level)
+   - Field validation in `RegisterRequest` schema
+
+2. **Login Password Truncation**
+   - Passwords > 72 characters automatically truncated
+   - Warning logged when truncation occurs
+   - Maintains bcrypt compatibility
+
+**Security Best Practices**:
+- ✅ Passwords hashed with bcrypt before storage
+- ✅ Password never stored in plain text
+- ✅ Password never returned in API responses
+- ✅ Length validation prevents buffer issues
+- ✅ Email uniqueness enforced at database level
+
+**Code Reference**:
+```python
+# Registration validation
+password: str = Field(..., min_length=8, max_length=72)
+
+# Login truncation
+if len(password_to_check) > 72:
+    password_to_check = password_to_check[:72]
+    logger.warning(f"Password truncated for user {login_data.email}")
 ```
 
-### Modifying Existing Endpoint
-```markdown
-#### PUT /api/v1/existing-endpoint
-- **CHANGED**: Description of what changed
-- **BREAKING CHANGE** (if applicable): How this breaks backward compatibility
-- **MIGRATION**: How to update code for the change
+---
+
+### API Response Format Updates
+
+#### CamelCase Conversion (Existing Feature)
+
+All API responses use camelCase for JSON keys via `CamelCaseBaseModel`:
+
+**Database/Python** → **API Response**
+- `access_level` → `accessLevel`
+- `created_at` → `createdAt`
+- `updated_at` → `updatedAt`
+- `scenario_name` → `scenarioName`
+- `user_id` → `userId`
+
+**Example**:
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "projectName": "My SAF Project",
+  "createdAt": "2025-12-01T10:00:00Z",
+  "updatedAt": "2025-12-01T10:00:00Z"
+}
 ```
 
-### Deprecating Endpoint
-```markdown
-#### DELETE /api/v1/old-endpoint
-- **DEPRECATED**: This endpoint is deprecated as of vX.X.X
-- **REASON**: Why it's being deprecated
-- **REPLACEMENT**: Use this endpoint instead
-- **REMOVAL DATE**: Will be removed in vX.X.X
+---
+
+## Breaking Changes
+
+### None in Version 2.0.0
+
+All changes in this release are backward compatible:
+- New registration endpoint (additive)
+- New occupation field (optional)
+- User schema enhancement (non-breaking)
+
+---
+
+## Migration Guide
+
+### For Frontend Developers
+
+#### Adopting User Registration
+
+**Step 1**: Implement Registration Form
+```typescript
+interface RegisterRequest {
+  name: string;
+  email: string;
+  password: string;
+  occupation: 'student' | 'researcher';
+}
+
+async function register(data: RegisterRequest) {
+  const response = await fetch('http://localhost:8000/api/v1/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+
+  if (response.status === 409) {
+    throw new Error('Email already registered');
+  }
+
+  return await response.json();
+}
 ```
+
+**Step 2**: Update User Interface Type
+```typescript
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  accessLevel: string;
+  occupation?: 'student' | 'researcher';  // Optional for backward compatibility
+}
+```
+
+**Step 3**: Handle Registration Flow
+```typescript
+// 1. Collect registration data
+const registerData = {
+  name: formData.name,
+  email: formData.email,
+  password: formData.password,
+  occupation: formData.occupation  // 'student' or 'researcher'
+};
+
+// 2. Call registration endpoint
+const result = await register(registerData);
+
+// 3. User is created with CORE access level
+console.log(result.user.accessLevel); // "CORE"
+
+// 4. User can now login
+const loginResult = await login({
+  email: registerData.email,
+  password: registerData.password
+});
+```
+
+**Step 4**: Display Occupation (Optional)
+```typescript
+function UserProfile({ user }: { user: User }) {
+  return (
+    <div>
+      <h2>{user.name}</h2>
+      <p>Email: {user.email}</p>
+      <p>Access Level: {user.accessLevel}</p>
+      {user.occupation && (
+        <p>Occupation: {user.occupation}</p>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+### For Backend Developers
+
+#### Database Migration
+
+**Option 1: Manual SQL**
+```sql
+-- Add occupation column to users table
+ALTER TABLE users ADD COLUMN occupation VARCHAR NULL;
+
+-- Verify migration
+SELECT id, name, email, access_level, occupation FROM users LIMIT 5;
+```
+
+**Option 2: Using Alembic**
+```bash
+# Generate migration
+alembic revision -m "add occupation field to users table"
+
+# Edit migration file (alembic/versions/xxx_add_occupation.py)
+def upgrade():
+    op.add_column('users', sa.Column('occupation', sa.String(), nullable=True))
+
+def downgrade():
+    op.drop_column('users', 'occupation')
+
+# Apply migration
+alembic upgrade head
+```
+
+**Option 3: Automatic (SQLAlchemy)**
+```python
+# If using create_all() in development
+from app.core.database import engine, Base
+Base.metadata.create_all(bind=engine)
+# Column will be added automatically
+```
+
+---
+
+#### Updating Seeding Script
+
+If you have database seeding, update user creation:
+
+**Before**:
+```python
+new_user = User(
+    name="Test User",
+    email="test@example.com",
+    password_hash=hashed_password,
+    access_level="CORE"
+)
+```
+
+**After**:
+```python
+new_user = User(
+    name="Test User",
+    email="test@example.com",
+    password_hash=hashed_password,
+    access_level="CORE",
+    occupation="researcher"  # Optional, can be None
+)
+```
+
+---
+
+### Testing Registration Endpoint
+
+#### cURL Example
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "password": "securepass123",
+    "occupation": "researcher"
+  }'
+```
+
+#### Python Example
+```python
+import requests
+
+response = requests.post(
+    'http://localhost:8000/api/v1/auth/register',
+    json={
+        'name': 'Jane Smith',
+        'email': 'jane@example.com',
+        'password': 'securepass123',
+        'occupation': 'researcher'
+    }
+)
+
+if response.status_code == 201:
+    print("Registration successful!")
+    print(response.json())
+elif response.status_code == 409:
+    print("Email already exists")
+else:
+    print(f"Error: {response.json()}")
+```
+
+#### JavaScript/TypeScript Example
+```typescript
+const response = await fetch('http://localhost:8000/api/v1/auth/register', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    password: 'securepass123',
+    occupation: 'researcher'
+  })
+});
+
+const data = await response.json();
+console.log(data.message); // "Registration successful"
+console.log(data.user.accessLevel); // "CORE"
+```
+
+---
+
+## Validation Rules
+
+### Registration Request Validation
+
+| Field | Type | Required | Constraints | Error Message |
+|-------|------|----------|-------------|---------------|
+| `name` | string | ✅ | 1-100 characters | "String should have at least 1 character" |
+| `email` | string | ✅ | Valid email format, unique | "Value is not a valid email address" |
+| `password` | string | ✅ | 8-72 characters | "String should have at least 8 characters" |
+| `occupation` | string | ✅ | "student" or "researcher" | "Input should be 'student' or 'researcher'" |
+
+### Error Response Examples
+
+**Invalid Email Format** (422):
+```json
+{
+  "detail": [
+    {
+      "type": "value_error",
+      "loc": ["body", "email"],
+      "msg": "value is not a valid email address",
+      "input": "invalid-email"
+    }
+  ]
+}
+```
+
+**Password Too Short** (422):
+```json
+{
+  "detail": [
+    {
+      "type": "string_too_short",
+      "loc": ["body", "password"],
+      "msg": "String should have at least 8 characters",
+      "input": "short",
+      "ctx": {"min_length": 8}
+    }
+  ]
+}
+```
+
+**Invalid Occupation** (422):
+```json
+{
+  "detail": [
+    {
+      "type": "literal_error",
+      "loc": ["body", "occupation"],
+      "msg": "Input should be 'student' or 'researcher'",
+      "input": "professor"
+    }
+  ]
+}
+```
+
+**Email Already Registered** (409):
+```json
+{
+  "detail": "Email already registered"
+}
+```
+
+---
+
+## Known Issues and Limitations
+
+### Registration System
+
+1. **No Email Verification**
+   - Emails are not verified during registration
+   - Future enhancement: Add email verification flow
+   - Users can immediately login after registration
+
+2. **Single Access Level**
+   - All new users receive "CORE" access level
+   - Upgrading to "ADVANCE" or "ROADSHOW" requires admin action
+   - Future enhancement: Add access level management endpoints
+
+3. **No Password Reset**
+   - Password reset functionality not yet implemented
+   - Users cannot recover forgotten passwords
+   - Future enhancement: Add password reset flow
+
+4. **Occupation Update**
+   - No endpoint to update occupation after registration
+   - Occupation is set during registration only
+   - Future enhancement: Add user profile update endpoint
+
+---
+
+## Future Enhancements (Roadmap)
+
+### Planned Features
+
+#### Authentication & User Management
+- [ ] Email verification system
+- [ ] Password reset/forgot password flow
+- [ ] User profile update endpoint (name, occupation)
+- [ ] Change password endpoint
+- [ ] Refresh token mechanism
+- [ ] OAuth2 social login (Google, GitHub)
+
+#### Access Control
+- [ ] Admin endpoints for user management
+- [ ] Access level upgrade/downgrade system
+- [ ] Role-based permissions system
+- [ ] API key authentication for programmatic access
+
+#### Security
+- [ ] Rate limiting on registration endpoint
+- [ ] CAPTCHA integration to prevent bot registrations
+- [ ] Two-factor authentication (2FA)
+- [ ] Session management and device tracking
+- [ ] Account lockout after failed login attempts
+
+---
+
+## Deprecations
+
+### None
+
+No features have been deprecated in version 2.0.0.
 
 ---
 
 ## Version History
 
-| Version | Release Date | Status | Notes |
-|---------|--------------|--------|-------|
-| 2.0.0 | Nov 2025 | **Current** | JWT auth, UUID IDs, auto-calculation |
-| 1.x | Jul-Oct 2025 | Deprecated | CSV auth, integer IDs |
+| Version | Release Date | Status | Major Changes |
+|---------|--------------|--------|---------------|
+| 2.0.0 | Dec 18, 2025 | Current | User registration, occupation field |
+| 1.x.x | Before Dec 2025 | Legacy | Initial API implementation |
 
 ---
 
-## Friday Integration Changes (Pending)
-
-**Date**: December 5, 2025
-**Status**: Scheduled
-
-### Expected Changes from Frontend Integration
-
-The following changes may be required after frontend delivery on Friday:
-
-1. **API Contract Adjustments**
-   - Potential request/response schema modifications
-   - Additional validation requirements
-   - New error scenarios
-
-2. **Frontend-Driven Requirements**
-   - New endpoints for specific UI needs
-   - Modified response formats for visualization
-   - Additional filtering/sorting capabilities
-
-3. **Bug Fixes**
-   - API issues discovered during integration
-   - Edge cases not covered in current implementation
-
-### Update Plan
-
-1. Document all API changes made during Friday integration
-2. Update this changelog with specific modifications
-3. Update API_DOCUMENTATION.md with new/changed endpoints
-4. Tag release as v2.0.1 (if backward-compatible) or v2.1.0 (if new features)
-
----
-
-## Contact
+## Support
 
 For questions about API changes or migration assistance:
-- **Backend Developer**: [Your Name] - [Your Email]
-- **API Documentation**: See `docs/API_DOCUMENTATION.md`
-- **Git Commit History**: Review commit messages for detailed change descriptions
+- Review the [API Documentation](API_DOCUMENTATION.md)
+- Check the [Database Schema](../architecture/DATABASE_SCHEMA.md)
+- Consult the backend development team
 
 ---
 
 **Document Version**: 1.0
-**Last Updated**: December 1, 2025
+**Last Updated**: December 23, 2025
+**API Version**: 2.0.0
 **Maintained By**: Backend Development Team
