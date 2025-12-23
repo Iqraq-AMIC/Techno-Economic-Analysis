@@ -1,0 +1,196 @@
+{
+  "process_outputs": {
+    "feedstock_consumption": {
+      "UCO": {
+        "value": 605000.0,
+        "unit": "tons/year"
+      }
+    },
+    "product_production": {
+      "JET": {
+        "value": 320000.0,
+        "unit": "tons/year"
+      },
+      "DIESEL": {
+        "value": 75000.0,
+        "unit": "tons/year"
+      },
+      "Naphtha": {
+        "value": 105000.0,
+        "unit": "tons/year"
+      }
+    },
+    "total_production": {
+      "value": 500000,
+      "unit": "tons/year"
+    },
+    "utility_consumption": {
+      "hydrogen": {
+        "value": 21000000,
+        "unit": "kg/year"
+      },
+      "electricity": {
+        "value": 60000000,
+        "unit": "kWh/year"
+      }
+    }
+  },
+  "economic_outputs": {
+    "total_capital_investment": {
+      "value": 400.0,
+      "unit": "MUSD"
+    },
+    "total_direct_opex": {
+      "value": 679350000.0,
+      "unit": "USD/year"
+    },
+    "feedstock_cost": {
+      "value": 562650000.0,
+      "unit": "USD/year"
+    },
+    "hydrogen_cost": {
+      "value": 113400000.00000001,
+      "unit": "USD/year"
+    },
+    "electricity_cost": {
+      "value": 3300000.0,
+      "unit": "USD/year"
+    },
+    "total_indirect_opex": {
+      "value": 30800000.0,
+      "unit": "USD/year"
+    },
+    "total_opex": {
+      "value": 710150000.0,
+      "unit": "USD/year"
+    },
+    "opex_breakdown": {
+      "hydrogen": {
+        "value": 113400000.00000001,
+        "unit": "USD/year"
+      },
+      "feedstock": {
+        "value": 562650000,
+        "unit": "USD/year"
+      },
+      "electricity": {
+        "value": 3300000,
+        "unit": "USD/year"
+      },
+      "indirect_opex": {
+        "value": 30800000,
+        "unit": "USD/year"
+      }
+    },
+    "lcop": {
+      "value": 1495.8143405946046,
+      "unit": "USD/ton"
+    },
+    "lcop_breakdown": {
+      "feedstock_component": {
+        "value": 0.7522992456087026,
+        "unit": "fraction"
+      },
+      "hydrogen_component": {
+        "value": 0.1516230950893573,
+        "unit": "fraction"
+      },
+      "electricity_component": {
+        "value": 0.0044123122909601326,
+        "unit": "fraction"
+      },
+      "indirect_opex_component": {
+        "value": 0.04118158138229457,
+        "unit": "fraction"
+      },
+      "tci_component": {
+        "value": 0.050483765628685354,
+        "unit": "fraction"
+      }
+    }
+  },
+  "carbon_metrics": {
+    "product_carbon_intensity": {
+      "JET": {
+        "value": 594.83,
+        "unit": "kg CO2e/ton"
+      },
+      "DIESEL": {
+        "value": 139.41,
+        "unit": "kg CO2e/ton"
+      },
+      "Naphtha": {
+        "value": 195.18,
+        "unit": "kg CO2e/ton"
+      }
+    },
+    "product_carbon_conversion_efficiency": {
+      "JET": {
+        "value": 57.44,
+        "unit": "percent"
+      },
+      "DIESEL": {
+        "value": 13.51,
+        "unit": "percent"
+      },
+      "Naphtha": {
+        "value": 18.69,
+        "unit": "percent"
+      }
+    },
+    "product_co2_emissions": {
+      "JET": {
+        "value": 190344,
+        "unit": "tons/year"
+      },
+      "DIESEL": {
+        "value": 10456,
+        "unit": "tons/year"
+      },
+      "Naphtha": {
+        "value": 20494,
+        "unit": "tons/year"
+      }
+    }
+  },
+  "revenue_outputs": {
+    "product_revenues": {
+      "JET": {
+        "value": 960000000,
+        "value_musd": 960.0,
+        "unit": "USD/year"
+      },
+      "DIESEL": {
+        "value": 112500000,
+        "value_musd": 112.5,
+        "unit": "USD/year"
+      },
+      "Naphtha": {
+        "value": 105000000,
+        "value_musd": 105.0,
+        "unit": "USD/year"
+      }
+    },
+    "total_revenue": {
+      "value": 1177500000,
+      "value_musd": 1177.5,
+      "unit": "USD/year"
+    }
+  },
+  "financial_outputs": {
+    "irr": {
+      "value": 0.96,
+      "unit": "ratio",
+      "description": "Internal Rate of Return"
+    },
+    "npv": {
+      "value": 3495748626,
+      "unit": "USD",
+      "description": "Net Present Value"
+    },
+    "payback_period": {
+      "value": 2,
+      "unit": "years"
+    }
+  }
+}

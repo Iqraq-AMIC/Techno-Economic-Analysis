@@ -1,9 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { Chart, registerables } from 'chart.js';
-
-// Register all Chart.js components
-Chart.register(...registerables);
+import Chart from 'chart.js';
 
 // Color palette for LCOP cost components
 const LCOP_COLORS = {
@@ -16,29 +13,29 @@ const LCOP_COLORS = {
 
 const LcopCostChart = ({ lcopData, comparisonData, isComparison, colors }) => {
   const chartRef = useRef(null);
-  const chartInstance = useRef(null);
 
   useEffect(() => {
-    if (!chartRef.current) return;
+    const canvas = chartRef.current;
+    if (!canvas) return;
 
     // Destroy existing chart
-    if (chartInstance.current) {
-      chartInstance.current.destroy();
+    if (canvas.chartInstance) {
+      canvas.chartInstance.destroy();
     }
 
-    const ctx = chartRef.current.getContext('2d');
+    const ctx = canvas.getContext('2d');
 
     if (isComparison && comparisonData && comparisonData.length > 0) {
       // Stacked horizontal bar chart for comparison mode
-      chartInstance.current = createStackedBarChart(ctx, comparisonData, colors);
+      canvas.chartInstance = createStackedBarChart(ctx, comparisonData, colors);
     } else if (lcopData) {
       // Pie chart for single scenario mode
-      chartInstance.current = createPieChart(ctx, lcopData, colors);
+      canvas.chartInstance = createPieChart(ctx, lcopData, colors);
     }
 
     return () => {
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
+      if (canvas?.chartInstance) {
+        canvas.chartInstance.destroy();
       }
     };
   }, [lcopData, comparisonData, isComparison, colors]);
@@ -84,47 +81,37 @@ const createPieChart = (ctx, lcopData, colors) => {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: true,
-          position: 'right',
-          labels: {
-            color: colors?.text || '#000000',
-            font: {
-              size: 11
-            },
-            padding: 10,
-            boxWidth: 15
-          }
-        },
-        tooltip: {
-          backgroundColor: colors?.cardBackground || '#ffffff',
-          titleColor: colors?.text || '#000000',
-          bodyColor: colors?.text || '#000000',
-          borderColor: colors?.border || '#e5e7eb',
-          borderWidth: 1,
+      legend: {
+        display: true,
+        position: 'right',
+        labels: {
+          fontColor: colors?.text || '#000000',
+          fontSize: 11,
           padding: 10,
-          displayColors: true,
-          callbacks: {
-            label: function(context) {
-              const label = context.label || '';
-              const value = context.parsed;
-              const percentage = percentages[context.dataIndex].toFixed(1);
-              return `${label}: $${value.toFixed(2)}/unit (${percentage}%)`;
-            }
-          }
-        },
-        title: {
-          display: true,
-          text: 'Levelized Cost of Production Breakdown',
-          color: colors?.text || '#000000',
-          font: {
-            size: 14,
-            weight: 'bold'
-          },
-          padding: {
-            top: 10,
-            bottom: 20
+          boxWidth: 15
+        }
+      },
+      title: {
+        display: true,
+        text: 'Levelized Cost of Production Breakdown',
+        fontColor: colors?.text || '#000000',
+        fontSize: 14,
+        fontStyle: 'bold',
+        padding: 10
+      },
+      tooltips: {
+        backgroundColor: colors?.cardBackground || '#ffffff',
+        titleFontColor: colors?.text || '#000000',
+        bodyFontColor: colors?.text || '#000000',
+        borderColor: colors?.border || '#e5e7eb',
+        borderWidth: 1,
+        displayColors: true,
+        callbacks: {
+          label: function(tooltipItem, data) {
+            const label = data.labels[tooltipItem.index] || '';
+            const value = data.datasets[0].data[tooltipItem.index];
+            const percentage = percentages[tooltipItem.index].toFixed(1);
+            return `${label}: $${value.toFixed(2)}/unit (${percentage}%)`;
           }
         }
       }
@@ -177,117 +164,98 @@ const createStackedBarChart = (ctx, comparisonData, colors) => {
   ];
 
   return new Chart(ctx, {
-    type: 'bar',
+    type: 'horizontalBar', // Chart.js v2 syntax for horizontal bars
     data: {
       labels: scenarioNames,
       datasets: datasets
     },
     options: {
-      indexAxis: 'y', // Horizontal bars
       responsive: true,
       maintainAspectRatio: false,
+      legend: {
+        display: true,
+        position: 'bottom',
+        labels: {
+          fontColor: colors?.text || '#000000',
+          fontSize: 10,
+          padding: 8,
+          boxWidth: 12
+        }
+      },
+      title: {
+        display: true,
+        text: 'LCOP Comparison Across Scenarios',
+        fontColor: colors?.text || '#000000',
+        fontSize: 14,
+        fontStyle: 'bold',
+        padding: 10
+      },
+      tooltips: {
+        backgroundColor: colors?.cardBackground || '#ffffff',
+        titleFontColor: colors?.text || '#000000',
+        bodyFontColor: colors?.text || '#000000',
+        borderColor: colors?.border || '#e5e7eb',
+        borderWidth: 1,
+        displayColors: true,
+        callbacks: {
+          label: function(tooltipItem, data) {
+            const label = data.datasets[tooltipItem.datasetIndex].label || '';
+            const value = tooltipItem.xLabel;
+
+            // Calculate percentage of total LCOP for this scenario
+            const scenarioIndex = tooltipItem.index;
+            const scenarioData = comparisonData[scenarioIndex];
+            const total = scenarioData.lcopData.total || 0;
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+
+            return `${label}: $${value.toFixed(2)} (${percentage}%)`;
+          },
+          afterBody: function(tooltipItems) {
+            if (tooltipItems.length > 0) {
+              const scenarioIndex = tooltipItems[0].index;
+              const scenarioData = comparisonData[scenarioIndex];
+              const total = scenarioData.lcopData.total || 0;
+              return `Total LCOP: $${total.toFixed(2)}/unit`;
+            }
+            return '';
+          }
+        }
+      },
       scales: {
-        x: {
+        xAxes: [{
           stacked: true,
           ticks: {
-            color: colors?.text || '#000000',
-            font: {
-              size: 10
-            },
+            fontColor: colors?.text || '#000000',
+            fontSize: 10,
             callback: function(value) {
               return '$' + value.toFixed(0);
             }
           },
-          title: {
+          scaleLabel: {
             display: true,
-            text: 'LCOP (USD/unit)',
-            color: colors?.text || '#000000',
-            font: {
-              size: 11,
-              weight: 'bold'
-            }
+            labelString: 'LCOP (USD/unit)',
+            fontColor: colors?.text || '#000000',
+            fontSize: 11
           },
-          grid: {
+          gridLines: {
             color: colors?.border || '#e5e7eb',
-            borderColor: colors?.border || '#e5e7eb'
+            zeroLineColor: colors?.border || '#e5e7eb'
           }
-        },
-        y: {
+        }],
+        yAxes: [{
           stacked: true,
           ticks: {
-            color: colors?.text || '#000000',
-            font: {
-              size: 10
-            },
-            callback: function(value, index) {
-              const name = scenarioNames[index];
+            fontColor: colors?.text || '#000000',
+            fontSize: 10,
+            callback: function(value) {
               // Truncate long names
-              return name.length > 20 ? name.substring(0, 17) + '...' : name;
+              return value.length > 20 ? value.substring(0, 17) + '...' : value;
             }
           },
-          grid: {
+          gridLines: {
             display: false
           }
-        }
-      },
-      plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: {
-            color: colors?.text || '#000000',
-            font: {
-              size: 10
-            },
-            padding: 8,
-            boxWidth: 12
-          }
-        },
-        tooltip: {
-          backgroundColor: colors?.cardBackground || '#ffffff',
-          titleColor: colors?.text || '#000000',
-          bodyColor: colors?.text || '#000000',
-          borderColor: colors?.border || '#e5e7eb',
-          borderWidth: 1,
-          padding: 10,
-          displayColors: true,
-          callbacks: {
-            label: function(context) {
-              const label = context.dataset.label || '';
-              const value = context.parsed.x;
-
-              // Calculate percentage of total LCOP for this scenario
-              const scenarioIndex = context.dataIndex;
-              const scenarioData = comparisonData[scenarioIndex];
-              const total = scenarioData.lcopData.total || 0;
-              const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
-
-              return `${label}: $${value.toFixed(2)} (${percentage}%)`;
-            },
-            footer: function(tooltipItems) {
-              if (tooltipItems.length > 0) {
-                const scenarioIndex = tooltipItems[0].dataIndex;
-                const scenarioData = comparisonData[scenarioIndex];
-                const total = scenarioData.lcopData.total || 0;
-                return `Total LCOP: $${total.toFixed(2)}/unit`;
-              }
-              return '';
-            }
-          }
-        },
-        title: {
-          display: true,
-          text: 'LCOP Comparison Across Scenarios',
-          color: colors?.text || '#000000',
-          font: {
-            size: 14,
-            weight: 'bold'
-          },
-          padding: {
-            top: 10,
-            bottom: 20
-          }
-        }
+        }]
       }
     }
   });

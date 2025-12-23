@@ -1,0 +1,136 @@
+{
+  "description": "HEFA test case inputs extracted from 'Wave 1 - specs for miniTEA_with HEFA and PTL examples' Excel file",
+  "process_id": 1,
+  "feedstock_id": 1,
+  "country_id": 1,
+  "conversion_plant": {
+    "plant_capacity": {
+      "value": 500,
+      "unit": "KTPA"
+    },
+    "annual_load_hours": 8000,
+    "ci_process_default": {
+      "value": 20,
+      "unit": "gCO2e/MJ"
+    }
+  },
+  "feedstock_data": {
+    "name": "UCO",
+    "price": {
+      "value": 930,
+      "unit": "USD/t"
+    },
+    "yield": {
+      "value": 1.21,
+      "unit": "kg UCO/kg_fuel",
+      "description": "Feedstock consumption per kg of liquid fuel produced"
+    },
+    "carbon_content": 0.78,
+    "energy_content": 0,
+    "carbon_intensity": {
+      "value": 46.526,
+      "unit": "gCO2e/kg"
+    }
+  },
+  "utilities": [
+    {
+      "name": "Hydrogen",
+      "price": {
+        "value": 5.4,
+        "unit": "USD/kg"
+      },
+      "yield": {
+        "value": 4.2,
+        "unit": "percent",
+        "description": "Percentage of feedstock input"
+      },
+      "carbon_content": 0,
+      "energy_content": 0,
+      "carbon_intensity": {
+        "value": 0,
+        "unit": "gCO2e/kg"
+      }
+    },
+    {
+      "name": "Electricity",
+      "price": {
+        "value": 55,
+        "unit": "USD/MWh"
+      },
+      "yield": {
+        "value": 12,
+        "unit": "percent",
+        "description": "Percentage of feedstock input"
+      },
+      "carbon_content": 0,
+      "energy_content": 0,
+      "carbon_intensity": {
+        "value": 20,
+        "unit": "gCO2e/kWh"
+      }
+    }
+  ],
+  "products": [
+    {
+      "name": "JET",
+      "price": {
+        "value": 3000,
+        "unit": "USD/t"
+      },
+      "yield": {
+        "value": 64,
+        "unit": "percent",
+        "description": "Product yield percentage"
+      },
+      "carbon_content": 0.847,
+      "energy_content": 43.8,
+      "product_density": 0.81,
+      "price_sensitivity_to_ci": 0.5
+    },
+    {
+      "name": "DIESEL",
+      "price": {
+        "value": 1500,
+        "unit": "USD/t"
+      },
+      "yield": {
+        "value": 15,
+        "unit": "percent"
+      },
+      "carbon_content": 0.85,
+      "energy_content": 42.6,
+      "product_density": 0.83,
+      "price_sensitivity_to_ci": 0.5
+    },
+    {
+      "name": "Naphtha",
+      "price": {
+        "value": 1000,
+        "unit": "USD/t"
+      },
+      "yield": {
+        "value": 21,
+        "unit": "percent"
+      },
+      "carbon_content": 0.84,
+      "energy_content": 43.4,
+      "product_density": 0.7,
+      "price_sensitivity_to_ci": 0.5
+    }
+  ],
+  "economic_parameters": {
+    "discount_rate": 0.07,
+    "plant_lifetime": 20,
+    "tci_ref": {
+      "value": 400,
+      "unit": "MUSD"
+    },
+    "tci_scaling_exponent": 0.6,
+    "capacity_ref": {
+      "value": 500,
+      "unit": "KTPA"
+    },
+    "working_capital_tci_ratio": 0.15,
+    "indirect_opex_tci_ratio": 0.077
+  }
+}

@@ -265,6 +265,11 @@ const ScenarioTabs = () => {
       {/* Scenario Tabs */}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
         {scenarios.map((scenario, index) => {
+          // Safety check - skip scenarios without valid ID
+          if (!scenario || !scenario.scenario_id) {
+            console.warn("⚠️ ScenarioTabs - Invalid scenario at index", index, scenario);
+            return null;
+          }
           const isActive = currentScenario?.scenario_id === scenario.scenario_id;
           const isCompared = comparisonScenarios.includes(scenario.scenario_id);
           const canDelete = index > 0; // Can delete Scenario 2 and 3 (index 1 and 2)

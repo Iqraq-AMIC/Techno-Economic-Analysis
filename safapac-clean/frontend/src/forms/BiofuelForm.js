@@ -21,17 +21,6 @@ import {
 } from "shards-react";
 import { useTheme } from "../contexts/ThemeContext";
 import ScenarioTabs from "../components/project/ScenarioTabs";
-// Heroicons via react-icons
-// Install: npm i react-icons
-// Fallback emoji icons (remove if using react-icons). If you want Heroicons,
-// install `react-icons` and import from 'react-icons/hi' or 'react-icons/hi2'.
-const EmojiIcon = {
-  plant: <span role="img" aria-label="plant" style={{ fontSize: 16, lineHeight: 0 }}>🏭</span>,
-  leaf: <span role="img" aria-label="leaf" style={{ fontSize: 16, lineHeight: 0 }}>🌿</span>,
-  bolt: <span role="img" aria-label="bolt" style={{ fontSize: 16, lineHeight: 0 }}>⚡</span>,
-  cube: <span role="img" aria-label="cube" style={{ fontSize: 16, lineHeight: 0 }}>📦</span>,
-  trend: <span role="img" aria-label="trend" style={{ fontSize: 16, lineHeight: 0 }}>📈</span>,
-};
 
 const formatNumber = (num, decimals = 0) => {
   if (num === null || num === undefined || Number.isNaN(num)) {
@@ -230,6 +219,7 @@ const BiofuelForm = ({
   onReset,
   onSave,
   isCalculating,
+  onMasterDataLoaded,
 }) => {
   const { colors } = useTheme();
   const [processes, setProcesses] = useState([]);
@@ -244,7 +234,7 @@ const BiofuelForm = ({
   });
   const [collapsedProducts, setCollapsedProducts] = useState({});
 
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000";
+  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000/api/v1";
 
   // Initialize all products as collapsed by default
   useEffect(() => {
@@ -266,10 +256,16 @@ const BiofuelForm = ({
   useEffect(() => {
     let isMounted = true;
     axios
-      .get(`${API_URL}/processes`)
+      .get(`${API_URL}/process-technologies`)
       .then((res) => {
         if (isMounted) {
-          setProcesses(res.data || []);
+          // Backend returns array of objects with 'id' and 'name' fields
+          const processData = res.data || [];
+          setProcesses(processData);
+          // Notify parent of loaded master data
+          if (onMasterDataLoaded) {
+            onMasterDataLoaded({ processes: processData });
+          }
         }
       })
       .catch((err) => {
@@ -278,7 +274,7 @@ const BiofuelForm = ({
     return () => {
       isMounted = false;
     };
-  }, [API_URL]);
+  }, [API_URL, onMasterDataLoaded]);
 
   useEffect(() => {
     if (!selectedProcess) {
@@ -287,10 +283,16 @@ const BiofuelForm = ({
     }
     let isMounted = true;
     axios
-      .get(`${API_URL}/feedstocks/${selectedProcess}`)
+      .get(`${API_URL}/feedstocks`)
       .then((res) => {
         if (isMounted) {
-          setFeedstocks(res.data || []);
+          // Backend returns array of objects with 'id' and 'name' fields
+          const feedstockData = res.data || [];
+          setFeedstocks(feedstockData);
+          // Notify parent of loaded master data
+          if (onMasterDataLoaded) {
+            onMasterDataLoaded({ feedstocks: feedstockData });
+          }
         }
       })
       .catch((err) => {
@@ -299,7 +301,7 @@ const BiofuelForm = ({
     return () => {
       isMounted = false;
     };
-  }, [API_URL, selectedProcess]);
+  }, [API_URL, selectedProcess, onMasterDataLoaded]);
 
   // const totalMassFraction = useMemo(
   //   () =>
@@ -1017,21 +1019,6 @@ const BiofuelForm = ({
     </div>
   );
 
-  const feedstockUtilitiesPlaceholder = (
-    <div
-      style={{
-        padding: "12px",
-        borderRadius: "6px",
-        backgroundColor: colors.cardBackground,
-        border: `1px dashed ${colors.border}`,
-        fontSize: "0.75rem",
-        color: colors.textSecondary,
-      }}
-    >
-      The selected feedstock data will be used automatically. Choose <strong>Full Customization</strong> to override these settings directly.
-    </div>
-  );
-
   const feedstockUtilitiesSubtitle = "Describe the primary feedstock and supporting utilities.";
 
   const feedstockUtilitiesContent = feedstockUtilitiesForm;
@@ -1068,8 +1055,8 @@ const BiofuelForm = ({
                   >
                     <option value="">-- Select Process --</option>
                     {processes.map((process) => (
-                      <option key={process} value={process}>
-                        {process}
+                      <option key={process.id} value={process.name}>
+                        {process.name}
                       </option>
                     ))}
                   </FormSelect>
@@ -1087,8 +1074,8 @@ const BiofuelForm = ({
                     >
                       <option value="">-- Select Feedstock --</option>
                       {feedstocks.map((feedstock) => (
-                        <option key={feedstock} value={feedstock}>
-                          {feedstock}
+                        <option key={feedstock.id} value={feedstock.name}>
+                          {feedstock.name}
                         </option>
                       ))}
                     </FormSelect>
@@ -1423,6 +1410,7 @@ BiofuelForm.propTypes = {
   onReset: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,
   isCalculating: PropTypes.bool,
+  onMasterDataLoaded: PropTypes.func,
 };
 
 export default BiofuelForm;

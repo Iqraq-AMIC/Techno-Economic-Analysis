@@ -1,0 +1,114 @@
+{
+  "description": "HEFA test case inputs extracted from 'Wave 1 - specs for miniTEA_with HEFA and PTL examples' Excel file",
+  "process_technology": "HEFA",
+  "feedstock": "UCO",
+  "country": "USA",
+  "conversion_plant": {
+    "plant_capacity": {
+      "value": 500,
+      "unit": "KTPA"
+    },
+    "annual_load_hours": 8000,
+    "ci_process_default": {
+      "value": 20,
+      "unit": "gCO2e/MJ"
+    }
+  },
+  "feedstock_data": {
+    "name": "UCO",
+    "price": {
+      "value": 930,
+      "unit": "USD/t"
+    },
+    "yield": {
+      "value": 1.21,
+      "unit": "kg UCO/kg_fuel",
+      "description": "Feedstock consumption per kg of liquid fuel produced"
+    }
+  },
+  "utilities": [
+    {
+      "name": "Hydrogen",
+      "price": {
+        "value": 5.4,
+        "unit": "USD/kg"
+      },
+      "yield": {
+        "value": 0.042,
+        "unit": "kg H2/kg_fuel"
+      }
+    },
+    {
+      "name": "Electricity",
+      "price": {
+        "value": 55,
+        "unit": "USD/MWh"
+      },
+      "ci": {
+        "value": 20,
+        "unit": "gCO2e/kWh"
+      },
+      "yield": {
+        "value": 0.12,
+        "unit": "kWh/kg_fuel"
+      }
+    }
+  ],
+  "products": [
+    {
+      "name": "JET",
+      "price": {
+        "value": 3000,
+        "unit": "USD/t"
+      },
+      "carbon_content": 0.847,
+      "energy_content": 43.8,
+      "yield": {
+        "value": 0.64,
+        "unit": "kg/kg",
+        "description": "Product yield per kg of liquid fuel"
+      }
+    },
+    {
+      "name": "DIESEL",
+      "price": {
+        "value": 1500,
+        "unit": "USD/t"
+      },
+      "carbon_content": 0.85,
+      "energy_content": 42.6,
+      "yield": {
+        "value": 0.15,
+        "unit": "kg/kg"
+      }
+    },
+    {
+      "name": "Naphtha",
+      "price": {
+        "value": 1000,
+        "unit": "USD/t"
+      },
+      "carbon_content": 0.84,
+      "energy_content": 43.4,
+      "yield": {
+        "value": 0.21,
+        "unit": "kg/kg"
+      }
+    }
+  ],
+  "economic_parameters": {
+    "discount_rate": 0.07,
+    "plant_lifetime": 20,
+    "tci_ref": {
+      "value": 400,
+      "unit": "MUSD"
+    },
+    "tci_scaling_exponent": 0.6,
+    "capacity_ref": {
+      "value": 500,
+      "unit": "KTPA"
+    },
+    "working_capital_tci_ratio": 0.15,
+    "indirect_opex_tci_ratio": 0.077
+  }
+}

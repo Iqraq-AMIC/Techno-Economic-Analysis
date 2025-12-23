@@ -23,16 +23,18 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
   const isComparisonMode = comparisonData && comparisonData.length > 0;
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+
     console.log("📊 Chart received data:", data?.length, "rows");
     console.log("📊 Chart received comparisonData:", comparisonData);
     console.log("📊 isComparisonMode:", isComparisonMode);
 
-    if (!data || !data.length) return;
+    if (!data || !data.length || !canvas) return;
 
-    const ctx = canvasRef.current.getContext("2d");
+    const ctx = canvas.getContext("2d");
 
-    if (canvasRef.current.chartInstance) {
-      canvasRef.current.chartInstance.destroy();
+    if (canvas.chartInstance) {
+      canvas.chartInstance.destroy();
     }
 
     // Create high-density data by interpolating between points
@@ -152,7 +154,7 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
       ];
     }
 
-    canvasRef.current.chartInstance = new Chart(ctx, {
+    canvas.chartInstance = new Chart(ctx, {
       type: "line",
       plugins: [],
       data: {
@@ -203,7 +205,7 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
               fontColor: colors.text,
               padding: 10,  // Space between tick marks and labels
               // autoSkip: false,  // Don't auto-skip any ticks
-              callback: function(value, index, values) {
+              callback: function(value) {
                 // Only show integer labels on x-axis
                 return Number.isInteger(Number(value)) ? value : '';
               },
@@ -268,8 +270,8 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
 
     // Cleanup function to prevent memory leaks
     return () => {
-      if (canvasRef.current?.chartInstance) {
-        canvasRef.current.chartInstance.destroy();
+      if (canvas?.chartInstance) {
+        canvas.chartInstance.destroy();
       }
     };
   }, [data, comparisonData, isComparisonMode, theme, colors]);
