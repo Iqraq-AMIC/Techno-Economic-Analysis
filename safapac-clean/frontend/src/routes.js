@@ -6,15 +6,24 @@ import { DefaultLayout } from "./layouts";
 
 // Route Views
 import Tables from "./views/Tables";
-import AnalysisDashboardv2 from "./views/AnalysisDashboardv2";
-import Login from "./views/Login";
+import AnalysisDashboard from "./views/AnalysisDashboard";
+import LoginForm from "./views/LoginForm";
+import SignUp from "./views/SignUp";
 
 export default [
   {
     path: "/login",
     exact: true,
     layout: React.Fragment,
-    component: Login,
+    component: LoginForm,
+    publicOnly: true,
+    redirect: "/TEA"
+  },
+  {
+    path: "/signup",
+    exact: true,
+    layout: React.Fragment,
+    component: SignUp,
     publicOnly: true,
     redirect: "/TEA"
   },
@@ -33,7 +42,7 @@ export default [
   {
     path: "/TEA",
     layout: DefaultLayout,
-    component: AnalysisDashboardv2,
+    component: AnalysisDashboard,
     private: true
   }
 ];
