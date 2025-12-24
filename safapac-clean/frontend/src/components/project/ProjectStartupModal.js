@@ -142,7 +142,7 @@ const ProjectStartupModal = ({ isOpen, onProjectSelected }) => {
               block
               style={{ backgroundColor: "#006D7C", borderColor: "#006D7C", padding: "1rem" }}
             >
-              <i className="material-icons" style={{ verticalAlign: "middle", marginRight: "0.5rem" }}>add_circle</i>
+              <i className="material-icons" style={{ verticalAlign: "middle", marginRight: "0.5rem", marginTop: "-7px" }}>add_circle</i>
               Create New Project
             </Button>
           </div>
@@ -186,7 +186,7 @@ const ProjectStartupModal = ({ isOpen, onProjectSelected }) => {
                   block
                   style={{ padding: "0.75rem" }}
                 >
-                  <i className="material-icons" style={{ verticalAlign: "middle", marginRight: "0.5rem" }}>folder_open</i>
+                  <i className="material-icons" style={{ verticalAlign: "middle", marginRight: "0.5rem", marginTop: "-6px" }}>folder_open</i>
                   Load Selected Project
                 </Button>
               </FormGroup>
