@@ -158,8 +158,8 @@ class UserInputs:
                 flat["hydrogen_carbon_intensity"] = util.carbon_intensity.value
                 flat["hydrogen_yield"] = util_yield
             elif "electricity" in name_lower:
-                # Convert electricity price from USD/MWh to USD/kWh
-                flat["electricity_rate"] = util.price.value / 1000.0
+                # Price is already normalized to USD/kWh by UnitNormalizer
+                flat["electricity_rate"] = util.price.value
                 flat["electricity_carbon_intensity"] = util.carbon_intensity.value
                 flat["electricity_yield"] = util_yield
 

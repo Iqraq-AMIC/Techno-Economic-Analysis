@@ -122,16 +122,17 @@ REFERENCE_DATA_SEED: Dict[str, Any] = {
 }
 
 # --- UNIT MASTER DATA DEFINITIONS ---
+# NOTE: Base units are standardized to tonnes (t) and USD/t for compatibility with calculation engine
 UNIT_GROUPS = [
     {"name": "Capacity (Mass/Time)", "base_unit_name": "t/yr"},
     {"name": "Density (Mass/Volume)", "base_unit_name": "kg/m3"},
-    {"name": "Price/Mass", "base_unit_name": "USD/kg"},
+    {"name": "Price/Mass", "base_unit_name": "USD/t"},      # Changed: USD/t is now base unit
     {"name": "Price/Power", "base_unit_name": "USD/kWh"},
     {"name": "CI/Mass", "base_unit_name": "gCO2/kg"},
     {"name": "CI/Power", "base_unit_name": "gCO2/kWh"},
     {"name": "Energy/Mass", "base_unit_name": "MJ/kg"},
-    {"name": "Yield/Mass", "base_unit_name": "kg/kg"},
-    {"name": "Yield/Power", "base_unit_name": "kWh/kg"},
+    {"name": "Yield/Mass", "base_unit_name": "t/t"},        # Changed: t/t is now base unit
+    {"name": "Yield/Power", "base_unit_name": "kWh/t"},     # Changed: kWh/t is now base unit
     {"name": "Price/CI", "base_unit_name": "USD/gCO2"},
     {"name": "Currency", "base_unit_name": "USD"},
     {"name": "Unitless (Percent)", "base_unit_name": "%"},
@@ -145,10 +146,10 @@ UNITS_OF_MEASURE_AND_CONVERSIONS = [
     # Density (Base Unit: kg/m3)
     {"group_name": "Density (Mass/Volume)", "name": "kg/m3", "display_name": "kilogram per cubic meter", "factor": 1.0},
     {"group_name": "Density (Mass/Volume)", "name": "g/cm3", "display_name": "gram per cubic centimeter", "factor": 1000.0},
-    # Price/Mass (Base Unit: USD/kg)
-    {"group_name": "Price/Mass", "name": "usd/kg", "display_name": "USD per kilogram", "factor": 1.0},
-    {"group_name": "Price/Mass", "name": "usd/t", "display_name": "USD per tonne", "factor": 0.001},
-    {"group_name": "Price/Mass", "name": "usd/kt", "display_name": "USD per kilotonne", "factor": 1e-6},
+    # Price/Mass (Base Unit: USD/t) - UPDATED: USD/t is now base unit
+    {"group_name": "Price/Mass", "name": "usd/t", "display_name": "USD per tonne", "factor": 1.0},       # Base unit
+    {"group_name": "Price/Mass", "name": "usd/kg", "display_name": "USD per kilogram", "factor": 1000.0}, # 1 USD/kg = 1000 USD/t
+    {"group_name": "Price/Mass", "name": "usd/kt", "display_name": "USD per kilotonne", "factor": 0.001}, # 1 USD/kt = 0.001 USD/t
     # Price/Power (Base Unit: USD/kWh)
     {"group_name": "Price/Power", "name": "usd/kwh", "display_name": "USD per kilowatt-hour", "factor": 1.0},
     {"group_name": "Price/Power", "name": "usd/mwh", "display_name": "USD per megawatt-hour", "factor": 0.001},
@@ -160,18 +161,19 @@ UNITS_OF_MEASURE_AND_CONVERSIONS = [
     {"group_name": "CI/Power", "name": "kgco2/mwh", "display_name": "kgCO2 per megawatt-hour", "factor": 1.0},
     # Energy/Mass (Base Unit: MJ/kg)
     {"group_name": "Energy/Mass", "name": "mj/kg", "display_name": "Megajoule per kilogram", "factor": 1.0},
-    # Yield/Mass (Base Unit: kg/kg)
-    {"group_name": "Yield/Mass", "name": "kg/kg", "display_name": "kilogram per kilogram", "factor": 1.0},
-    {"group_name": "Yield/Mass", "name": "t/t", "display_name": "tonne per tonne", "factor": 1.0},
-    # Yield/Power (Base Unit: kWh/kg)
-    {"group_name": "Yield/Power", "name": "kwh/kg", "display_name": "kilowatt-hour per kilogram", "factor": 1.0},
-    {"group_name": "Yield/Power", "name": "mwh/kg", "display_name": "megawatt-hour per kilogram", "factor": 1000.0},
+    # Yield/Mass (Base Unit: t/t) - UPDATED: t/t is now base unit
+    {"group_name": "Yield/Mass", "name": "t/t", "display_name": "tonne per tonne", "factor": 1.0},       # Base unit
+    {"group_name": "Yield/Mass", "name": "kg/kg", "display_name": "kilogram per kilogram", "factor": 1.0}, # Same ratio
+    # Yield/Power (Base Unit: kWh/t) - UPDATED: kWh/t is now base unit
+    {"group_name": "Yield/Power", "name": "kwh/t", "display_name": "kilowatt-hour per tonne", "factor": 1.0},    # Base unit
+    {"group_name": "Yield/Power", "name": "kwh/kg", "display_name": "kilowatt-hour per kilogram", "factor": 1000.0}, # 1 kWh/kg = 1000 kWh/t
+    {"group_name": "Yield/Power", "name": "mwh/t", "display_name": "megawatt-hour per tonne", "factor": 1000.0},  # 1 MWh/t = 1000 kWh/t
     # Price/CI (Base Unit: USD/gCO2)
     {"group_name": "Price/CI", "name": "usd/gco2", "display_name": "USD per gCO2", "factor": 1.0},
     {"group_name": "Price/CI", "name": "usd/kgco2", "display_name": "USD per kgCO2", "factor": 0.001},
     # Currency (Base Unit: USD)
     {"group_name": "Currency", "name": "usd", "display_name": "US Dollar", "factor": 1.0},
-    {"group_name": "Currency", "name": "musd", "display_name": "Million US Dollar (MUS D)", "factor": 1_000_000.0},
+    {"group_name": "Currency", "name": "musd", "display_name": "Million US Dollar (MUSD)", "factor": 1_000_000.0},
     # Unitless (Percent)
     {"group_name": "Unitless (Percent)", "name": "%", "display_name": "Percent", "factor": 1.0},
 ]

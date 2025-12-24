@@ -166,8 +166,24 @@ class TestRunner:
         hydrogen_ci = inputs["utilities"][0]["carbon_intensity"]["value"]
         electricity_ci = inputs["utilities"][1]["carbon_intensity"]["value"]
 
+        # Get plant capacity and convert to base unit (tons/year)
+        # The calculation engine expects tons/year as the base unit
+        plant_capacity_raw = inputs["conversion_plant"]["plant_capacity"]["value"]
+        plant_capacity_unit = inputs["conversion_plant"]["plant_capacity"].get("unit", "KTPA")
+
+        # Convert to tons/year based on unit
+        if plant_capacity_unit.upper() in ["KTPA", "KTA", "KT/YR"]:
+            # KTA = kilotonne per annum, multiply by 1000 to get tons/year
+            plant_capacity_tons = plant_capacity_raw * 1000
+        elif plant_capacity_unit.upper() in ["TPA", "T/YR", "TONS/YEAR"]:
+            # Already in tons/year
+            plant_capacity_tons = plant_capacity_raw
+        else:
+            # Default: assume KTPA for backward compatibility
+            plant_capacity_tons = plant_capacity_raw * 1000
+
         calc_inputs = {
-            "plant_total_liquid_fuel_capacity": inputs["conversion_plant"]["plant_capacity"]["value"],
+            "plant_total_liquid_fuel_capacity": plant_capacity_tons,  # Now in tons/year (base unit)
             "feedstock_carbon_intensity": feedstock_ci,
             "feedstock_carbon_content": feedstock_carbon_content,
             "feedstock_price": inputs["feedstock_data"]["price"]["value"],
