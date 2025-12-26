@@ -43,7 +43,7 @@ export const ThemeProvider = ({ children }) => {
       hoverBackground: '#f8f9fa'
     },
     dark: {
-      oxfordBlue: '#0d2847',
+      oxfordBlue: '#3180da',
       background: '#1a1a1a',
       cardBackground: '#2a2a2a',
       text: '#f5f5f5',

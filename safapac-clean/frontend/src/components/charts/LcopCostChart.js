@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import Chart from 'chart.js';
 
+
 // Color palette for LCOP cost components
 const LCOP_COLORS = {
   capital: '#92400e',      // Brown (TCI)
@@ -13,31 +14,37 @@ const LCOP_COLORS = {
 
 const LcopCostChart = ({ lcopData, comparisonData, isComparison, colors }) => {
   const chartRef = useRef(null);
+  const chartInstance = useRef(null);
 
   useEffect(() => {
-    const canvas = chartRef.current;
-    if (!canvas) return;
+    if (!chartRef.current) return;
 
-    // Destroy existing chart
-    if (canvas.chartInstance) {
-      canvas.chartInstance.destroy();
+    const ctx = chartRef.current.getContext('2d');
+
+    // Destroy existing chart instance stored on canvas ref
+    if (chartRef.current.chartInstance) {
+      chartRef.current.chartInstance.destroy();
+      chartRef.current.chartInstance = null;
     }
 
-    const ctx = canvas.getContext('2d');
+    // Also destroy the ref-based instance
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+      chartInstance.current = null;
+    }
+
+    // Always animate when creating a new chart
+    const shouldAnimate = true;
 
     if (isComparison && comparisonData && comparisonData.length > 0) {
       // Stacked horizontal bar chart for comparison mode
-      canvas.chartInstance = createStackedBarChart(ctx, comparisonData, colors);
+      chartInstance.current = createStackedBarChart(ctx, comparisonData, colors, shouldAnimate);
+      chartRef.current.chartInstance = chartInstance.current;
     } else if (lcopData) {
       // Pie chart for single scenario mode
-      canvas.chartInstance = createPieChart(ctx, lcopData, colors);
+      chartInstance.current = createPieChart(ctx, lcopData, colors, shouldAnimate);
+      chartRef.current.chartInstance = chartInstance.current;
     }
-
-    return () => {
-      if (canvas?.chartInstance) {
-        canvas.chartInstance.destroy();
-      }
-    };
   }, [lcopData, comparisonData, isComparison, colors]);
 
   return (
@@ -48,14 +55,15 @@ const LcopCostChart = ({ lcopData, comparisonData, isComparison, colors }) => {
 };
 
 // Create pie chart for single scenario
-const createPieChart = (ctx, lcopData, colors) => {
-  const { capital, feedstock, hydrogen, electricity, indirect, total } = lcopData;
+const createPieChart = (ctx, lcopData, colors, shouldAnimate = true) => {
+  const { capital, feedstock, hydrogen, electricity, indirect } = lcopData;
 
-  // Calculate percentages
+  // Calculate percentages based on sum of components (matching economic outputs display)
   const values = [capital, feedstock, hydrogen, electricity, indirect];
-  const percentages = values.map(v => total > 0 ? (v / total) * 100 : 0);
+  const componentsSum = values.reduce((sum, val) => sum + val, 0);
+  const percentages = values.map(v => componentsSum > 0 ? (v / componentsSum) * 100 : 0);
 
-  return new Chart(ctx, {
+  const chart = new Chart(ctx, {
     type: 'pie',
     data: {
       labels: [
@@ -78,9 +86,83 @@ const createPieChart = (ctx, lcopData, colors) => {
         borderWidth: 2
       }]
     },
+    plugins: [{
+      // Custom plugin to draw value labels on pie slices
+      afterDatasetsDraw: function(chart) {
+        const ctx = chart.ctx;
+        const meta = chart.getDatasetMeta(0);
+        const centerX = meta.data[0]._model.x;
+        const centerY = meta.data[0]._model.y;
+
+        meta.data.forEach(function(slice, index) {
+          const value = values[index];
+          const percentage = percentages[index];
+
+          if (value && value > 0) {
+            // Get the center position of the slice
+            const model = slice._model;
+            const startAngle = model.startAngle;
+            const endAngle = model.endAngle;
+            const midAngle = startAngle + (endAngle - startAngle) / 2;
+            const radius = (model.innerRadius + model.outerRadius) / 2;
+
+            // Check if slice is small (less than 10% or small angle)
+            const sliceAngle = endAngle - startAngle;
+            const isSmallSlice = percentage < 10 || sliceAngle < 0.3; // ~17 degrees
+
+            const label = `$${value.toFixed(2)}`;
+            const percentLabel = `(${percentage.toFixed(2)}%)`;
+
+            if (isSmallSlice) {
+              // Draw label outside with leader line
+              const outerRadius = model.outerRadius;
+              const lineStartX = centerX + Math.cos(midAngle) * outerRadius;
+              const lineStartY = centerY + Math.sin(midAngle) * outerRadius;
+
+              const labelDistance = outerRadius + 30;
+              const lineEndX = centerX + Math.cos(midAngle) * labelDistance;
+              const lineEndY = centerY + Math.sin(midAngle) * labelDistance;
+
+              // Draw leader line
+              ctx.strokeStyle = colors?.text || '#000000';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(lineStartX, lineStartY);
+              ctx.lineTo(lineEndX, lineEndY);
+              ctx.stroke();
+
+              // Draw label outside
+              ctx.fillStyle = colors?.text || '#000000';
+              ctx.font = 'bold 11px sans-serif';
+              ctx.textAlign = lineEndX > centerX ? 'left' : 'right';
+              ctx.textBaseline = 'middle';
+
+              const labelX = lineEndX + (lineEndX > centerX ? 5 : -5);
+              ctx.fillText(label, labelX, lineEndY - 6);
+              ctx.fillText(percentLabel, labelX, lineEndY + 6);
+            } else {
+              // Draw label inside the slice
+              const x = centerX + Math.cos(midAngle) * radius * 0.75;
+              const y = centerY + Math.sin(midAngle) * radius * 0.75;
+
+              ctx.fillStyle = '#000000ff';
+              ctx.font = 'bold 11px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+
+              ctx.fillText(label, x, y - 6);
+              ctx.fillText(percentLabel, x, y + 6);
+            }
+          }
+        });
+      }
+    }],
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: {
+        duration: shouldAnimate ? 1000 : 0
+      },
       legend: {
         display: true,
         position: 'right',
@@ -90,14 +172,6 @@ const createPieChart = (ctx, lcopData, colors) => {
           padding: 10,
           boxWidth: 15
         }
-      },
-      title: {
-        display: true,
-        text: 'Levelized Cost of Production Breakdown',
-        fontColor: colors?.text || '#000000',
-        fontSize: 14,
-        fontStyle: 'bold',
-        padding: 10
       },
       tooltips: {
         backgroundColor: colors?.cardBackground || '#ffffff',
@@ -111,67 +185,126 @@ const createPieChart = (ctx, lcopData, colors) => {
             const label = data.labels[tooltipItem.index] || '';
             const value = data.datasets[0].data[tooltipItem.index];
             const percentage = percentages[tooltipItem.index].toFixed(1);
-            return `${label}: $${value.toFixed(2)}/unit (${percentage}%)`;
+            return `${label}: $${value.toFixed(2)}/T (${percentage}%)`;
           }
         }
+      },
+      title: {
+        display: true,
+        text: 'Levelized Cost of Production Breakdown',
+        fontColor: colors?.text || '#000000',
+        fontSize: 14,
+        fontStyle: 'bold',
+        padding: 20
       }
     }
   });
+
+  return chart;
 };
 
-// Create stacked horizontal bar chart for comparison mode
-const createStackedBarChart = (ctx, comparisonData, colors) => {
-  // Extract scenario names
-  const scenarioNames = comparisonData.map(d => d.scenarioName || 'Unnamed');
-
-  // Prepare datasets for each cost component
-  const datasets = [
-    {
-      label: 'Capital (TCI)',
-      data: comparisonData.map(d => d.lcopData.capital),
-      backgroundColor: LCOP_COLORS.capital,
-      borderColor: colors?.cardBackground || '#ffffff',
-      borderWidth: 1
-    },
-    {
-      label: 'Feedstock',
-      data: comparisonData.map(d => d.lcopData.feedstock),
-      backgroundColor: LCOP_COLORS.feedstock,
-      borderColor: colors?.cardBackground || '#ffffff',
-      borderWidth: 1
-    },
-    {
-      label: 'Hydrogen',
-      data: comparisonData.map(d => d.lcopData.hydrogen),
-      backgroundColor: LCOP_COLORS.hydrogen,
-      borderColor: colors?.cardBackground || '#ffffff',
-      borderWidth: 1
-    },
-    {
-      label: 'Electricity',
-      data: comparisonData.map(d => d.lcopData.electricity),
-      backgroundColor: LCOP_COLORS.electricity,
-      borderColor: colors?.cardBackground || '#ffffff',
-      borderWidth: 1
-    },
-    {
-      label: 'Indirect OPEX',
-      data: comparisonData.map(d => d.lcopData.indirect),
-      backgroundColor: LCOP_COLORS.indirect,
-      borderColor: colors?.cardBackground || '#ffffff',
-      borderWidth: 1
-    }
+// Create comparative (grouped) horizontal bar chart for comparison mode
+const createStackedBarChart = (ctx, comparisonData, colors, shouldAnimate = true) => {
+  // Scenario colors for comparison (reuse from BreakevenBarChart)
+  const SCENARIO_COLORS = [
+    '#006D7C',  // Teal
+    '#F59E0B',  // Amber
+    '#8B5CF6',  // Purple
   ];
 
-  return new Chart(ctx, {
-    type: 'horizontalBar', // Chart.js v2 syntax for horizontal bars
+  // Cost component labels for y-axis
+  const costComponents = [
+    'Capital (TCI)',
+    'Feedstock',
+    'Hydrogen',
+    'Electricity',
+    'Indirect OPEX'
+  ];
+
+  // Prepare datasets for each scenario
+  const datasets = comparisonData.map((scenario, index) => ({
+    label: scenario.scenarioName || `Scenario ${index + 1}`,
+    data: [
+      scenario.lcopData.capital,
+      scenario.lcopData.feedstock,
+      scenario.lcopData.hydrogen,
+      scenario.lcopData.electricity,
+      scenario.lcopData.indirect
+    ],
+    backgroundColor: SCENARIO_COLORS[index % SCENARIO_COLORS.length],
+    borderColor: colors?.cardBackground || '#ffffff',
+    borderWidth: 1
+  }));
+
+  const chart = new Chart(ctx, {
+    type: 'horizontalBar',
     data: {
-      labels: scenarioNames,
+      labels: costComponents,
       datasets: datasets
     },
+    plugins: [{
+      // Custom plugin to draw value labels on bars
+      afterDatasetsDraw: function(chart) {
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach(function(dataset, datasetIndex) {
+          const meta = chart.getDatasetMeta(datasetIndex);
+          if (!meta.hidden) {
+            meta.data.forEach(function(bar, index) {
+              const data = dataset.data[index];
+              if (data && data > 0) {
+                ctx.fillStyle = colors?.text || '#000000';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                const label = '$' + data.toFixed(2);
+                const x = bar._model.x + 5; // 5px padding from end of bar
+                const y = bar._model.y;
+                ctx.fillText(label, x, y);
+              }
+            });
+          }
+        });
+      }
+    }],
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: {
+        duration: shouldAnimate ? 1000 : 0
+      },
+      scales: {
+        xAxes: [{
+          stacked: false,  // Grouped bars, not stacked
+          ticks: {
+            fontColor: colors?.text || '#000000',
+            fontSize: 10,
+            callback: function(value) {
+              return '$' + value.toFixed(0);
+            }
+          },
+          scaleLabel: {
+            display: true,
+            labelString: 'Cost ($/T)',
+            fontColor: colors?.text || '#000000',
+            fontSize: 11,
+            fontStyle: 'bold'
+          },
+          gridLines: {
+            color: colors?.border || '#e5e7eb',
+            zeroLineColor: colors?.border || '#e5e7eb'
+          }
+        }],
+        yAxes: [{
+          stacked: false,  // Grouped bars, not stacked
+          ticks: {
+            fontColor: colors?.text || '#000000',
+            fontSize: 10
+          },
+          gridLines: {
+            display: false
+          }
+        }]
+      },
       legend: {
         display: true,
         position: 'bottom',
@@ -182,14 +315,6 @@ const createStackedBarChart = (ctx, comparisonData, colors) => {
           boxWidth: 12
         }
       },
-      title: {
-        display: true,
-        text: 'LCOP Comparison Across Scenarios',
-        fontColor: colors?.text || '#000000',
-        fontSize: 14,
-        fontStyle: 'bold',
-        padding: 10
-      },
       tooltips: {
         backgroundColor: colors?.cardBackground || '#ffffff',
         titleFontColor: colors?.text || '#000000',
@@ -199,66 +324,24 @@ const createStackedBarChart = (ctx, comparisonData, colors) => {
         displayColors: true,
         callbacks: {
           label: function(tooltipItem, data) {
-            const label = data.datasets[tooltipItem.datasetIndex].label || '';
+            const scenarioName = data.datasets[tooltipItem.datasetIndex].label || '';
             const value = tooltipItem.xLabel;
-
-            // Calculate percentage of total LCOP for this scenario
-            const scenarioIndex = tooltipItem.index;
-            const scenarioData = comparisonData[scenarioIndex];
-            const total = scenarioData.lcopData.total || 0;
-            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
-
-            return `${label}: $${value.toFixed(2)} (${percentage}%)`;
-          },
-          afterBody: function(tooltipItems) {
-            if (tooltipItems.length > 0) {
-              const scenarioIndex = tooltipItems[0].index;
-              const scenarioData = comparisonData[scenarioIndex];
-              const total = scenarioData.lcopData.total || 0;
-              return `Total LCOP: $${total.toFixed(2)}/unit`;
-            }
-            return '';
+            return `${scenarioName}: $${value.toFixed(2)}/T`;
           }
         }
       },
-      scales: {
-        xAxes: [{
-          stacked: true,
-          ticks: {
-            fontColor: colors?.text || '#000000',
-            fontSize: 10,
-            callback: function(value) {
-              return '$' + value.toFixed(0);
-            }
-          },
-          scaleLabel: {
-            display: true,
-            labelString: 'LCOP (USD/unit)',
-            fontColor: colors?.text || '#000000',
-            fontSize: 11
-          },
-          gridLines: {
-            color: colors?.border || '#e5e7eb',
-            zeroLineColor: colors?.border || '#e5e7eb'
-          }
-        }],
-        yAxes: [{
-          stacked: true,
-          ticks: {
-            fontColor: colors?.text || '#000000',
-            fontSize: 10,
-            callback: function(value) {
-              // Truncate long names
-              return value.length > 20 ? value.substring(0, 17) + '...' : value;
-            }
-          },
-          gridLines: {
-            display: false
-          }
-        }]
+      title: {
+        display: true,
+        text: 'LCOP Comparison by Cost Component',
+        fontColor: colors?.text || '#000000',
+        fontSize: 14,
+        fontStyle: 'bold',
+        padding: 20
       }
     }
   });
+
+  return chart;
 };
 
 LcopCostChart.propTypes = {
