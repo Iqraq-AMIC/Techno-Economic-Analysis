@@ -17,6 +17,7 @@ import { useAccess } from "../contexts/AccessContext";
 import { useProject } from "../contexts/ProjectContext";
 import ProjectStartupModal from "../components/project/ProjectStartupModal";
 import { calculateScenario } from "../api/projectApi";
+import { convertUnit, UNIT_TO_VALUE_FIELD, FIELD_TO_CONVERSION_TYPE, PRODUCT_UNIT_TO_VALUE_FIELD, PRODUCT_FIELD_TO_CONVERSION_TYPE } from "../utils/unitConversions";
 
 // ✅ Mock data for fallback
 const mockCashFlowTable = [
@@ -156,6 +157,10 @@ const convertBackendInputsToFrontend = (backendInputs) => {
   const elecPriceMWh = electricity.price?.value || 55;
   const elecPriceKWh = elecPriceMWh / 1000;
 
+  // Convert hydrogen price from USD/t to USD/kg
+  const hydrogenPricePerTon = hydrogen.price?.value || 5400;
+  const hydrogenPricePerKg = hydrogenPricePerTon / 1000;
+
   // Convert feedstock yield (backend stores as percent if >1, need to check)
   let feedstockYield = feedstock.yieldPercent || 121;
   if (feedstockYield > 10) feedstockYield = feedstockYield / 100; // Convert from 121 to 1.21
@@ -164,8 +169,8 @@ const convertBackendInputsToFrontend = (backendInputs) => {
   let hydrogenYield = hydrogen.yieldPercent || 4.2;
   if (hydrogenYield > 1) hydrogenYield = hydrogenYield / 100; // Convert from 4.2 to 0.042
 
-  let electricityYield = electricity.yieldPercent || 12;
-  if (electricityYield > 1) electricityYield = electricityYield / 100; // Convert from 12 to 0.12
+  let electricityYield = electricity.yieldPercent || 12000;
+  if (electricityYield > 100) electricityYield = electricityYield / 100000; // Convert from 12000 to 0.12
 
   return {
     production_capacity: capacityTYr,
@@ -176,7 +181,7 @@ const convertBackendInputsToFrontend = (backendInputs) => {
     conversion_process_ci_default: cp.ciProcessDefault || 20,
     feedstock_price: feedstock.price?.value || 930,
     feedstock_price_unit: "USD/t",
-    hydrogen_price: hydrogen.price?.value || 5.4,
+    hydrogen_price: hydrogenPricePerKg,
     hydrogen_price_unit: "USD/kg",
     electricity_rate: elecPriceKWh,
     electricity_rate_unit: "USD/kWh",
@@ -208,6 +213,10 @@ const convertBackendInputsToFrontend = (backendInputs) => {
     products: products.map(p => {
       let productYield = p.yieldPercent || 0;
       if (productYield > 1) productYield = productYield / 100; // Convert from 64 to 0.64
+
+      // Convert product density from backend t/m³ (0.81) to frontend kg/m³ (810)
+      const densityKgM3 = (p.productDensity || 0) * 1000;
+
       return {
         name: p.name,
         price: p.price?.value || 0,
@@ -217,7 +226,7 @@ const convertBackendInputsToFrontend = (backendInputs) => {
         carbonContent: p.carbonContent || 0,
         energyContent: p.energyContent || 0,
         energyUnit: "MJ/kg",
-        density: (p.productDensity || 0) * 1000, // Convert from 0.81 to 810
+        density: densityKgM3, // Converted to kg/m³
         yield: productYield,
         yieldUnit: "kg/kg",
       };
@@ -477,10 +486,35 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       valueOrEvent && typeof valueOrEvent === "object" && "target" in valueOrEvent
         ? valueOrEvent.target.value
         : valueOrEvent;
-    setInputs((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+
+    setInputs((prev) => {
+      // Check if this is a unit field change that requires automatic value conversion
+      const valueField = UNIT_TO_VALUE_FIELD[key];
+
+      if (valueField && prev[valueField] !== undefined && prev[key] !== undefined) {
+        // This is a unit change - convert the value
+        const oldUnit = prev[key];
+        const newUnit = value;
+        const oldValue = prev[valueField];
+        const conversionType = FIELD_TO_CONVERSION_TYPE[valueField];
+
+        if (conversionType && oldUnit !== newUnit) {
+          const convertedValue = convertUnit(oldValue, oldUnit, newUnit, conversionType);
+
+          return {
+            ...prev,
+            [key]: value,
+            [valueField]: convertedValue,
+          };
+        }
+      }
+
+      // Regular value change (not a unit change)
+      return {
+        ...prev,
+        [key]: value,
+      };
+    });
   };
 
   const handleProductSliderChange = (index, key) => (vals) => {
@@ -497,7 +531,30 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       valueOrEvent && typeof valueOrEvent === "object" && "target" in valueOrEvent
         ? valueOrEvent.target.value
         : valueOrEvent;
+
     setInputs((prev) => {
+      // Check if this is a product unit field change that requires automatic value conversion
+      const valueField = PRODUCT_UNIT_TO_VALUE_FIELD[key];
+      const currentProduct = prev.products[index];
+
+      if (valueField && currentProduct && currentProduct[valueField] !== undefined && currentProduct[key] !== undefined) {
+        // This is a unit change - convert the value
+        const oldUnit = currentProduct[key];
+        const newUnit = value;
+        const oldValue = currentProduct[valueField];
+        const conversionType = PRODUCT_FIELD_TO_CONVERSION_TYPE[valueField];
+
+        if (conversionType && oldUnit !== newUnit) {
+          const convertedValue = convertUnit(oldValue, oldUnit, newUnit, conversionType);
+
+          const products = prev.products.map((product, idx) =>
+            idx === index ? { ...product, [key]: value, [valueField]: convertedValue } : product
+          );
+          return { ...prev, products };
+        }
+      }
+
+      // Regular value change (not a unit change)
       const products = prev.products.map((product, idx) =>
         idx === index ? { ...product, [key]: value } : product
       );
@@ -698,27 +755,82 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     setIsCalculating(true);
     try {
       // === UNIT CONVERSIONS FOR BACKEND ===
-      
-      // 1. Capacity: Frontend = Tons/yr (e.g. 500,000). Backend expects KTA (e.g. 500)
-      const capacityKTA = (inputs.production_capacity || 0) / 1000;
+      // Convert all inputs to the units that the backend expects
 
-      // 2. TCI Ref: Frontend = USD (e.g. 400,000,000). Backend expects MUSD (e.g. 400)
+      // 1. Capacity: Convert to KTA (backend expects unitId: 3)
+      const capacityKTA = convertUnit(
+        inputs.production_capacity || 0,
+        inputs.plant_capacity_unit || "t/yr",
+        "KTA",
+        "capacity"
+      );
+
+      // 2. TCI Ref: Always in USD, convert to MUSD
       const tciRefMUSD = (inputs.tci_ref || 0) / 1_000_000;
 
-      // 3. Capacity Ref: Frontend = Tons/yr. Backend expects KTA.
-      const capacityRefKTA = (inputs.capacity_ref || 0) / 1000;
+      // 3. Capacity Ref: Convert to KTA
+      const capacityRefKTA = convertUnit(
+        inputs.capacity_ref || 0,
+        inputs.capacity_ref_unit || "t/yr",
+        "KTA",
+        "capacity"
+      );
 
-      // 4. Electricity: Frontend = USD/kWh (e.g. 0.055). Backend expects USD/MWh (e.g. 55)
-      // The backend code specifically does: price / 1000. So we must multiply by 1000 here.
-      const electricityPriceMWh = (inputs.electricity_rate || 0) * 1000;
+      // 4. Feedstock Price: Convert to USD/t (backend expects unitId: 6)
+      const feedstockPriceUSDPerTon = convertUnit(
+        inputs.feedstock_price || 0,
+        inputs.feedstock_price_unit || "USD/t",
+        "USD/t",
+        "price"
+      );
 
-      // 5. Feedstock Yield: Frontend = Ratio (e.g. 1.21). 
-      // Backend Logic: "if yield > 1.0, divide by 100". 
-      // If we send 1.21, backend makes it 0.0121 (WRONG).
-      // If we send 121, backend makes it 1.21 (CORRECT).
+      // 5. Hydrogen Price: Convert to USD/t (backend expects unitId: 6)
+      const hydrogenPricePerTon = convertUnit(
+        inputs.hydrogen_price || 0,
+        inputs.hydrogen_price_unit || "USD/kg",
+        "USD/t",
+        "price"
+      );
+
+      // 6. Electricity Rate: Convert to USD/MWh (backend expects unitId: 10)
+      const electricityPriceMWh = convertUnit(
+        inputs.electricity_rate || 0,
+        inputs.electricity_rate_unit || "USD/kWh",
+        "USD/MWh",
+        "electricity_rate"
+      );
+
+      // 7. Feedstock CI: gCO₂/kg is same as kgCO₂/t (backend expects unitId: 11)
+      const feedstockCI = inputs.feedstock_carbon_intensity || 0;
+
+      // 8. Hydrogen CI: gCO₂/kg is same as kgCO₂/t (backend expects unitId: 11)
+      const hydrogenCI = inputs.hydrogen_carbon_intensity || 0;
+
+      // 9. Electricity CI: gCO₂/kWh is same as kgCO₂/MWh (backend expects unitId: 13)
+      const electricityCI = inputs.electricity_carbon_intensity || 0;
+
+      // 10. Yields: Backend expects specific formats
+      // Feedstock Yield: Backend expects percent (121 for 1.21 ratio)
       let feedstockYieldPayload = inputs.feedstock_yield || 0;
       if (feedstockYieldPayload > 1.0 && feedstockYieldPayload < 100) {
          feedstockYieldPayload = feedstockYieldPayload * 100;
+      }
+
+      // Hydrogen Yield: Backend expects percent (4.2 for 0.042 ratio)
+      let hydrogenYieldPayload = inputs.hydrogen_yield || 0;
+      if (hydrogenYieldPayload < 1) {
+         hydrogenYieldPayload = hydrogenYieldPayload * 100;
+      }
+
+      // Electricity Yield: Convert to kWh, then scale per ton (12000 for 0.12 kWh/kg)
+      let electricityYieldPayload = convertUnit(
+        inputs.electricity_yield || 0,
+        inputs.electricity_yield_unit || "kWh/kg",
+        "kWh/kg",
+        "yield"
+      );
+      if (electricityYieldPayload < 100) {
+         electricityYieldPayload = electricityYieldPayload * 100000; // Scale to per-ton
       }
 
       const payload = {
@@ -727,8 +839,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         countryId: countryId,
         conversionPlant: {
           plantCapacity: {
-            value: capacityKTA, // <--- CHANGED: Sent as KTA
-            unitId: 1
+            value: capacityKTA, // <--- CHANGED: Sent as KTA (500 for 500,000 t/yr)
+            unitId: 3 // UnitId 3 = KTA (Kilo Tons per Annum)
           },
           annualLoadHours: inputs.annual_load_hours || 8000,
           ciProcessDefault: inputs.conversion_process_ci_default || 0
@@ -744,41 +856,67 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         },
         feedstockData: [{
           name: selectedFeedstock,
-          price: { value: inputs.feedstock_price || 0, unitId: 2 },
+          price: { value: feedstockPriceUSDPerTon, unitId: 6 }, // UnitId 6 = USD/t
           carbonContent: inputs.feedstock_carbon_content || 0,
-          carbonIntensity: { value: inputs.feedstock_carbon_intensity || 0, unitId: 3 },
+          carbonIntensity: { value: feedstockCI, unitId: 11 }, // UnitId 11 = gCO2/kg
           energyContent: inputs.feedstock_energy_content || 0,
-          yieldPercent: feedstockYieldPayload // <--- CHANGED: Scaled to survive backend logic
+          yieldPercent: feedstockYieldPayload // Scaled to percent
         }],
         utilityData: [
           {
             name: "Hydrogen",
-            price: { value: inputs.hydrogen_price || 0, unitId: 4 },
+            price: { value: hydrogenPricePerTon, unitId: 6 }, // UnitId 6 = USD/t
             carbonContent: 0,
-            carbonIntensity: { value: inputs.hydrogen_carbon_intensity || 0, unitId: 5 },
+            carbonIntensity: { value: hydrogenCI, unitId: 11 }, // UnitId 11 = gCO2/kg
             energyContent: 0,
-            yieldPercent: inputs.hydrogen_yield || 0 // Usually < 1, so backend keeps it as is
+            yieldPercent: hydrogenYieldPayload // Scaled to percent
           },
           {
-            name: "Electricity",
-            price: { value: electricityPriceMWh, unitId: 6 }, // <--- CHANGED: Sent as USD/MWh
+            name: "electricity",
+            price: { value: electricityPriceMWh, unitId: 10 }, // UnitId 10 = USD/MWh
             carbonContent: 0,
-            carbonIntensity: { value: inputs.electricity_carbon_intensity || 0, unitId: 7 },
+            carbonIntensity: { value: electricityCI, unitId: 13 }, // UnitId 13 = gCO2/kWh
             energyContent: 0,
-            yieldPercent: inputs.electricity_yield || 0
+            yieldPercent: electricityYieldPayload // Scaled to per-ton
           }
         ],
-        productData: (inputs.products || []).map(product => ({
-          name: product.name,
-          price: { value: Number(product.price) || 0, unitId: 8 },
-          priceSensitivityToCi: Number(product.priceSensitivity) || 0,
-          carbonContent: Number(product.carbonContent) || 0,
-          energyContent: Number(product.energyContent) || 0,
-          // If yield is entered as a decimal (0.64), backend keeps it.
-          // If entered as percent (64), backend divides by 100. Both work.
-          yieldPercent: Number(product.yield) || 0, 
-          productDensity: Number(product.density) || 0
-        }))
+        productData: (inputs.products || []).map(product => {
+          // Convert product price to USD/t (backend expects unitId: 6)
+          const productPriceUSDPerTon = convertUnit(
+            Number(product.price) || 0,
+            product.priceUnit || "USD/t",
+            "USD/t",
+            "price"
+          );
+
+          // Convert product price sensitivity to USD/gCO₂
+          const productPriceSensitivity = convertUnit(
+            Number(product.priceSensitivity) || 0,
+            product.priceSensitivityUnit || "USD/gCO₂",
+            "USD/gCO₂",
+            "price_sensitivity"
+          );
+
+          // Convert product yield to decimal (backend expects percent like 64 for 64%)
+          let productYield = Number(product.yield) || 0;
+          // If yield is in kg/kg format (0.64), convert to percent (64)
+          if (productYield < 1) {
+            productYield = productYield * 100;
+          }
+
+          // Product density: Frontend stores as kg/m³ (810), backend expects t/m³ (0.81)
+          const productDensity = (Number(product.density) || 0) / 1000;
+
+          return {
+            name: product.name,
+            price: { value: productPriceUSDPerTon, unitId: 6 }, // UnitId 6 = USD/t
+            priceSensitivityToCi: productPriceSensitivity,
+            carbonContent: Number(product.carbonContent) || 0,
+            energyContent: Number(product.energyContent) || 0,
+            yieldPercent: productYield,
+            productDensity: productDensity
+          };
+        })
       };
 
       console.log("=== API Request Payload (Corrected Units) ===");
@@ -1037,7 +1175,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     consumptionCards.push({
       key: "hydrogen",
       label: "Hydrogen",
-      value: formatNumber(hydrogenConsumption / 1000, 2),
+      value: formatNumber(hydrogenConsumption, 2),
       unit: "tons/yr",
     });
   }
