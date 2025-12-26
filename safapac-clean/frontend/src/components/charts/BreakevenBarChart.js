@@ -204,12 +204,13 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
             ticks: {
               fontColor: colors.text,
               padding: 10,  // Space between tick marks and labels
-              // autoSkip: false,  // Don't auto-skip any ticks
-              callback: function(value) {
-                // Only show integer labels on x-axis
-                return Number.isInteger(Number(value)) ? value : '';
+              autoSkip: false,  // Don't auto-skip any ticks
+              callback: function(value, index, ticks) {
+                // Only show labels at 5-year intervals
+                return Number.isInteger(Number(value)) && Number(value) % 5 === 0 ? value : '';
+                // return value;
               },
-              stepSize: 1, // Force 1-year intervals
+              stepSize: 5, // Force 5-year intervals
               max: Math.max(...allLabels), // Set max to the highest year
               min: Math.min(...allLabels), // Set min to the lowest year
               maxRotation: 0, // Keep labels horizontal
@@ -219,10 +220,10 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
               display: true,  // Must be true to show borders
               drawBorder: true,
               drawOnChartArea: false,  // Don't draw grid lines in chart area
-              drawTicks: true,  // Show tick marks
-              tickMarkLength: 10,  // Length of tick marks in pixels
-              zeroLineColor: colors.text,  // Same color as labels
-              color: colors.text,
+              drawTicks: false,  // Show tick marks
+              // tickMarkLength: 10,  // Length of tick marks in pixels
+              zeroLineColor: colors.border,  // Same color as labels
+              color: colors.border,
               lineWidth: 2,  // Thickness of axis line
               zeroLineWidth: 2  // Thickness of zero line
             }
@@ -237,14 +238,19 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
               fontColor: colors.text,
               padding: 10,  // Space between tick marks and labels
               beginAtZero: false,
+              maxTicksLimit: 8,  // Limit number of ticks to prevent overlapping
               // Set min/max based on all data values for proper scaling with padding
               min: (() => {
                 const minVal = Math.min(...allPVValues);
-                return minVal < 0 ? minVal * 1.1 : minVal * 0.9;
+                const paddedMin = minVal < 0 ? minVal * 1.1 : minVal * 0.9;
+                // Round down to nearest 5M to get clean intervals
+                return Math.floor(paddedMin / 5000000) * 5000000;
               })(),
               max: (() => {
                 const maxVal = Math.max(...allPVValues);
-                return maxVal > 0 ? maxVal * 1.1 : maxVal * 0.9;
+                const paddedMax = maxVal > 0 ? maxVal * 1.1 : maxVal * 0.9;
+                // Round up to nearest 5M to get clean intervals
+                return Math.ceil(paddedMax / 5000000) * 5000000;
               })(),
               callback: (val) => {
                 if (val === null || val === undefined || isNaN(val)) return "-";
@@ -257,9 +263,9 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
               drawBorder: true,
               drawOnChartArea: false,  // Don't draw grid lines in chart area
               drawTicks: true,  // Show tick marks
-              tickMarkLength: 10,  // Length of tick marks in pixels
-              zeroLineColor: colors.text,  // Same color as labels
-              color: colors.text,
+              // tickMarkLength: 10,  // Length of tick marks in pixels
+              zeroLineColor: colors.border,  // Same color as labels
+              color: colors.border,
               lineWidth: 2,  // Thickness of axis line
               zeroLineWidth: 2  // Thickness of zero line
             }
@@ -279,18 +285,6 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
   return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
 };
 
-// Helper: cumulative PV + breakeven index
-// const preprocessData = (rows) => {
-//   let cumulative = 0;
-//   const labels = rows.map((r) => r["Project Lifetime"] ?? r["Year"]);
-//   const pv = rows.map((r) => {
-//     cumulative += r["Present Value"];
-//     return cumulative;
-//   });
-
-//   const breakevenIndex = pv.findIndex((v) => v >= 0);
-//   return { labels, pv, breakevenIndex };
-// };
 const preprocessData = (rows) => {
   // Flexible label detection - try multiple possible keys
   const labels = rows.map((r) => r["Year"] ?? r["year"] ?? r["Project Lifetime"] ?? 0);

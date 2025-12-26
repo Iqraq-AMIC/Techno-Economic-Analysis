@@ -40,6 +40,10 @@ const Login = ({ history }) => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // new
+  const [showPassword, setShowPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (field) => ({ target }) => {
     const { value = "" } = target || {};
@@ -275,6 +279,7 @@ const Login = ({ history }) => {
               </Alert>
             )}
 
+            {/* hydar's change */}
             {/* Sign In Form */}
             {activeTab === "signin" && (
               <Form onSubmit={handleSignIn}>
@@ -303,20 +308,54 @@ const Login = ({ history }) => {
                   <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
                     Password
                   </label>
-                  <FormInput
-                    size="lg"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={credentials.password}
-                    onChange={handleChange("password")}
-                    style={{
-                      fontSize: "0.95rem",
-                      backgroundColor: "#ffffff",
-                      color: "#212529",
-                      border: "1px solid #d1d5db"
-                    }}
-                    required
-                  />
+                  <div style={{ position: "relative" }}>
+                    <FormInput
+                      size="lg"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      value={credentials.password}
+                      onChange={handleChange("password")}
+                      style={{
+                        fontSize: "0.95rem",
+                        backgroundColor: "#ffffff",
+                        color: "#212529",
+                        border: "1px solid #d1d5db",
+                        paddingRight: "2.5rem"
+                      }}
+                      required
+                    />
+                    {/* newly added show/hide password button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: "absolute",
+                        right: "0.75rem",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "0.25rem",
+                        display: "flex",
+                        alignItems: "center",
+                        color: "#6b7280"
+                      }}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </FormGroup>
 
                 <div style={{ textAlign: "right", marginBottom: "1.5rem" }}>
@@ -374,6 +413,30 @@ const Login = ({ history }) => {
                     to { transform: rotate(360deg); }
                   }
                 `}</style>
+
+                {/* newly added */}
+                <div style={{ textAlign: "center", marginTop: "1rem" }}>
+                  <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: 0 }}>
+                    Don't have an account?{" "}
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setActiveTab("signup");
+                        setError("");
+                        setSuccess("");
+                      }}
+                      style={{
+                        color: "#006D7C",
+                        textDecoration: "none",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Sign Up
+                    </a>
+                  </p>
+                </div>
               </Form>
             )}
 
@@ -423,40 +486,106 @@ const Login = ({ history }) => {
                   <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
                     Password
                   </label>
-                  <FormInput
-                    size="lg"
-                    type="password"
-                    placeholder="Create a password (min 8 characters)"
-                    value={signupData.password}
-                    onChange={handleSignupChange("password")}
-                    style={{
-                      fontSize: "0.95rem",
-                      backgroundColor: "#ffffff",
-                      color: "#212529",
-                      border: "1px solid #d1d5db"
-                    }}
-                    required
-                  />
+                  <div style={{ position: "relative" }}>
+                    <FormInput
+                      size="lg"
+                      type={showSignupPassword ? "text" : "password"}
+                      placeholder="Create a password (min 8 characters)"
+                      value={signupData.password}
+                      onChange={handleSignupChange("password")}
+                      style={{
+                        fontSize: "0.95rem",
+                        backgroundColor: "#ffffff",
+                        color: "#212529",
+                        border: "1px solid #d1d5db",
+                        paddingRight: "2.5rem"
+                      }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPassword(!showSignupPassword)}
+                      style={{
+                        position: "absolute",
+                        right: "0.75rem",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "0.25rem",
+                        display: "flex",
+                        alignItems: "center",
+                        color: "#6b7280"
+                      }}
+                      aria-label={showSignupPassword ? "Hide password" : "Show password"}
+                    >
+                      {showSignupPassword ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </FormGroup>
 
                 <FormGroup>
                   <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
                     Confirm Password
                   </label>
-                  <FormInput
-                    size="lg"
-                    type="password"
-                    placeholder="Confirm your password"
-                    value={signupData.confirmPassword}
-                    onChange={handleSignupChange("confirmPassword")}
-                    style={{
-                      fontSize: "0.95rem",
-                      backgroundColor: "#ffffff",
-                      color: "#212529",
-                      border: "1px solid #d1d5db"
-                    }}
-                    required
-                  />
+                  <div style={{ position: "relative" }}>
+                    <FormInput
+                      size="lg"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Confirm your password"
+                      value={signupData.confirmPassword}
+                      onChange={handleSignupChange("confirmPassword")}
+                      style={{
+                        fontSize: "0.95rem",
+                        backgroundColor: "#ffffff",
+                        color: "#212529",
+                        border: "1px solid #d1d5db",
+                        paddingRight: "2.5rem"
+                      }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      style={{
+                        position: "absolute",
+                        right: "0.75rem",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "0.25rem",
+                        display: "flex",
+                        alignItems: "center",
+                        color: "#6b7280"
+                      }}
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {showConfirmPassword ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </FormGroup>
 
                 <Button
@@ -475,6 +604,30 @@ const Login = ({ history }) => {
                 >
                   {isSubmitting ? "Creating account..." : "Sign Up"}
                 </Button>
+
+                {/* newly added */}
+                <div style={{ textAlign: "center", marginTop: "1rem" }}>
+                  <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: 0 }}>
+                    Already have an account?{" "}
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setActiveTab("signin");
+                        setError("");
+                        setSuccess("");
+                      }}
+                      style={{
+                        color: "#006D7C",
+                        textDecoration: "none",
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      Sign In
+                    </a>
+                  </p>
+                </div>
               </Form>
             )}
 

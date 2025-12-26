@@ -697,7 +697,7 @@ const BiofuelForm = ({
                     onChange={(e) =>
                       handleProductInputChange(index, "priceSensitivityUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem", minWidth: 120 }}
+                    style={{ fontSize: "0.7rem", minWidth: 90 }}
                   >
                     {PRODUCT_UNIT_OPTIONS.priceSensitivityUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -756,7 +756,7 @@ const BiofuelForm = ({
                     onChange={(e) =>
                       handleProductInputChange(index, "energyUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem", minWidth: 120 }}
+                    style={{ fontSize: "0.7rem", minWidth: 90 }}
                   >
                     {PRODUCT_UNIT_OPTIONS.energyUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -1026,7 +1026,7 @@ const BiofuelForm = ({
   return (
     <Card small className="d-flex flex-column" style={{ height: "100%" }}>
       <CardHeader className="p-1" style={{ flexShrink: 0 }}>
-        <h6 className="m-0" style={{ fontSize: "0.75rem", fontWeight: 600 }}>
+        <h6 className="m-0" style={{ fontSize: "0.95rem", fontWeight: 700, letterSpacing: "0.5px" }}>
           Scenario Inputs
         </h6>
       </CardHeader>
@@ -1042,9 +1042,9 @@ const BiofuelForm = ({
           style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
           onSubmit={handleFormSubmit}
         >
-          <div style={{ flexShrink: 0 }}>
+          <div style={{ flexShrink: 0, paddingRight: "4px" }}>
             <Row form>
-              <Col md="4" className="mb-1">
+              <Col md="12" className="mb-1">
                 <FormGroup className="mb-0">
                   <label style={{ fontSize: "0.7rem", fontWeight: 600, marginBottom: "2px" }}>Process Technology</label>
                   <FormSelect
@@ -1062,7 +1062,9 @@ const BiofuelForm = ({
                   </FormSelect>
                 </FormGroup>
               </Col>
-              <Col md="4" className="mb-1">
+            </Row>
+            <Row form>
+              <Col md="6" className="mb-1">
                 {selectedProcess && (
                   <FormGroup className="mb-0">
                     <label style={{ fontSize: "0.7rem", fontWeight: 600, marginBottom: "2px" }}>Feedstock</label>
@@ -1082,7 +1084,7 @@ const BiofuelForm = ({
                   </FormGroup>
                 )}
               </Col>
-              <Col md="4" className="mb-1">
+              <Col md="6" className="mb-1">
                 {selectedProcess && (
                   <FormGroup className="mb-0">
                     <label style={{ fontSize: "0.7rem", fontWeight: 600, marginBottom: "2px" }}>Country</label>
@@ -1312,7 +1314,7 @@ const BiofuelForm = ({
                   { min: 0, max: 1 },
                   0.01,
                   handleSliderChange("indirect_opex_to_tci_ratio"),
-                  2,
+                  3,
                   null,
                   [],
                   "slider-economic"
