@@ -20,6 +20,7 @@ class User(Base):
     password_hash = Column(String, nullable=False, default='placeholder')
     access_level = Column(String, nullable=False)
     occupation = Column(String, nullable=True)  # student/researcher
+    refresh_token = Column(String, nullable=True)  # Store current refresh token
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships

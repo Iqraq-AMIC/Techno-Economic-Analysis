@@ -6,6 +6,7 @@ const AuthContext = createContext();
 const AUTH_STORAGE_KEY = "safapac-authenticated";
 const USER_STORAGE_KEY = "safapac-user";
 const TOKEN_STORAGE_KEY = "access_token"; // <--- NEW: Required for API calls
+const REFRESH_TOKEN_STORAGE_KEY = "refresh_token";
 
 // Ensure this matches your FastAPI URL
 const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
@@ -57,17 +58,19 @@ export const AuthProvider = ({ children }) => {
     return storedUser ? JSON.parse(storedUser) : null;
   });
 
-  const persistAuthState = (isAuth, user = null, token = null) => {
+  const persistAuthState = (isAuth, user = null, token = null, refreshToken = null) => {
     if (typeof window === "undefined") return;
-    
+
     if (isAuth) {
       window.localStorage.setItem(AUTH_STORAGE_KEY, "true");
       if (user) window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-      if (token) window.localStorage.setItem(TOKEN_STORAGE_KEY, token); // Save JWT
+      if (token) window.localStorage.setItem(TOKEN_STORAGE_KEY, token); // Save access token
+      if (refreshToken) window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken); // Save refresh token
     } else {
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
       window.localStorage.removeItem(USER_STORAGE_KEY);
-      window.localStorage.removeItem(TOKEN_STORAGE_KEY); // Clear JWT
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY); // Clear access token
+      window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY); // Clear refresh token
     }
   };
 
@@ -82,14 +85,14 @@ export const AuthProvider = ({ children }) => {
         password: password
       });
 
-      // 2. Handle Success (FastAPI returns 200 OK with token)
-      // Backend uses camelCase: { accessToken, tokenType, user }
-      const { accessToken, user } = response.data;
+      // 2. Handle Success (FastAPI returns 200 OK with tokens)
+      // Backend uses camelCase: { accessToken, refreshToken, tokenType, user }
+      const { accessToken, refreshToken, user } = response.data;
 
       // 3. Update State & Storage
       setIsAuthenticated(true);
       setCurrentUser(user);
-      persistAuthState(true, user, accessToken);
+      persistAuthState(true, user, accessToken, refreshToken);
 
       return { success: true, user: user };
 
@@ -128,30 +131,6 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener("auth:logout", handleAuthLogout);
     return () => window.removeEventListener("auth:logout", handleAuthLogout);
   }, []);
-
-  // Periodic token expiration check (every 60 seconds)
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const checkTokenExpiration = () => {
-      const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-      if (!token || isTokenExpired(token)) {
-        console.warn("Token expired during session. Logging out...");
-        // Clear storage
-        window.localStorage.removeItem(AUTH_STORAGE_KEY);
-        window.localStorage.removeItem(USER_STORAGE_KEY);
-        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-        // Update state and redirect
-        handleLogout(true);
-      }
-    };
-
-    // Check immediately and then every 60 seconds
-    checkTokenExpiration();
-    const interval = setInterval(checkTokenExpiration, 60000);
-
-    return () => clearInterval(interval);
-  }, [isAuthenticated, handleLogout]);
 
   // ... (Keep signup/forgotPassword mocks or implement similarly if needed) ...
   const signup = async () => ({ success: true });

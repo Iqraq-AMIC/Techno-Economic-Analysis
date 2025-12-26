@@ -20,32 +20,108 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// 3. RESPONSE INTERCEPTOR: Handle 401 Unauthorized (Token Expired)
+// Helper: Flag to prevent infinite refresh loops
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
+// 3. RESPONSE INTERCEPTOR: Handle 401 Unauthorized (Token Expired) with Auto-Refresh
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid - trigger logout
-      console.warn("Token expired or unauthorized. Logging out...");
+  async (error) => {
+    const originalRequest = error.config;
 
-      // Clear all auth data from localStorage
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("safapac-authenticated");
-      localStorage.removeItem("safapac-user");
+    // If 401 error and we haven't tried to refresh yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return apiClient(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
 
-      // Dispatch custom event for AuthContext to handle
-      window.dispatchEvent(new CustomEvent("auth:logout", {
-        detail: { reason: "token_expired" }
-      }));
+      originalRequest._retry = true;
+      isRefreshing = true;
 
-      // Redirect to login page
-      if (window.location.pathname !== "/") {
-        window.location.href = "/";
+      const refreshToken = localStorage.getItem("refresh_token");
+
+      if (!refreshToken) {
+        // No refresh token available - logout
+        console.warn("No refresh token available. Logging out...");
+        isRefreshing = false;
+        logout();
+        return Promise.reject(error);
+      }
+
+      try {
+        // Call refresh endpoint
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+          refreshToken: refreshToken
+        });
+
+        const { accessToken, refreshToken: newRefreshToken } = response.data;
+
+        // Update tokens in localStorage
+        localStorage.setItem("access_token", accessToken);
+        localStorage.setItem("refresh_token", newRefreshToken);
+
+        // Update the authorization header
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+
+        // Process queued requests
+        processQueue(null, accessToken);
+        isRefreshing = false;
+
+        // Retry the original request
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed - logout
+        processQueue(refreshError, null);
+        isRefreshing = false;
+        logout();
+        return Promise.reject(refreshError);
       }
     }
+
     return Promise.reject(error);
   }
 );
+
+// Logout helper function
+function logout() {
+  // Clear all auth data from localStorage
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  localStorage.removeItem("safapac-authenticated");
+  localStorage.removeItem("safapac-user");
+
+  // Dispatch custom event for AuthContext to handle
+  window.dispatchEvent(new CustomEvent("auth:logout", {
+    detail: { reason: "token_expired" }
+  }));
+
+  // Redirect to login page
+  if (window.location.pathname !== "/") {
+    window.location.href = "/";
+  }
+}
 
 // --- HELPER: Transform Backend Data to Frontend Shape ---
 const transformProject = (p) => ({

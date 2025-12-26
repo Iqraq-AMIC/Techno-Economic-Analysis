@@ -11,12 +11,15 @@ from app.core.database import get_db
 from app.core.security import (
     verify_password,
     create_access_token,
+    create_refresh_token,
+    verify_refresh_token,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 # --- MODIFIED IMPORTS ---
 from app.schemas.user_schema import (
     LoginRequest, LoginResponse, UserSchema,
-    RegisterRequest, RegisterResponse
+    RegisterRequest, RegisterResponse,
+    RefreshTokenRequest, RefreshTokenResponse
 )
 from app.models.user_project import User
 from app.core.security import get_password_hash
@@ -63,6 +66,13 @@ def login(
             data={"sub": str(user.id)}, expires_delta=access_token_expires
         )
 
+        # Create refresh token
+        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+        # Store refresh token in database
+        user.refresh_token = refresh_token
+        db.commit()
+
         # Create user schema
         user_schema = UserSchema(
             id=user.id,
@@ -73,6 +83,7 @@ def login(
 
         return LoginResponse(
             access_token=access_token,
+            refresh_token=refresh_token,
             token_type="bearer",
             user=user_schema
         )
@@ -142,4 +153,60 @@ def register(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed"
+        )
+
+
+@router.post("/refresh", response_model=RefreshTokenResponse)
+def refresh_access_token(
+    refresh_data: RefreshTokenRequest,
+    db: Session = Depends(get_db)
+):
+    """Refresh access token using a valid refresh token."""
+    try:
+        # Verify the refresh token and extract user_id
+        user_id = verify_refresh_token(refresh_data.refresh_token)
+
+        # Get user from database
+        stmt = select(User).where(User.id == user_id)
+        user = db.execute(stmt).scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+
+        # Verify the refresh token matches the one stored in the database
+        if user.refresh_token != refresh_data.refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token"
+            )
+
+        # Create new access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": str(user.id)}, expires_delta=access_token_expires
+        )
+
+        # Create new refresh token
+        new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+        # Update refresh token in database
+        user.refresh_token = new_refresh_token
+        db.commit()
+
+        return RefreshTokenResponse(
+            access_token=access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Token refresh error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Token refresh failed"
         )
