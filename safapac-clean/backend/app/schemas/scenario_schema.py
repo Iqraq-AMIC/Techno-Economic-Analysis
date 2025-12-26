@@ -119,6 +119,15 @@ class CalculationResponse(CamelCaseBaseModel):
     financials: Dict[str, Any]
     resolved_inputs: Dict[str, Any]
 
+class CalculationStatusResponse(CamelCaseBaseModel):
+    """Response for calculation status polling."""
+    scenario_id: UUID
+    status: str  # "calculating", "calculated", "failed"
+    message: Optional[str] = None
+    techno_economics: Optional[Dict[str, Any]] = None
+    financials: Optional[Dict[str, Any]] = None
+    resolved_inputs: Optional[Dict[str, Any]] = None
+
 class ReferenceDataResponse(CamelCaseBaseModel):
     process_technology: str
     feedstock: str

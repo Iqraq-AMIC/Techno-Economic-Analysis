@@ -5,9 +5,9 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_async_db
 from app.core.security import (
     verify_password,
     create_access_token,
@@ -31,15 +31,16 @@ router = APIRouter()
 # ==================== AUTH ENDPOINTS ====================
 
 @router.post("/login", response_model=LoginResponse)
-def login(
+async def login(
     login_data: LoginRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """User login endpoint with JWT token generation."""
     try:
         # Find user by email
         stmt = select(User).where(User.email == login_data.email)
-        user = db.execute(stmt).scalar_one_or_none()
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
 
         if not user:
             raise HTTPException(
@@ -71,7 +72,7 @@ def login(
 
         # Store refresh token in database
         user.refresh_token = refresh_token
-        db.commit()
+        await db.commit()
 
         # Create user schema
         user_schema = UserSchema(
@@ -99,15 +100,16 @@ def login(
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-def register(
+async def register(
     register_data: RegisterRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """User registration endpoint."""
     try:
         # Check if email already exists
         stmt = select(User).where(User.email == register_data.email)
-        existing_user = db.execute(stmt).scalar_one_or_none()
+        result = await db.execute(stmt)
+        existing_user = result.scalar_one_or_none()
 
         if existing_user:
             raise HTTPException(
@@ -128,8 +130,8 @@ def register(
         )
 
         db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
+        await db.commit()
+        await db.refresh(new_user)
 
         # Create user schema for response
         user_schema = UserSchema(
@@ -148,7 +150,7 @@ def register(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Registration error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -157,9 +159,9 @@ def register(
 
 
 @router.post("/refresh", response_model=RefreshTokenResponse)
-def refresh_access_token(
+async def refresh_access_token(
     refresh_data: RefreshTokenRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Refresh access token using a valid refresh token."""
     try:
@@ -168,7 +170,8 @@ def refresh_access_token(
 
         # Get user from database
         stmt = select(User).where(User.id == user_id)
-        user = db.execute(stmt).scalar_one_or_none()
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
 
         if not user:
             raise HTTPException(
@@ -194,7 +197,7 @@ def refresh_access_token(
 
         # Update refresh token in database
         user.refresh_token = new_refresh_token
-        db.commit()
+        await db.commit()
 
         return RefreshTokenResponse(
             access_token=access_token,
