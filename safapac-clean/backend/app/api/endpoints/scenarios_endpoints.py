@@ -230,7 +230,10 @@ async def create_scenario(
     db_scenario = await crud.create_scenario(scenario_data)
     logger.info(f"Scenario '{scenario_name}' created for project {project_id}")
 
-    return db_scenario
+    # Fetch the scenario again with relationships loaded for the response
+    db_scenario_with_relations = await crud.get_scenario_by_id(db_scenario.id)
+
+    return db_scenario_with_relations
 
 @router.get("", response_model=List[ScenarioDetailResponse])
 async def get_project_scenarios(

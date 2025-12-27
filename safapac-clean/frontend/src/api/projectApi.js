@@ -251,23 +251,40 @@ export const updateScenario = async (scenarioId, updates) => {
 // Explicit calculation - only called when user clicks "Calculate" button
 export const calculateScenario = async (scenarioId, inputs) => {
   try {
-    const response = await apiClient.post(`/scenarios/${scenarioId}/calculate`, inputs);
+    // 1. Start async calculation (returns 202 Accepted immediately)
+    await apiClient.post(`/scenarios/${scenarioId}/calculate`, inputs);
 
-    // Calculate returns { technoEconomics, financials, resolvedInputs }
-    const result = response.data;
+    // 2. Poll for results until calculation is complete
+    const pollStatus = async () => {
+      const statusResponse = await apiClient.get(`/scenarios/${scenarioId}/calculate/status`);
+      const { status, technoEconomics, financials, resolvedInputs, message } = statusResponse.data;
 
-    // Return data in the format that AnalysisDashboard expects:
-    // - apiData.technoEconomics for production/cost metrics
-    // - apiData.financials for NPV, IRR, payback, cashFlowTable
-    return {
-      success: true,
-      data: {
-        scenario_id: scenarioId,
-        resolvedInputs: result.resolvedInputs,
-        technoEconomics: result.technoEconomics,
-        financials: result.financials,
+      if (status === "calculated") {
+        // Calculation complete - return results
+        return {
+          success: true,
+          data: {
+            scenario_id: scenarioId,
+            resolvedInputs: resolvedInputs,
+            technoEconomics: technoEconomics,
+            financials: financials,
+          }
+        };
+      } else if (status === "failed") {
+        // Calculation failed
+        throw new Error(message || "Calculation failed");
+      } else if (status === "calculating") {
+        // Still calculating - wait 1 second and poll again
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return pollStatus();
+      } else {
+        // Unknown status
+        throw new Error(`Unexpected status: ${status}`);
       }
     };
+
+    return await pollStatus();
+
   } catch (error) {
     console.error("Error calculating scenario:", error);
     return { success: false, error: error.response?.data?.detail || error.message };
@@ -282,3 +299,6 @@ export const deleteScenario = async (scenarioId) => {
     return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
+
+// Export the configured apiClient for use in other components
+export { apiClient, API_BASE_URL };
