@@ -7,7 +7,7 @@ from uuid import UUID
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -367,6 +367,7 @@ async def save_draft(
 
 @router.post("/{scenario_id}/calculate", status_code=status.HTTP_202_ACCEPTED)
 async def calculate_scenario_async(
+    request: Request,
     scenario_id: UUID,
     inputs_in: UserInputsSchema,
     background_tasks: BackgroundTasks,
@@ -375,6 +376,7 @@ async def calculate_scenario_async(
 ):
     """
     Async calculation endpoint that returns immediately (202 Accepted).
+    Rate limit: 10 calculations per minute per IP.
 
     1. Receives full User Inputs (JSON).
     2. Updates DB with new inputs and sets status to "calculating".
@@ -382,6 +384,9 @@ async def calculate_scenario_async(
     4. Returns immediately with status info.
     5. Frontend polls GET /{scenario_id}/calculate/status for results.
     """
+    # Apply rate limiting
+    limiter = request.app.state.limiter
+    await limiter.check_request(request, "10/minute")
     # 1. Verify access
     db_scenario = await crud.get_scenario_by_id(scenario_id)
     if not db_scenario or db_scenario.project.user_id != current_user.id:
@@ -460,6 +465,7 @@ async def get_calculation_status(
 
 @router.post("/{scenario_id}/calculate/sync", response_model=CalculationResponse)
 async def calculate_scenario_sync(
+    request: Request,
     scenario_id: UUID,
     inputs_in: UserInputsSchema,
     current_user: User = Depends(get_current_active_user),
@@ -468,6 +474,7 @@ async def calculate_scenario_sync(
 ):
     """
     Synchronous calculation endpoint (waits for completion).
+    Rate limit: 10 calculations per minute per IP.
     Use this for immediate results when you don't need async behavior.
 
     1. Receives full User Inputs (JSON).
@@ -476,6 +483,9 @@ async def calculate_scenario_sync(
     4. Saves Results.
     5. Returns Results.
     """
+    # Apply rate limiting
+    limiter = request.app.state.limiter
+    await limiter.check_request(request, "10/minute")
     # 1. Verify access
     db_scenario = await crud.get_scenario_by_id(scenario_id)
     if not db_scenario or db_scenario.project.user_id != current_user.id:

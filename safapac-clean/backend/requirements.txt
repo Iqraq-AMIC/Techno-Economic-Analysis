@@ -29,3 +29,4 @@ psycopg2-binary
 pydantic[email]
 asyncpg
 greenlet
+slowapi

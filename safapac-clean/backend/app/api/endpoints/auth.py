@@ -3,7 +3,7 @@
 from datetime import timedelta
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,10 +32,14 @@ router = APIRouter()
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
+    request: Request,
     login_data: LoginRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
-    """User login endpoint with JWT token generation."""
+    """User login endpoint with JWT token generation. Rate limit: 5 attempts per minute per IP."""
+    # Apply rate limiting to prevent brute force attacks
+    limiter = request.app.state.limiter
+    await limiter.check_request(request, "5/minute")
     try:
         # Find user by email
         stmt = select(User).where(User.email == login_data.email)
@@ -101,10 +105,14 @@ async def login(
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 async def register(
+    request: Request,
     register_data: RegisterRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
-    """User registration endpoint."""
+    """User registration endpoint. Rate limit: 3 registrations per hour per IP."""
+    # Apply rate limiting to prevent spam registrations
+    limiter = request.app.state.limiter
+    await limiter.check_request(request, "3/hour")
     try:
         # Check if email already exists
         stmt = select(User).where(User.email == register_data.email)
@@ -160,10 +168,14 @@ async def register(
 
 @router.post("/refresh", response_model=RefreshTokenResponse)
 async def refresh_access_token(
+    request: Request,
     refresh_data: RefreshTokenRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
-    """Refresh access token using a valid refresh token."""
+    """Refresh access token using a valid refresh token. Rate limit: 10 refreshes per minute per IP."""
+    # Apply rate limiting
+    limiter = request.app.state.limiter
+    await limiter.check_request(request, "10/minute")
     try:
         # Verify the refresh token and extract user_id
         user_id = verify_refresh_token(refresh_data.refresh_token)
