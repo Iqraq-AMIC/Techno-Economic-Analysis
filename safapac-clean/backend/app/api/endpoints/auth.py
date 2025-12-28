@@ -28,18 +28,28 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Get limiter from request - will be accessed via decorator
+def get_limiter():
+    """Import limiter lazily to avoid circular imports."""
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    return Limiter(key_func=get_remote_address)
+
+# Create a module-level limiter instance
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
+
 # ==================== AUTH ENDPOINTS ====================
 
 @router.post("/login", response_model=LoginResponse)
+@limiter.limit("5/minute")
 async def login(
     request: Request,
     login_data: LoginRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """User login endpoint with JWT token generation. Rate limit: 5 attempts per minute per IP."""
-    # Apply rate limiting to prevent brute force attacks
-    limiter = request.app.state.limiter
-    await limiter.check_request(request, "5/minute")
     try:
         # Find user by email
         stmt = select(User).where(User.email == login_data.email)
@@ -104,15 +114,13 @@ async def login(
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("3/hour")
 async def register(
     request: Request,
     register_data: RegisterRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """User registration endpoint. Rate limit: 3 registrations per hour per IP."""
-    # Apply rate limiting to prevent spam registrations
-    limiter = request.app.state.limiter
-    await limiter.check_request(request, "3/hour")
     try:
         # Check if email already exists
         stmt = select(User).where(User.email == register_data.email)
@@ -167,15 +175,13 @@ async def register(
 
 
 @router.post("/refresh", response_model=RefreshTokenResponse)
+@limiter.limit("10/minute")
 async def refresh_access_token(
     request: Request,
     refresh_data: RefreshTokenRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
     """Refresh access token using a valid refresh token. Rate limit: 10 refreshes per minute per IP."""
-    # Apply rate limiting
-    limiter = request.app.state.limiter
-    await limiter.check_request(request, "10/minute")
     try:
         # Verify the refresh token and extract user_id
         user_id = verify_refresh_token(refresh_data.refresh_token)

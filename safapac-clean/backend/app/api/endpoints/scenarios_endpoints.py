@@ -37,6 +37,11 @@ router = APIRouter()
 # Thread pool for CPU-intensive calculations
 calculation_executor = ThreadPoolExecutor(max_workers=4)
 
+# Create limiter instance for rate limiting
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
+
 # --- Dependency Injection ---
 async def get_biofuel_crud(db: AsyncSession = Depends(get_async_db)) -> AsyncBiofuelCRUD:
     return AsyncBiofuelCRUD(db)
@@ -366,9 +371,10 @@ async def save_draft(
 # ==================== CALCULATION ENDPOINTS ====================
 
 @router.post("/{scenario_id}/calculate", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("10/minute")
 async def calculate_scenario_async(
-    request: Request,
     scenario_id: UUID,
+    request: Request,
     inputs_in: UserInputsSchema,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
@@ -384,9 +390,6 @@ async def calculate_scenario_async(
     4. Returns immediately with status info.
     5. Frontend polls GET /{scenario_id}/calculate/status for results.
     """
-    # Apply rate limiting
-    limiter = request.app.state.limiter
-    await limiter.check_request(request, "10/minute")
     # 1. Verify access
     db_scenario = await crud.get_scenario_by_id(scenario_id)
     if not db_scenario or db_scenario.project.user_id != current_user.id:
@@ -464,9 +467,10 @@ async def get_calculation_status(
 
 
 @router.post("/{scenario_id}/calculate/sync", response_model=CalculationResponse)
+@limiter.limit("10/minute")
 async def calculate_scenario_sync(
-    request: Request,
     scenario_id: UUID,
+    request: Request,
     inputs_in: UserInputsSchema,
     current_user: User = Depends(get_current_active_user),
     crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud),
@@ -483,9 +487,6 @@ async def calculate_scenario_sync(
     4. Saves Results.
     5. Returns Results.
     """
-    # Apply rate limiting
-    limiter = request.app.state.limiter
-    await limiter.check_request(request, "10/minute")
     # 1. Verify access
     db_scenario = await crud.get_scenario_by_id(scenario_id)
     if not db_scenario or db_scenario.project.user_id != current_user.id:
