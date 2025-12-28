@@ -48,10 +48,26 @@ class TraceableEconomics:
         # Create traceable LCOP
         lcop_traceable = self._create_lcop_traceable(techno, results["financials"])
 
+        # Create traceable Revenue
+        revenue_traceable = self._create_revenue_traceable(techno)
+
+        # Create traceable Production
+        production_traceable = self._create_production_traceable(techno)
+
+        # Create traceable Carbon Intensity
+        carbon_intensity_traceable = self._create_carbon_intensity_traceable(techno)
+
+        # Create traceable Emissions
+        emissions_traceable = self._create_emissions_traceable(techno)
+
         # Update results with traceable values
         results["techno_economics"]["total_capital_investment_traceable"] = tci_traceable.to_dict()
         results["techno_economics"]["total_opex_traceable"] = opex_traceable.to_dict()
         results["techno_economics"]["LCOP_traceable"] = lcop_traceable.to_dict()
+        results["techno_economics"]["total_revenue_traceable"] = revenue_traceable.to_dict()
+        results["techno_economics"]["production_traceable"] = production_traceable.to_dict()
+        results["techno_economics"]["carbon_intensity_traceable"] = carbon_intensity_traceable.to_dict()
+        results["techno_economics"]["total_emissions_traceable"] = emissions_traceable.to_dict()
 
         return results
 
@@ -201,6 +217,156 @@ class TraceableEconomics:
         return TraceableValue(
             value=lcop,
             unit="USD/t",
+            formula=formula,
+            components=components,
+            metadata=metadata
+        )
+
+    def _create_revenue_traceable(self, techno: dict) -> TraceableValue:
+        """Create traceable Revenue with formula and product breakdown."""
+        total_revenue = techno.get("total_revenue", 0)
+        product_revenue_breakdown = techno.get("product_revenue_breakdown", {})
+
+        components = []
+        for product_name, revenue_value in product_revenue_breakdown.items():
+            components.append(
+                ComponentValue(
+                    name=f"{product_name.upper()} Revenue",
+                    value=revenue_value,
+                    unit="USD/year",
+                    description=f"Annual revenue from {product_name} sales"
+                )
+            )
+
+        formula = "Total_Revenue = Σ(Product_i_Production × Product_i_Price)"
+
+        metadata = {
+            "product_count": len(product_revenue_breakdown),
+            "products": list(product_revenue_breakdown.keys())
+        }
+
+        return TraceableValue(
+            value=total_revenue,
+            unit="USD/year",
+            formula=formula,
+            components=components,
+            metadata=metadata
+        )
+
+    def _create_production_traceable(self, techno: dict) -> TraceableValue:
+        """Create traceable Production with formula and product breakdown."""
+        total_production = techno.get("production", 0)
+        product_breakdown = techno.get("product_breakdown", {})
+        product_cce = techno.get("product_carbon_conversion_efficiency", {})
+
+        components = []
+        for product_name, production_value in product_breakdown.items():
+            cce_value = product_cce.get(product_name, 0)
+            components.append(
+                ComponentValue(
+                    name=f"{product_name.upper()} Production",
+                    value=production_value,
+                    unit="tons/year",
+                    description=f"Annual {product_name} production (CCE: {cce_value:.2f}%)"
+                )
+            )
+
+        formula = "Product_Production = Plant_Capacity × Product_Yield"
+
+        metadata = {
+            "total_production_tons_year": total_production,
+            "product_count": len(product_breakdown),
+            "products": list(product_breakdown.keys())
+        }
+
+        return TraceableValue(
+            value=total_production,
+            unit="tons/year",
+            formula=formula,
+            components=components,
+            metadata=metadata
+        )
+
+    def _create_carbon_intensity_traceable(self, techno: dict) -> TraceableValue:
+        """Create traceable Carbon Intensity with formula and source breakdown."""
+        total_ci = techno.get("carbon_intensity", 0)
+        ci_breakdown = techno.get("carbon_intensity_breakdown", {})
+        fuel_energy_content = techno.get("fuel_energy_content", 0)
+
+        components = [
+            ComponentValue(
+                name="Feedstock Carbon Intensity",
+                value=ci_breakdown.get("feedstock", 0),
+                unit="gCO2e/MJ",
+                description="Carbon intensity contribution from feedstock"
+            ),
+            ComponentValue(
+                name="Hydrogen Carbon Intensity",
+                value=ci_breakdown.get("hydrogen", 0),
+                unit="gCO2e/MJ",
+                description="Carbon intensity contribution from hydrogen utility"
+            ),
+            ComponentValue(
+                name="Electricity Carbon Intensity",
+                value=ci_breakdown.get("electricity", 0),
+                unit="gCO2e/MJ",
+                description="Carbon intensity contribution from electricity utility"
+            ),
+            ComponentValue(
+                name="Process Carbon Intensity",
+                value=ci_breakdown.get("process", 0),
+                unit="gCO2e/MJ",
+                description="Carbon intensity from conversion process"
+            )
+        ]
+
+        formula = "CI_total = (CI_feedstock + CI_hydrogen + CI_electricity + CI_process)"
+
+        metadata = {
+            "fuel_energy_content_mj_kg": fuel_energy_content,
+            "total_ci_kgco2_ton": ci_breakdown.get("total", 0),
+            "conversion_formula": "CI_component = (Component_CI × Component_Yield) / Fuel_Energy_Content"
+        }
+
+        return TraceableValue(
+            value=total_ci,
+            unit="gCO2e/MJ",
+            formula=formula,
+            components=components,
+            metadata=metadata
+        )
+
+    def _create_emissions_traceable(self, techno: dict) -> TraceableValue:
+        """Create traceable Total Emissions with formula and product breakdown."""
+        total_emissions = techno.get("total_co2_emissions", 0)
+        product_emissions = techno.get("product_co2_emissions", {})
+        production = techno.get("production", 0)
+        carbon_intensity = techno.get("carbon_intensity", 0)
+        fuel_energy_content = techno.get("fuel_energy_content", 0)
+
+        components = []
+        for product_name, emissions_value in product_emissions.items():
+            components.append(
+                ComponentValue(
+                    name=f"{product_name.upper()} Emissions",
+                    value=emissions_value,
+                    unit="tons CO2e/year",
+                    description=f"Annual CO2 emissions from {product_name} production"
+                )
+            )
+
+        formula = "Total_CO2 = Carbon_Intensity × Fuel_Energy_Content × Production"
+
+        metadata = {
+            "carbon_intensity_gco2_mj": carbon_intensity,
+            "fuel_energy_content_mj_kg": fuel_energy_content,
+            "total_production_tons_year": production,
+            "calculation_detail": f"{carbon_intensity:.4f} gCO2e/MJ × {fuel_energy_content:.3f} MJ/kg × {production:.0f} kg/year"
+        }
+
+        return TraceableValue(
+            value=total_emissions,
+            unit="gCO2e/year",
             formula=formula,
             components=components,
             metadata=metadata
