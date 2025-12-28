@@ -58,9 +58,9 @@
         "unit": "USD/MWh"
       },
       "yield": {
-        "value": 12,
-        "unit": "percent",
-        "description": "Percentage of feedstock input"
+        "value": 0.12,
+        "unit": "MWh/ton",
+        "description": "Electricity consumption per ton of fuel produced"
       },
       "carbon_content": 0,
       "energy_content": 0,

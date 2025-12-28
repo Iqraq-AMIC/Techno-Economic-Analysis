@@ -155,12 +155,17 @@ class TestRunner:
 
         # Handle utility yield conversions
         hydrogen_yield = inputs["utilities"][0]["yield"]["value"]
-        if inputs["utilities"][0]["yield"].get("unit") == "percent":
+        hydrogen_yield_unit = inputs["utilities"][0]["yield"].get("unit", "")
+        if hydrogen_yield_unit == "percent":
             hydrogen_yield = hydrogen_yield / 100
 
         electricity_yield = inputs["utilities"][1]["yield"]["value"]
-        if inputs["utilities"][1]["yield"].get("unit") == "percent":
+        electricity_yield_unit = inputs["utilities"][1]["yield"].get("unit", "")
+        if electricity_yield_unit == "percent":
             electricity_yield = electricity_yield / 100
+        elif "MWh" in electricity_yield_unit:
+            # Convert MWh/ton to kWh/ton for calculation engine (which expects kWh/ton)
+            electricity_yield = electricity_yield * 1000
 
         # Get utility carbon intensities
         hydrogen_ci = inputs["utilities"][0]["carbon_intensity"]["value"]
@@ -182,23 +187,31 @@ class TestRunner:
             # Default: assume KTPA for backward compatibility
             plant_capacity_tons = plant_capacity_raw * 1000
 
+        # Convert hydrogen price from $/kg to $/ton if unit is specified as kg
+        hydrogen_price_raw = inputs["utilities"][0]["price"]["value"]
+        hydrogen_price_unit = inputs["utilities"][0]["price"].get("unit", "USD/kg")
+        if "kg" in hydrogen_price_unit.lower():
+            hydrogen_price = hydrogen_price_raw * 1000  # Convert $/kg to $/ton
+        else:
+            hydrogen_price = hydrogen_price_raw
+
         calc_inputs = {
             "plant_total_liquid_fuel_capacity": plant_capacity_tons,  # Now in tons/year (base unit)
             "feedstock_carbon_intensity": feedstock_ci,
             "feedstock_carbon_content": feedstock_carbon_content,
             "feedstock_price": inputs["feedstock_data"]["price"]["value"],
             "feedstock_yield": inputs["feedstock_data"]["yield"]["value"],
-            "hydrogen_price": inputs["utilities"][0]["price"]["value"],
+            "hydrogen_price": hydrogen_price,
             "hydrogen_yield": hydrogen_yield,
             "hydrogen_carbon_intensity": hydrogen_ci,
             "electricity_rate": inputs["utilities"][1]["price"]["value"] / 1000,
             "electricity_yield": electricity_yield,
             "electricity_carbon_intensity": electricity_ci,
-            
+
             # --- CHANGED THIS LINE ---
             # Use ref_data (from DB) to get the name, because inputs (from JSON) only has the ID
-            "process_type": ref_data["process_technology"], 
-            
+            "process_type": ref_data["process_technology"],
+
             "indirect_opex_tci_ratio": inputs["economic_parameters"]["indirect_opex_tci_ratio"],
             "products": products
         }
@@ -293,15 +306,24 @@ class TestRunner:
             "name": "Hydrogen Consumption",
             "actual": calc_results["layer1"]["hydrogen_consumption"],
             "expected": expected["process_outputs"]["utility_consumption"]["hydrogen"]["value"],
-            "unit": "kg/year",
+            "unit": expected["process_outputs"]["utility_consumption"]["hydrogen"]["unit"],
             "tolerance": 0.01
         })
 
+        # Handle electricity consumption - backend returns kWh/year, but we expect MWh/year
+        electricity_actual = calc_results["layer1"]["electricity_consumption"]
+        electricity_expected_value = expected["process_outputs"]["utility_consumption"]["electricity"]["value"]
+        electricity_expected_unit = expected["process_outputs"]["utility_consumption"]["electricity"]["unit"]
+
+        # If expected is in MWh, convert actual from kWh to MWh for comparison
+        if "MWh" in electricity_expected_unit:
+            electricity_actual = electricity_actual / 1000  # kWh to MWh
+
         tests.append({
             "name": "Electricity Consumption",
-            "actual": calc_results["layer1"]["electricity_consumption"],
-            "expected": expected["process_outputs"]["utility_consumption"]["electricity"]["value"],
-            "unit": "kWh/year",
+            "actual": electricity_actual,
+            "expected": electricity_expected_value,
+            "unit": electricity_expected_unit,
             "tolerance": 0.01
         })
 
