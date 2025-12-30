@@ -13,6 +13,8 @@ from app.services.economics import BiofuelEconomics
 from app.services.traceable_layer1 import TraceableLayer1
 from app.services.traceable_layer2 import TraceableLayer2
 from app.services.traceable_layer3 import TraceableLayer3
+from app.services.traceable_layer4 import TraceableLayer4
+from app.services.traceable_financial import TraceableFinancial
 from app.models.calculation_data import UserInputs
 from app.crud.biofuel_crud import BiofuelCRUD
 
@@ -31,6 +33,8 @@ class TraceableEconomics:
         self.layer1 = TraceableLayer1(inputs)
         self.layer2 = TraceableLayer2(inputs)
         self.layer3 = TraceableLayer3(inputs)
+        self.layer4 = TraceableLayer4(inputs)
+        self.financial = TraceableFinancial(inputs)
 
     def run(self, process_id: int, feedstock_id: int, country_id: int, product_key: str = "jet") -> dict:
         """
@@ -83,6 +87,22 @@ class TraceableEconomics:
         direct_opex_traceable = self.layer3.create_direct_opex_traceable(techno)
         weighted_carbon_intensity_traceable = self.layer3.create_weighted_carbon_intensity_traceable(techno)
 
+        # Create Layer 4 traceable calculations (enhanced versions)
+        total_opex_enhanced_traceable = self.layer4.create_total_opex_traceable(techno)
+        lcop_enhanced_traceable = self.layer4.create_lcop_traceable(techno, results.get("financials", {}))
+        total_emissions_enhanced_traceable = self.layer4.create_total_emissions_traceable(techno)
+
+        # Create Financial Analysis traceable calculations (only if financials exist)
+        financials = results.get("financials", {})
+        if financials:
+            npv_traceable = self.financial.create_npv_traceable(financials, techno)
+            irr_traceable = self.financial.create_irr_traceable(financials, techno)
+            payback_period_traceable = self.financial.create_payback_period_traceable(financials, techno)
+        else:
+            npv_traceable = None
+            irr_traceable = None
+            payback_period_traceable = None
+
         # Update results with traceable values
         results["techno_economics"]["total_capital_investment_traceable"] = tci_traceable.to_dict()
         results["techno_economics"]["total_opex_traceable"] = opex_traceable.to_dict()
@@ -108,6 +128,19 @@ class TraceableEconomics:
         # Add Layer 3 traceable outputs
         results["techno_economics"]["direct_opex_traceable"] = direct_opex_traceable.to_dict()
         results["techno_economics"]["weighted_carbon_intensity_traceable"] = weighted_carbon_intensity_traceable.to_dict()
+
+        # Add Layer 4 traceable outputs (enhanced versions)
+        results["techno_economics"]["total_opex_enhanced_traceable"] = total_opex_enhanced_traceable.to_dict()
+        results["techno_economics"]["lcop_enhanced_traceable"] = lcop_enhanced_traceable.to_dict()
+        results["techno_economics"]["total_emissions_enhanced_traceable"] = total_emissions_enhanced_traceable.to_dict()
+
+        # Add Financial Analysis traceable outputs (only if they were created)
+        if npv_traceable and irr_traceable and payback_period_traceable:
+            if "financials" not in results:
+                results["financials"] = {}
+            results["financials"]["npv_traceable"] = npv_traceable.to_dict()
+            results["financials"]["irr_traceable"] = irr_traceable.to_dict()
+            results["financials"]["payback_period_traceable"] = payback_period_traceable.to_dict()
 
         return results
 
