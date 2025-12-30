@@ -1,14 +1,18 @@
-# app/services/traceable_layer3.py
+# app/traceable/layer3.py
 
 """
 Layer 3 Traceable Calculations
 
 Handles aggregation calculations for Direct OPEX and Weighted Carbon Intensity.
 Based on the implementation plan Phase 2.4 (Layer 3).
+
+Calculations:
+- Total Direct OPEX (sum of feedstock, hydrogen, electricity costs)
+- Weighted Carbon Intensity (per product or total)
 """
 
 from typing import Dict
-from app.models.traceable_value import TraceableValue, ComponentValue, CalculationStep
+from app.traceable.models import TraceableValue, ComponentValue, CalculationStep
 from app.models.calculation_data import UserInputs
 
 

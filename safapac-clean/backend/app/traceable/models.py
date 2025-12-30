@@ -1,4 +1,4 @@
-# app/models/traceable_value.py
+# app/traceable/models.py
 
 """
 Traceable Value Models for Calculation Transparency

@@ -1,14 +1,21 @@
-# app/services/traceable_layer1.py
+# app/traceable/layer1.py
 
 """
 Layer 1 Traceable Calculations
 
 Handles core parameter calculations for consumption, production, and conversion metrics.
 Based on the implementation plan Phase 2.2 (Layer 1).
+
+Calculations:
+- Feedstock Consumption
+- Hydrogen Consumption
+- Electricity Consumption
+- Carbon Conversion Efficiency (per product)
+- Weighted Fuel Energy Content
 """
 
 from typing import Dict
-from app.models.traceable_value import TraceableValue, ComponentValue, CalculationStep
+from app.traceable.models import TraceableValue, ComponentValue, CalculationStep
 from app.models.calculation_data import UserInputs
 
 

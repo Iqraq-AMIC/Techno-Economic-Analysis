@@ -1,150 +1,43 @@
-# app/services/traceable_economics.py
+# app/traceable/base.py
 
 """
-Traceable Economics Wrapper
+Base Traceable Calculations (Foundation Layer)
 
-Wraps the BiofuelEconomics class to add calculation transparency for key KPIs.
-This module converts raw calculation results into TraceableValue objects with
-formulas, components, and metadata.
+Handles the 7 original foundation metrics:
+- Total Capital Investment (TCI)
+- Total Operating Expenses (OPEX)
+- Levelized Cost of Production (LCOP)
+- Total Revenue
+- Production
+- Carbon Intensity
+- Total Emissions
+
+These are the core KPIs that form the foundation of the traceable calculation system.
 """
 
-from app.models.traceable_value import TraceableValue, ComponentValue, CalculationStep, create_traceable_value
-from app.services.economics import BiofuelEconomics
-from app.services.traceable_layer1 import TraceableLayer1
-from app.services.traceable_layer2 import TraceableLayer2
-from app.services.traceable_layer3 import TraceableLayer3
-from app.services.traceable_layer4 import TraceableLayer4
-from app.services.traceable_financial import TraceableFinancial
+from typing import Dict
+from app.traceable.models import TraceableValue, ComponentValue, CalculationStep
 from app.models.calculation_data import UserInputs
-from app.crud.biofuel_crud import BiofuelCRUD
 
 
-class TraceableEconomics:
+class TraceableBase:
     """
-    Enhanced economics calculator that provides traceable results.
+    Foundation traceable calculations for core KPIs.
 
-    This wrapper adds transparency by converting key KPIs (TCI, OPEX, LCOP)
-    into TraceableValue objects with formulas and component breakdowns.
+    This class creates traceable outputs for the 7 original metrics
+    that were in the first implementation phase.
     """
 
-    def __init__(self, inputs: UserInputs, crud: BiofuelCRUD):
-        self.economics = BiofuelEconomics(inputs, crud)
+    def __init__(self, inputs: UserInputs):
+        """
+        Initialize Base traceable calculator.
+
+        Args:
+            inputs: User input parameters containing economic and conversion data
+        """
         self.inputs = inputs
-        self.layer1 = TraceableLayer1(inputs)
-        self.layer2 = TraceableLayer2(inputs)
-        self.layer3 = TraceableLayer3(inputs)
-        self.layer4 = TraceableLayer4(inputs)
-        self.financial = TraceableFinancial(inputs)
 
-    def run(self, process_id: int, feedstock_id: int, country_id: int, product_key: str = "jet") -> dict:
-        """
-        Run calculation and return results with traceable key KPIs.
-
-        Returns:
-            dict: Results with enhanced techno_economics containing TraceableValue objects
-        """
-        # Run the standard calculation
-        results = self.economics.run(process_id, feedstock_id, country_id, product_key)
-
-        # Extract values for traceability
-        techno = results["techno_economics"]
-
-        # Create traceable TCI
-        tci_traceable = self._create_tci_traceable(techno)
-
-        # Create traceable OPEX
-        opex_traceable = self._create_opex_traceable(techno)
-
-        # Create traceable LCOP
-        lcop_traceable = self._create_lcop_traceable(techno, results["financials"])
-
-        # Create traceable Revenue
-        revenue_traceable = self._create_revenue_traceable(techno)
-
-        # Create traceable Production
-        production_traceable = self._create_production_traceable(techno)
-
-        # Create traceable Carbon Intensity
-        carbon_intensity_traceable = self._create_carbon_intensity_traceable(techno)
-
-        # Create traceable Emissions
-        emissions_traceable = self._create_emissions_traceable(techno)
-
-        # Create Layer 1 traceable calculations
-        feedstock_consumption_traceable = self.layer1.create_feedstock_consumption_traceable(techno)
-        hydrogen_consumption_traceable = self.layer1.create_hydrogen_consumption_traceable(techno)
-        electricity_consumption_traceable = self.layer1.create_electricity_consumption_traceable(techno)
-        carbon_conversion_efficiency_traceable = self.layer1.create_carbon_conversion_efficiency_traceable(techno)
-        fuel_energy_content_traceable = self.layer1.create_fuel_energy_content_traceable(techno)
-
-        # Create Layer 2 traceable calculations
-        indirect_opex_traceable = self.layer2.create_indirect_opex_traceable(techno)
-        feedstock_cost_traceable = self.layer2.create_feedstock_cost_traceable(techno)
-        hydrogen_cost_traceable = self.layer2.create_hydrogen_cost_traceable(techno)
-        electricity_cost_traceable = self.layer2.create_electricity_cost_traceable(techno)
-
-        # Create Layer 3 traceable calculations
-        direct_opex_traceable = self.layer3.create_direct_opex_traceable(techno)
-        weighted_carbon_intensity_traceable = self.layer3.create_weighted_carbon_intensity_traceable(techno)
-
-        # Create Layer 4 traceable calculations (enhanced versions)
-        total_opex_enhanced_traceable = self.layer4.create_total_opex_traceable(techno)
-        lcop_enhanced_traceable = self.layer4.create_lcop_traceable(techno, results.get("financials", {}))
-        total_emissions_enhanced_traceable = self.layer4.create_total_emissions_traceable(techno)
-
-        # Create Financial Analysis traceable calculations (only if financials exist)
-        financials = results.get("financials", {})
-        if financials:
-            npv_traceable = self.financial.create_npv_traceable(financials, techno)
-            irr_traceable = self.financial.create_irr_traceable(financials, techno)
-            payback_period_traceable = self.financial.create_payback_period_traceable(financials, techno)
-        else:
-            npv_traceable = None
-            irr_traceable = None
-            payback_period_traceable = None
-
-        # Update results with traceable values
-        results["techno_economics"]["total_capital_investment_traceable"] = tci_traceable.to_dict()
-        results["techno_economics"]["total_opex_traceable"] = opex_traceable.to_dict()
-        results["techno_economics"]["LCOP_traceable"] = lcop_traceable.to_dict()
-        results["techno_economics"]["total_revenue_traceable"] = revenue_traceable.to_dict()
-        results["techno_economics"]["production_traceable"] = production_traceable.to_dict()
-        results["techno_economics"]["carbon_intensity_traceable"] = carbon_intensity_traceable.to_dict()
-        results["techno_economics"]["total_emissions_traceable"] = emissions_traceable.to_dict()
-
-        # Add Layer 1 traceable outputs
-        results["techno_economics"]["feedstock_consumption_traceable"] = feedstock_consumption_traceable.to_dict()
-        results["techno_economics"]["hydrogen_consumption_traceable"] = hydrogen_consumption_traceable.to_dict()
-        results["techno_economics"]["electricity_consumption_traceable"] = electricity_consumption_traceable.to_dict()
-        results["techno_economics"]["carbon_conversion_efficiency_traceable"] = carbon_conversion_efficiency_traceable.to_dict()
-        results["techno_economics"]["fuel_energy_content_traceable"] = fuel_energy_content_traceable.to_dict()
-
-        # Add Layer 2 traceable outputs
-        results["techno_economics"]["indirect_opex_traceable"] = indirect_opex_traceable.to_dict()
-        results["techno_economics"]["feedstock_cost_traceable"] = feedstock_cost_traceable.to_dict()
-        results["techno_economics"]["hydrogen_cost_traceable"] = hydrogen_cost_traceable.to_dict()
-        results["techno_economics"]["electricity_cost_traceable"] = electricity_cost_traceable.to_dict()
-
-        # Add Layer 3 traceable outputs
-        results["techno_economics"]["direct_opex_traceable"] = direct_opex_traceable.to_dict()
-        results["techno_economics"]["weighted_carbon_intensity_traceable"] = weighted_carbon_intensity_traceable.to_dict()
-
-        # Add Layer 4 traceable outputs (enhanced versions)
-        results["techno_economics"]["total_opex_enhanced_traceable"] = total_opex_enhanced_traceable.to_dict()
-        results["techno_economics"]["lcop_enhanced_traceable"] = lcop_enhanced_traceable.to_dict()
-        results["techno_economics"]["total_emissions_enhanced_traceable"] = total_emissions_enhanced_traceable.to_dict()
-
-        # Add Financial Analysis traceable outputs (only if they were created)
-        if npv_traceable and irr_traceable and payback_period_traceable:
-            if "financials" not in results:
-                results["financials"] = {}
-            results["financials"]["npv_traceable"] = npv_traceable.to_dict()
-            results["financials"]["irr_traceable"] = irr_traceable.to_dict()
-            results["financials"]["payback_period_traceable"] = payback_period_traceable.to_dict()
-
-        return results
-
-    def _create_tci_traceable(self, techno: dict) -> TraceableValue:
+    def create_tci_traceable(self, techno: dict) -> TraceableValue:
         """Create traceable TCI with comprehensive inputs and calculation steps."""
         tci = techno.get("total_capital_investment", 0)
 
@@ -252,7 +145,7 @@ class TraceableEconomics:
             metadata=metadata
         )
 
-    def _create_opex_traceable(self, techno: dict) -> TraceableValue:
+    def create_opex_traceable(self, techno: dict) -> TraceableValue:
         """Create traceable OPEX with comprehensive inputs and calculation steps."""
         total_opex = techno.get("total_opex", 0)
         opex_breakdown = techno.get("opex_breakdown", {})
@@ -331,7 +224,7 @@ class TraceableEconomics:
             metadata=metadata
         )
 
-    def _create_lcop_traceable(self, techno: dict, financials: dict) -> TraceableValue:
+    def create_lcop_traceable(self, techno: dict, financials: dict) -> TraceableValue:
         """Create traceable LCOP with comprehensive inputs and 5-step calculation breakdown."""
         lcop = techno.get("LCOP", 0)
         tci = techno.get("total_capital_investment", 0)
@@ -352,6 +245,7 @@ class TraceableEconomics:
             crf = (discount_rate * one_plus_r_n) / (one_plus_r_n - 1)
         else:
             crf = 1 / lifetime
+            one_plus_r_n = 1
 
         tci_annual = tci_usd * crf
         numerator = tci_annual + total_opex - total_revenue
@@ -459,7 +353,7 @@ class TraceableEconomics:
             metadata=metadata
         )
 
-    def _create_revenue_traceable(self, techno: dict) -> TraceableValue:
+    def create_revenue_traceable(self, techno: dict) -> TraceableValue:
         """Create traceable Revenue with comprehensive inputs and calculation steps."""
         total_revenue = techno.get("total_revenue", 0)
         product_revenue_breakdown = techno.get("product_revenue_breakdown", {})
@@ -529,7 +423,7 @@ class TraceableEconomics:
             metadata=metadata
         )
 
-    def _create_production_traceable(self, techno: dict) -> TraceableValue:
+    def create_production_traceable(self, techno: dict) -> TraceableValue:
         """Create traceable Production with comprehensive inputs and calculation steps."""
         total_production = techno.get("production", 0)
         product_breakdown = techno.get("product_breakdown", {})
@@ -586,7 +480,7 @@ class TraceableEconomics:
             metadata=metadata
         )
 
-    def _create_carbon_intensity_traceable(self, techno: dict) -> TraceableValue:
+    def create_carbon_intensity_traceable(self, techno: dict) -> TraceableValue:
         """Create traceable Carbon Intensity with comprehensive inputs and calculation steps."""
         total_ci = techno.get("carbon_intensity", 0)
         ci_breakdown = techno.get("carbon_intensity_breakdown", {})
@@ -663,7 +557,7 @@ class TraceableEconomics:
             metadata=metadata
         )
 
-    def _create_emissions_traceable(self, techno: dict) -> TraceableValue:
+    def create_emissions_traceable(self, techno: dict) -> TraceableValue:
         """Create traceable Total Emissions with comprehensive inputs and calculation steps."""
         total_emissions = techno.get("total_co2_emissions", 0)
         product_emissions = techno.get("product_co2_emissions", {})

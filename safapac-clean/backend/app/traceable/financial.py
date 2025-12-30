@@ -1,14 +1,19 @@
-# app/services/traceable_financial.py
+# app/traceable/financial.py
 
 """
 Financial Analysis Traceable Calculations
 
 Handles financial metric calculations (NPV, IRR, Payback Period).
 Based on the implementation plan Phase 2.6 (Financial Analysis).
+
+Calculations:
+- Net Present Value (NPV)
+- Internal Rate of Return (IRR)
+- Payback Period
 """
 
 from typing import Dict, List
-from app.models.traceable_value import TraceableValue, ComponentValue, CalculationStep
+from app.traceable.models import TraceableValue, ComponentValue, CalculationStep
 from app.models.calculation_data import UserInputs
 
 
@@ -157,7 +162,7 @@ class TraceableFinancial:
             "discount_rate_percent": self.inputs.economic_parameters.discount_rate_percent,
             "project_lifetime_years": lifetime,
             "total_cash_flows_count": len(cash_flows) if cash_flows else lifetime + 1,
-            "npv_positive": npv > 0,
+            "npv_positive": bool(npv > 0),
             "economic_viability": "Profitable" if npv > 0 else "Not profitable",
             "note": "NPV > 0 indicates the project is expected to generate value"
         }
@@ -278,7 +283,7 @@ class TraceableFinancial:
             "irr_decimal": irr_percent / 100,
             "irr_percent": irr_percent,
             "discount_rate_percent": self.inputs.economic_parameters.discount_rate_percent,
-            "exceeds_discount_rate": irr_percent > self.inputs.economic_parameters.discount_rate_percent,
+            "exceeds_discount_rate": bool(irr_percent > self.inputs.economic_parameters.discount_rate_percent),
             "economic_viability": "Profitable" if irr_percent > self.inputs.economic_parameters.discount_rate_percent else "Below hurdle rate",
             "note": "IRR > discount rate indicates the project meets minimum return requirements"
         }
@@ -418,7 +423,7 @@ class TraceableFinancial:
         metadata = {
             "payback_period_years": payback_period,
             "simple_payback_years": simple_payback,
-            "investment_recovered": payback_period < lifetime,
+            "investment_recovered": bool(payback_period < lifetime),
             "years_to_recover": payback_period,
             "note": f"Investment recovered in {payback_period:.2f} years" if payback_period < lifetime else "Investment not recovered within project lifetime"
         }

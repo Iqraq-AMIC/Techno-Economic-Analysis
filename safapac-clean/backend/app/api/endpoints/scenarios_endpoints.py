@@ -16,7 +16,7 @@ from app.crud.async_biofuel_crud import AsyncBiofuelCRUD
 from app.crud.biofuel_crud import BiofuelCRUD
 from app.core.security import get_current_active_user
 from app.services.economics import BiofuelEconomics
-from app.services.traceable_economics import TraceableEconomics
+from app.traceable import TraceableIntegration
 from app.services.unit_normalizer import UnitNormalizer
 from app.schemas.scenario_schema import (
     ScenarioCreate, ScenarioResponse, ScenarioDetailResponse, ScenarioUpdate,
@@ -52,10 +52,32 @@ def get_sync_biofuel_crud(db: Session = Depends(get_db)) -> BiofuelCRUD:
 
 # --- Helper Functions ---
 def sanitize_for_json(obj):
-    """Recursively replace NaN and Infinity with 0.0 for valid JSON serialization."""
-    if isinstance(obj, float):
+    """Recursively sanitize objects for valid JSON serialization.
+
+    Handles:
+    - NaN and Infinity floats -> 0.0
+    - numpy types -> native Python types
+    - nested dicts and lists
+    """
+    import numpy as np
+
+    # Handle numpy types first
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        val = float(obj)
+        if math.isnan(val) or math.isinf(val):
+            return 0.0
+        return val
+    elif isinstance(obj, np.ndarray):
+        return sanitize_for_json(obj.tolist())
+    # Handle native Python types
+    elif isinstance(obj, float):
         if math.isnan(obj) or math.isinf(obj):
             return 0.0
+        return obj
     elif isinstance(obj, dict):
         return {k: sanitize_for_json(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -110,7 +132,7 @@ def run_calculation_sync(db_scenario, sync_crud: BiofuelCRUD):
     normalized_inputs = normalizer.normalize_user_inputs(user_inputs)
 
     # Run Calculation with traceability
-    economics = TraceableEconomics(normalized_inputs, sync_crud)
+    economics = TraceableIntegration(normalized_inputs, sync_crud)
 
     # Pass IDs to run()
     results = economics.run(

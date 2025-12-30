@@ -1,4 +1,4 @@
-# app/services/traceable_layer4.py
+# app/traceable/layer4.py
 
 """
 Layer 4 Traceable Calculations
@@ -7,10 +7,15 @@ Handles final KPI calculations (Total OPEX, LCOP, Total Emissions).
 Based on the implementation plan Phase 2.5 (Layer 4).
 
 Note: These are enhanced versions that build upon Layer 1-3 calculations.
+
+Calculations:
+- Total OPEX (Direct + Indirect OPEX)
+- LCOP (Levelized Cost of Production)
+- Total CO2 Emissions
 """
 
 from typing import Dict
-from app.models.traceable_value import TraceableValue, ComponentValue, CalculationStep
+from app.traceable.models import TraceableValue, ComponentValue, CalculationStep
 from app.models.calculation_data import UserInputs
 
 
@@ -167,6 +172,7 @@ class TraceableLayer4:
             crf = (discount_rate * one_plus_r_n) / (one_plus_r_n - 1)
         else:
             crf = 1 / lifetime
+            one_plus_r_n = 1
 
         tci_annual = tci_usd * crf
         numerator = tci_annual + total_opex - total_revenue

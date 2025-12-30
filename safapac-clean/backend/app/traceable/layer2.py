@@ -1,14 +1,20 @@
-# app/services/traceable_layer2.py
+# app/traceable/layer2.py
 
 """
 Layer 2 Traceable Calculations
 
 Handles OPEX cost calculations (indirect, feedstock, hydrogen, electricity).
 Based on the implementation plan Phase 2.3 (Layer 2).
+
+Calculations:
+- Total Indirect OPEX
+- Feedstock Cost
+- Hydrogen Cost
+- Electricity Cost
 """
 
 from typing import Dict
-from app.models.traceable_value import TraceableValue, ComponentValue, CalculationStep
+from app.traceable.models import TraceableValue, ComponentValue, CalculationStep
 from app.models.calculation_data import UserInputs
 
 
