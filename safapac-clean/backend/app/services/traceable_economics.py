@@ -11,6 +11,8 @@ formulas, components, and metadata.
 from app.models.traceable_value import TraceableValue, ComponentValue, CalculationStep, create_traceable_value
 from app.services.economics import BiofuelEconomics
 from app.services.traceable_layer1 import TraceableLayer1
+from app.services.traceable_layer2 import TraceableLayer2
+from app.services.traceable_layer3 import TraceableLayer3
 from app.models.calculation_data import UserInputs
 from app.crud.biofuel_crud import BiofuelCRUD
 
@@ -27,6 +29,8 @@ class TraceableEconomics:
         self.economics = BiofuelEconomics(inputs, crud)
         self.inputs = inputs
         self.layer1 = TraceableLayer1(inputs)
+        self.layer2 = TraceableLayer2(inputs)
+        self.layer3 = TraceableLayer3(inputs)
 
     def run(self, process_id: int, feedstock_id: int, country_id: int, product_key: str = "jet") -> dict:
         """
@@ -69,6 +73,16 @@ class TraceableEconomics:
         carbon_conversion_efficiency_traceable = self.layer1.create_carbon_conversion_efficiency_traceable(techno)
         fuel_energy_content_traceable = self.layer1.create_fuel_energy_content_traceable(techno)
 
+        # Create Layer 2 traceable calculations
+        indirect_opex_traceable = self.layer2.create_indirect_opex_traceable(techno)
+        feedstock_cost_traceable = self.layer2.create_feedstock_cost_traceable(techno)
+        hydrogen_cost_traceable = self.layer2.create_hydrogen_cost_traceable(techno)
+        electricity_cost_traceable = self.layer2.create_electricity_cost_traceable(techno)
+
+        # Create Layer 3 traceable calculations
+        direct_opex_traceable = self.layer3.create_direct_opex_traceable(techno)
+        weighted_carbon_intensity_traceable = self.layer3.create_weighted_carbon_intensity_traceable(techno)
+
         # Update results with traceable values
         results["techno_economics"]["total_capital_investment_traceable"] = tci_traceable.to_dict()
         results["techno_economics"]["total_opex_traceable"] = opex_traceable.to_dict()
@@ -84,6 +98,16 @@ class TraceableEconomics:
         results["techno_economics"]["electricity_consumption_traceable"] = electricity_consumption_traceable.to_dict()
         results["techno_economics"]["carbon_conversion_efficiency_traceable"] = carbon_conversion_efficiency_traceable.to_dict()
         results["techno_economics"]["fuel_energy_content_traceable"] = fuel_energy_content_traceable.to_dict()
+
+        # Add Layer 2 traceable outputs
+        results["techno_economics"]["indirect_opex_traceable"] = indirect_opex_traceable.to_dict()
+        results["techno_economics"]["feedstock_cost_traceable"] = feedstock_cost_traceable.to_dict()
+        results["techno_economics"]["hydrogen_cost_traceable"] = hydrogen_cost_traceable.to_dict()
+        results["techno_economics"]["electricity_cost_traceable"] = electricity_cost_traceable.to_dict()
+
+        # Add Layer 3 traceable outputs
+        results["techno_economics"]["direct_opex_traceable"] = direct_opex_traceable.to_dict()
+        results["techno_economics"]["weighted_carbon_intensity_traceable"] = weighted_carbon_intensity_traceable.to_dict()
 
         return results
 
