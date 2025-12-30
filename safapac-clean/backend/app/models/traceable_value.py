@@ -8,8 +8,34 @@ components, and breakdown of how values were calculated.
 """
 
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pydantic import BaseModel
+
+
+@dataclass
+class CalculationStep:
+    """
+    Represents a single step in a calculation process.
+
+    Example:
+        CalculationStep(
+            step=1,
+            description="Calculate capacity ratio",
+            formula="ratio = capacity / capacity_ref",
+            calculation="500000 / 500000 = 1.0",
+            result={"value": 1.0, "unit": "dimensionless"}
+        )
+    """
+    step: int
+    description: str
+    formula: str
+    calculation: str
+    result: Dict[str, Any]
+    details: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return asdict(self)
 
 
 @dataclass
@@ -41,35 +67,50 @@ class TraceableValue:
     A value with full calculation transparency.
 
     Attributes:
+        name: Name of the metric (optional for backward compatibility)
         value: The final calculated value
         unit: Unit of measurement
         formula: Human-readable formula showing calculation
+        inputs: Dictionary of input values with units (optional)
+        calculation_steps: Step-by-step calculation breakdown (optional)
         components: List of component values that contributed to this result
         metadata: Additional context (e.g., assumptions, reference data)
 
-    Example:
+    Example (Enhanced format):
         TraceableValue(
-            value=1173.8,
-            unit="USD/t",
-            formula="LCOP = (TCI_annual + OPEX_total - Revenue_byproducts) / SAF_production",
-            components=[
-                ComponentValue("TCI_annual", 58500000, "USD/year"),
-                ComponentValue("OPEX_total", 710150000, "USD/year"),
-                ComponentValue("Revenue_byproducts", 250000000, "USD/year"),
-                ComponentValue("SAF_production", 605000, "t/year")
+            name="Total Capital Investment",
+            value=400.0,
+            unit="MUSD",
+            formula="TCI = TCI_ref × (Capacity / Capacity_ref)^scaling_exponent",
+            inputs={
+                "tci_ref": {"value": 400.0, "unit": "MUSD"},
+                "capacity": {"value": 500000, "unit": "tons/year"}
+            },
+            calculation_steps=[
+                CalculationStep(
+                    step=1,
+                    description="Calculate ratio",
+                    formula="ratio = capacity / capacity_ref",
+                    calculation="500000 / 500000 = 1.0",
+                    result={"value": 1.0, "unit": "dimensionless"}
+                )
             ],
-            metadata={"discount_rate": 0.07, "project_lifetime": 20}
+            components=[...],
+            metadata={"scaling_exponent": 0.6}
         )
     """
     value: float
     unit: str
     formula: str
-    components: List[ComponentValue]
+    components: List[ComponentValue] = field(default_factory=list)
+    name: Optional[str] = None
+    inputs: Optional[Dict[str, Any]] = None
+    calculation_steps: Optional[List[CalculationStep]] = None
     metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        result = {
             "value": self.value,
             "unit": self.unit,
             "formula": self.formula,
@@ -77,8 +118,30 @@ class TraceableValue:
             "metadata": self.metadata or {}
         }
 
+        # Add optional fields if present
+        if self.name is not None:
+            result["name"] = self.name
+
+        if self.inputs is not None:
+            result["inputs"] = self.inputs
+
+        if self.calculation_steps is not None:
+            result["calculation_steps"] = [step.to_dict() for step in self.calculation_steps]
+
+        return result
+
 
 # Pydantic schemas for API responses
+class CalculationStepSchema(BaseModel):
+    """Pydantic schema for CalculationStep."""
+    step: int
+    description: str
+    formula: str
+    calculation: str
+    result: Dict[str, Any]
+    details: Optional[Dict[str, Any]] = None
+
+
 class ComponentValueSchema(BaseModel):
     """Pydantic schema for ComponentValue."""
     name: str
@@ -93,6 +156,9 @@ class TraceableValueSchema(BaseModel):
     unit: str
     formula: str
     components: List[ComponentValueSchema]
+    name: Optional[str] = None
+    inputs: Optional[Dict[str, Any]] = None
+    calculation_steps: Optional[List[CalculationStepSchema]] = None
     metadata: Optional[Dict[str, Any]] = None
 
 
