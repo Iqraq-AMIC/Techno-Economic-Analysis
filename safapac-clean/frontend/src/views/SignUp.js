@@ -7,8 +7,11 @@ import {
   FormInput,
   Alert
 } from "shards-react";
+import { useAuth } from "../contexts/AuthContext";
 
 const SignUp = ({ history }) => {
+  const { signup } = useAuth();
+
   // Force light mode on signup page
   useEffect(() => {
     const originalTheme = document.documentElement.getAttribute('data-theme');
@@ -43,7 +46,7 @@ const SignUp = ({ history }) => {
     }));
   };
 
-  const handleSignUp = (event) => {
+  const handleSignUp = async (event) => {
     event.preventDefault();
     setError("");
     setSuccess("");
@@ -68,18 +71,28 @@ const SignUp = ({ history }) => {
       return;
     }
 
-    // TODO: Replace with actual API call
-    // For now, simulate success
-    setTimeout(() => {
-      setSuccess("Account created successfully! Redirecting to sign in...");
+    // Call the signup function from AuthContext
+    const result = await signup({
+      name: signupData.username,
+      email: signupData.email,
+      password: signupData.password,
+      occupation: signupData.role,
+    });
+
+    if (result.success) {
+      // Success
+      setSuccess(`Account created successfully! Welcome, ${result.user.name}. Redirecting to sign in...`);
       setSignupData({ username: "", email: "", role: "", password: "", confirmPassword: "" });
-      setIsSubmitting(false);
 
       // Redirect to login after 2 seconds
       setTimeout(() => {
         history.push("/login");
       }, 2000);
-    }, 1000);
+    } else {
+      // Handle error
+      setError(result.message || "Registration failed. Please try again.");
+      setIsSubmitting(false);
+    }
   };
 
   const navigateToLogin = () => {
