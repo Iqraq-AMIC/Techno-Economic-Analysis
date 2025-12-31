@@ -18,6 +18,8 @@ This handoff covers major backend improvements including performance optimizatio
 
 **What Changed**: Values are now dynamic based on user-selected units in the frontend. Previously, the frontend was hardcoded to use default units only.
 
+
+
 **Files Affected**:
 - Backend API now returns values that respect unit preferences
 
