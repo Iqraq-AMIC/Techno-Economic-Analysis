@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
-import axios from "axios";
 import {
   Card,
   CardHeader,
@@ -21,6 +20,7 @@ import {
 } from "shards-react";
 import { useTheme } from "../contexts/ThemeContext";
 import ScenarioTabs from "../components/project/ScenarioTabs";
+import { apiClient } from "../api/projectApi";
 
 const formatNumber = (num, decimals = 0) => {
   if (num === null || num === undefined || Number.isNaN(num)) {
@@ -234,8 +234,6 @@ const BiofuelForm = ({
   });
   const [collapsedProducts, setCollapsedProducts] = useState({});
 
-  const API_URL = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || "http://127.0.0.1:8000/api/v1";
-
   // Initialize all products as collapsed by default
   useEffect(() => {
     if (inputs.products && inputs.products.length > 0) {
@@ -255,8 +253,8 @@ const BiofuelForm = ({
 
   useEffect(() => {
     let isMounted = true;
-    axios
-      .get(`${API_URL}/process-technologies`)
+    apiClient
+      .get("/process-technologies")
       .then((res) => {
         if (isMounted) {
           // Backend returns array of objects with 'id' and 'name' fields
@@ -274,7 +272,7 @@ const BiofuelForm = ({
     return () => {
       isMounted = false;
     };
-  }, [API_URL, onMasterDataLoaded]);
+  }, [onMasterDataLoaded]);
 
   useEffect(() => {
     if (!selectedProcess) {
@@ -282,8 +280,8 @@ const BiofuelForm = ({
       return;
     }
     let isMounted = true;
-    axios
-      .get(`${API_URL}/feedstocks`)
+    apiClient
+      .get("/feedstocks")
       .then((res) => {
         if (isMounted) {
           // Backend returns array of objects with 'id' and 'name' fields
@@ -301,7 +299,7 @@ const BiofuelForm = ({
     return () => {
       isMounted = false;
     };
-  }, [API_URL, selectedProcess, onMasterDataLoaded]);
+  }, [selectedProcess, onMasterDataLoaded]);
 
   // const totalMassFraction = useMemo(
   //   () =>

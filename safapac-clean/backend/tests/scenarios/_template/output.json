@@ -1,80 +1,175 @@
 {
   "process_outputs": {
     "feedstock_consumption": {
-      "UCO": {
-        "value": 605000.0,
+      "FEEDSTOCK_NAME": {
+        "value": 0.0,
         "unit": "tons/year"
       }
     },
     "product_production": {
-      "JET": {
-        "value": 320000.0,
+      "PRODUCT_1": {
+        "value": 0.0,
         "unit": "tons/year"
       },
-      "DIESEL": {
-        "value": 75000.0,
+      "PRODUCT_2": {
+        "value": 0.0,
+        "unit": "tons/year"
+      }
+    },
+    "total_production": {
+      "value": 0.0,
+      "unit": "tons/year"
+    },
+    "utility_consumption": {
+      "hydrogen": {
+        "value": 0.0,
         "unit": "tons/year"
       },
-      "Naphtha": {
-        "value": 105000.0,
-        "unit": "tons/year"
+      "electricity": {
+        "value": 0.0,
+        "unit": "MWh/year"
       }
     }
   },
   "economic_outputs": {
     "total_capital_investment": {
-      "value": 400.0,
+      "value": 0.0,
       "unit": "MUSD"
     },
     "total_direct_opex": {
-      "value": 679350000.0,
+      "value": 0.0,
       "unit": "USD/year"
     },
     "feedstock_cost": {
-      "value": 562650000.0,
+      "value": 0.0,
       "unit": "USD/year"
     },
     "hydrogen_cost": {
-      "value": 113400000.00000001,
+      "value": 0.0,
       "unit": "USD/year"
     },
     "electricity_cost": {
-      "value": 3300000.0,
+      "value": 0.0,
       "unit": "USD/year"
     },
     "total_indirect_opex": {
-      "value": 30800000.0,
+      "value": 0.0,
       "unit": "USD/year"
     },
     "total_opex": {
-      "value": 710150000.0,
+      "value": 0.0,
       "unit": "USD/year"
     },
+    "opex_breakdown": {
+      "hydrogen": {
+        "value": 0.0,
+        "unit": "USD/year"
+      },
+      "feedstock": {
+        "value": 0.0,
+        "unit": "USD/year"
+      },
+      "electricity": {
+        "value": 0.0,
+        "unit": "USD/year"
+      },
+      "indirect_opex": {
+        "value": 0.0,
+        "unit": "USD/year"
+      }
+    },
     "lcop": {
-      "value": 1495.8143405946046,
+      "value": 0.0,
       "unit": "USD/ton"
     },
     "lcop_breakdown": {
       "feedstock_component": {
-        "value": 0.7522992456087026,
+        "value": 0.0,
         "unit": "fraction"
       },
       "hydrogen_component": {
-        "value": 0.1516230950893573,
+        "value": 0.0,
         "unit": "fraction"
       },
       "electricity_component": {
-        "value": 0.0044123122909601326,
+        "value": 0.0,
         "unit": "fraction"
       },
       "indirect_opex_component": {
-        "value": 0.04118158138229457,
+        "value": 0.0,
         "unit": "fraction"
       },
       "tci_component": {
-        "value": 0.050483765628685354,
+        "value": 0.0,
         "unit": "fraction"
       }
+    }
+  },
+  "carbon_metrics": {
+    "product_carbon_intensity": {
+      "PRODUCT_1": {
+        "value": 0.0,
+        "unit": "kg CO2e/ton"
+      },
+      "PRODUCT_2": {
+        "value": 0.0,
+        "unit": "kg CO2e/ton"
+      }
+    },
+    "product_carbon_conversion_efficiency": {
+      "PRODUCT_1": {
+        "value": 0.0,
+        "unit": "percent"
+      },
+      "PRODUCT_2": {
+        "value": 0.0,
+        "unit": "percent"
+      }
+    },
+    "product_co2_emissions": {
+      "PRODUCT_1": {
+        "value": 0.0,
+        "unit": "tons/year"
+      },
+      "PRODUCT_2": {
+        "value": 0.0,
+        "unit": "tons/year"
+      }
+    }
+  },
+  "revenue_outputs": {
+    "product_revenues": {
+      "PRODUCT_1": {
+        "value": 0.0,
+        "value_musd": 0.0,
+        "unit": "USD/year"
+      },
+      "PRODUCT_2": {
+        "value": 0.0,
+        "value_musd": 0.0,
+        "unit": "USD/year"
+      }
+    },
+    "total_revenue": {
+      "value": 0.0,
+      "value_musd": 0.0,
+      "unit": "USD/year"
+    }
+  },
+  "financial_outputs": {
+    "irr": {
+      "value": 0.0,
+      "unit": "ratio",
+      "description": "Internal Rate of Return"
+    },
+    "npv": {
+      "value": 0.0,
+      "unit": "USD",
+      "description": "Net Present Value"
+    },
+    "payback_period": {
+      "value": 0,
+      "unit": "years"
     }
   }
 }

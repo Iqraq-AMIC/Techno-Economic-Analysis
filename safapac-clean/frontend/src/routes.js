@@ -9,6 +9,7 @@ import Tables from "./views/Tables";
 import AnalysisDashboard from "./views/AnalysisDashboard";
 import LoginForm from "./views/LoginForm";
 import SignUp from "./views/SignUp";
+import VerifyEmail from "./views/VerifyEmail";
 
 export default [
   {
@@ -24,6 +25,14 @@ export default [
     exact: true,
     layout: React.Fragment,
     component: SignUp,
+    publicOnly: true,
+    redirect: "/TEA"
+  },
+  {
+    path: "/verify-email",
+    exact: true,
+    layout: React.Fragment,
+    component: VerifyEmail,
     publicOnly: true,
     redirect: "/TEA"
   },

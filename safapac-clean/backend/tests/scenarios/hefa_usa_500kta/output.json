@@ -26,12 +26,12 @@
     },
     "utility_consumption": {
       "hydrogen": {
-        "value": 21000000,
-        "unit": "kg/year"
+        "value": 21000,
+        "unit": "tons/year"
       },
       "electricity": {
-        "value": 60000000,
-        "unit": "kWh/year"
+        "value": 60000,
+        "unit": "MWh/year"
       }
     }
   },
@@ -49,7 +49,7 @@
       "unit": "USD/year"
     },
     "hydrogen_cost": {
-      "value": 113400000.00000001,
+      "value": 113400000.0,
       "unit": "USD/year"
     },
     "electricity_cost": {
@@ -66,19 +66,19 @@
     },
     "opex_breakdown": {
       "hydrogen": {
-        "value": 113400000.00000001,
+        "value": 113400000.0,
         "unit": "USD/year"
       },
       "feedstock": {
-        "value": 562650000,
+        "value": 562650000.0,
         "unit": "USD/year"
       },
       "electricity": {
-        "value": 3300000,
+        "value": 3300000.0,
         "unit": "USD/year"
       },
       "indirect_opex": {
-        "value": 30800000,
+        "value": 30800000.0,
         "unit": "USD/year"
       }
     },
@@ -112,43 +112,43 @@
   "carbon_metrics": {
     "product_carbon_intensity": {
       "JET": {
-        "value": 594.83,
+        "value": 594.8265343999991,
         "unit": "kg CO2e/ton"
       },
       "DIESEL": {
-        "value": 139.41,
+        "value": 139.4124689999998,
         "unit": "kg CO2e/ton"
       },
       "Naphtha": {
-        "value": 195.18,
+        "value": 195.17745659999972,
         "unit": "kg CO2e/ton"
       }
     },
     "product_carbon_conversion_efficiency": {
       "JET": {
-        "value": 57.44,
+        "value": 57.435897435897445,
         "unit": "percent"
       },
       "DIESEL": {
-        "value": 13.51,
+        "value": 13.509218054672601,
         "unit": "percent"
       },
       "Naphtha": {
-        "value": 18.69,
+        "value": 18.690400508582325,
         "unit": "percent"
       }
     },
     "product_co2_emissions": {
       "JET": {
-        "value": 190344,
+        "value": 190344.49100799972,
         "unit": "tons/year"
       },
       "DIESEL": {
-        "value": 10456,
+        "value": 10455.935174999984,
         "unit": "tons/year"
       },
       "Naphtha": {
-        "value": 20494,
+        "value": 20493.63294299997,
         "unit": "tons/year"
       }
     }
@@ -156,35 +156,35 @@
   "revenue_outputs": {
     "product_revenues": {
       "JET": {
-        "value": 960000000,
+        "value": 960000000.0,
         "value_musd": 960.0,
         "unit": "USD/year"
       },
       "DIESEL": {
-        "value": 112500000,
+        "value": 112500000.0,
         "value_musd": 112.5,
         "unit": "USD/year"
       },
       "Naphtha": {
-        "value": 105000000,
+        "value": 105000000.0,
         "value_musd": 105.0,
         "unit": "USD/year"
       }
     },
     "total_revenue": {
-      "value": 1177500000,
+      "value": 1177500000.0,
       "value_musd": 1177.5,
       "unit": "USD/year"
     }
   },
   "financial_outputs": {
     "irr": {
-      "value": 0.96,
+      "value": 0.8552263344012834,
       "unit": "ratio",
       "description": "Internal Rate of Return"
     },
     "npv": {
-      "value": 3495748626,
+      "value": 3224127521.2771134,
       "unit": "USD",
       "description": "Net Present Value"
     },

@@ -6,6 +6,7 @@ const AuthContext = createContext();
 const AUTH_STORAGE_KEY = "safapac-authenticated";
 const USER_STORAGE_KEY = "safapac-user";
 const TOKEN_STORAGE_KEY = "access_token"; // <--- NEW: Required for API calls
+const REFRESH_TOKEN_STORAGE_KEY = "refresh_token";
 
 // Ensure this matches your FastAPI URL
 const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
@@ -27,47 +28,61 @@ const isTokenExpired = (token) => {
   return Date.now() >= exp;
 };
 
+// Helper: Check initial auth state - allow if refresh token exists (will refresh on mount)
+const getInitialAuthState = () => {
+  if (typeof window === "undefined") return { isAuth: false, user: null };
+
+  const accessToken = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  const refreshToken = window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  const authFlag = window.localStorage.getItem(AUTH_STORAGE_KEY) === "true";
+  const storedUser = window.localStorage.getItem(USER_STORAGE_KEY);
+
+  // If access token is valid, user is authenticated
+  if (authFlag && accessToken && !isTokenExpired(accessToken)) {
+    return {
+      isAuth: true,
+      user: storedUser ? JSON.parse(storedUser) : null
+    };
+  }
+
+  // If access token is expired BUT refresh token exists, keep user "authenticated"
+  // The token will be refreshed on mount via useEffect
+  if (authFlag && refreshToken && !isTokenExpired(refreshToken)) {
+    return {
+      isAuth: true,
+      user: storedUser ? JSON.parse(storedUser) : null,
+      needsRefresh: true
+    };
+  }
+
+  // No valid tokens - clear everything and return unauthenticated
+  window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.localStorage.removeItem(USER_STORAGE_KEY);
+  window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  return { isAuth: false, user: null };
+};
+
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (typeof window === "undefined") return false;
+  const initialState = getInitialAuthState();
 
-    // Check if token exists and is not expired
-    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-    const authFlag = window.localStorage.getItem(AUTH_STORAGE_KEY) === "true";
+  const [isAuthenticated, setIsAuthenticated] = useState(initialState.isAuth);
+  const [currentUser, setCurrentUser] = useState(initialState.user);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-    if (authFlag && token && isTokenExpired(token)) {
-      // Token expired - clear auth state
-      window.localStorage.removeItem(AUTH_STORAGE_KEY);
-      window.localStorage.removeItem(USER_STORAGE_KEY);
-      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-      return false;
-    }
-
-    return authFlag && token && !isTokenExpired(token);
-  });
-
-  const [currentUser, setCurrentUser] = useState(() => {
-    if (typeof window === "undefined") return null;
-
-    // Don't return user if token is expired
-    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!token || isTokenExpired(token)) return null;
-
-    const storedUser = window.localStorage.getItem(USER_STORAGE_KEY);
-    return storedUser ? JSON.parse(storedUser) : null;
-  });
-
-  const persistAuthState = (isAuth, user = null, token = null) => {
+  const persistAuthState = (isAuth, user = null, token = null, refreshToken = null) => {
     if (typeof window === "undefined") return;
-    
+
     if (isAuth) {
       window.localStorage.setItem(AUTH_STORAGE_KEY, "true");
       if (user) window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-      if (token) window.localStorage.setItem(TOKEN_STORAGE_KEY, token); // Save JWT
+      if (token) window.localStorage.setItem(TOKEN_STORAGE_KEY, token); // Save access token
+      if (refreshToken) window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken); // Save refresh token
     } else {
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
       window.localStorage.removeItem(USER_STORAGE_KEY);
-      window.localStorage.removeItem(TOKEN_STORAGE_KEY); // Clear JWT
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY); // Clear access token
+      window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY); // Clear refresh token
     }
   };
 
@@ -82,14 +97,14 @@ export const AuthProvider = ({ children }) => {
         password: password
       });
 
-      // 2. Handle Success (FastAPI returns 200 OK with token)
-      // Backend uses camelCase: { accessToken, tokenType, user }
-      const { accessToken, user } = response.data;
+      // 2. Handle Success (FastAPI returns 200 OK with tokens)
+      // Backend uses camelCase: { accessToken, refreshToken, tokenType, user }
+      const { accessToken, refreshToken, user } = response.data;
 
       // 3. Update State & Storage
       setIsAuthenticated(true);
       setCurrentUser(user);
-      persistAuthState(true, user, accessToken);
+      persistAuthState(true, user, accessToken, refreshToken);
 
       return { success: true, user: user };
 
@@ -129,29 +144,50 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener("auth:logout", handleAuthLogout);
   }, []);
 
-  // Periodic token expiration check (every 60 seconds)
+  // Refresh token on mount if access token is expired but refresh token is valid
   useEffect(() => {
-    if (!isAuthenticated) return;
+    const refreshTokenOnMount = async () => {
+      const accessToken = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+      const refreshToken = window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
 
-    const checkTokenExpiration = () => {
-      const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-      if (!token || isTokenExpired(token)) {
-        console.warn("Token expired during session. Logging out...");
-        // Clear storage
-        window.localStorage.removeItem(AUTH_STORAGE_KEY);
-        window.localStorage.removeItem(USER_STORAGE_KEY);
-        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-        // Update state and redirect
+      // Only refresh if access token is expired and refresh token exists
+      if (!accessToken || !isTokenExpired(accessToken) || !refreshToken) {
+        return;
+      }
+
+      // Check if refresh token itself is expired
+      if (isTokenExpired(refreshToken)) {
+        console.log("Refresh token expired, logging out...");
         handleLogout(true);
+        return;
+      }
+
+      console.log("Access token expired, attempting refresh...");
+      setIsRefreshing(true);
+
+      try {
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+          refreshToken: refreshToken
+        });
+
+        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data;
+
+        // Update tokens in localStorage
+        window.localStorage.setItem(TOKEN_STORAGE_KEY, newAccessToken);
+        window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, newRefreshToken);
+
+        console.log("Token refreshed successfully on mount");
+      } catch (error) {
+        console.error("Failed to refresh token on mount:", error);
+        // Clear auth and redirect to login
+        handleLogout(true);
+      } finally {
+        setIsRefreshing(false);
       }
     };
 
-    // Check immediately and then every 60 seconds
-    checkTokenExpiration();
-    const interval = setInterval(checkTokenExpiration, 60000);
-
-    return () => clearInterval(interval);
-  }, [isAuthenticated, handleLogout]);
+    refreshTokenOnMount();
+  }, [handleLogout]);
 
   // ... (Keep signup/forgotPassword mocks or implement similarly if needed) ...
   const signup = async () => ({ success: true });
@@ -162,13 +198,14 @@ export const AuthProvider = ({ children }) => {
     () => ({
       isAuthenticated,
       currentUser,
+      isRefreshing,
       login,
       logout,
       signup,
       forgotPassword,
       resetPassword,
     }),
-    [isAuthenticated, currentUser]
+    [isAuthenticated, currentUser, isRefreshing]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

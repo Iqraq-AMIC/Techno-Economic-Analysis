@@ -77,7 +77,8 @@ class Layer1:
             yield_kwh = inputs["electricity_yield"]
 
         # === GET USER INPUTS ===
-        plant_capacity = inputs["plant_total_liquid_fuel_capacity"]  # KTA
+        # NOTE: plant_capacity is now in tons/year (base unit) after UnitNormalizer conversion
+        plant_capacity = inputs["plant_total_liquid_fuel_capacity"]  # tons/year (base unit)
         feedstock_carbon_content = inputs["feedstock_carbon_content"]
         products_payload = inputs.get("products") or []
 
@@ -89,19 +90,27 @@ class Layer1:
 
         # === CALCULATION (1): Total Capital Investment ===
         # TCI = TCI_ref × (Capacity / Capacity_ref)^0.6
-        tci = tci_ref * (plant_capacity / capacity_ref) ** 0.6
+        # NOTE: capacity_ref is in KTPA from database, convert to tons/year for comparison
+        # plant_capacity is already in t/yr (after unit normalization)
+        capacity_ref_tons = capacity_ref * 1000  # KTPA to t/yr
+        tci = tci_ref * (plant_capacity / capacity_ref_tons) ** 0.6
 
         # === CALCULATION (2): Feedstock Consumption ===
         # Feedstock Consumption = Plant_Capacity × Feedstock_Yield
-        feedstock_consumption = plant_capacity * 1000 * feedstock_yield  # tons/year
+        # plant_capacity is already in tons/year
+        feedstock_consumption = plant_capacity * feedstock_yield  # tons/year
 
         # === CALCULATION (3): Hydrogen Consumption ===
         # Hydrogen Consumption = Plant_Capacity × Yield_H2
-        hydrogen_consumption = plant_capacity * 1000 * 1000 * yield_h2  # kg/year
+        # plant_capacity is in t/year, yield_h2 is t H2 per t fuel
+        # Result is in t/year (standardized to tonnes)
+        hydrogen_consumption = plant_capacity * yield_h2  # t/year
 
         # === CALCULATION (4): Electricity Consumption ===
         # Electricity Consumption = Plant_Capacity × Yield_kWh
-        electricity_consumption = plant_capacity * 1000 * 1000 * yield_kwh  # kWh/year
+        # plant_capacity is in t/year, yield_kwh is kWh per t fuel
+        # Result is in kWh/year
+        electricity_consumption = plant_capacity * yield_kwh  # kWh/year
 
         # === PROCESS EACH PRODUCT ===
         product_results = []
@@ -130,7 +139,8 @@ class Layer1:
 
             # === CALCULATION (5): Amount of Product ===
             # Amount of Product = Plant_Capacity × Product_Yield
-            amount = plant_capacity * 1000 * product_yield  # tons/year
+            # plant_capacity is already in tons/year
+            amount = plant_capacity * product_yield  # tons/year
             total_production += amount
 
             # === CALCULATION (6): Carbon Conversion Efficiency ===
@@ -174,8 +184,9 @@ class Layer1:
             "hydrogen_consumption": hydrogen_consumption,
             "electricity_consumption": electricity_consumption,
             "feedstock_yield": feedstock_yield,
-            "product_yield": total_production / (plant_capacity * 1000) if plant_capacity > 0 else 0.0,
-            "plant_capacity": plant_capacity,
+            # plant_capacity is in tons/year, so product_yield is production/capacity
+            "product_yield": total_production / plant_capacity if plant_capacity > 0 else 0.0,
+            "plant_capacity": plant_capacity,  # tons/year (base unit)
             "yield_h2": yield_h2,
             "yield_kwh": yield_kwh,
             "products": product_results,
@@ -275,15 +286,20 @@ class Layer2:
 
         # === CALCULATION (5): Carbon Intensity Components ===
         # All components calculated to result in gCO2e/MJ at the end
+        # Note: fuel_energy_content is in MJ/kg, so yields must be converted to per-kg basis
 
         # CI_feedstock = Feedstock_CI × Feedstock_Yield / Fuel_Energy_Content (gCO2e/MJ)
+        # feedstock_yield is already in kg/kg (dimensionless ratio)
         ci_feedstock_gco2_mj = (feedstock_ci * feedstock_yield) / (fuel_energy_content + 1e-12)
 
         # CI_hydrogen = H2_CI × H2_Yield / Fuel_Energy_Content (gCO2e/MJ)
+        # hydrogen_yield is in t/t which equals kg/kg (dimensionless ratio)
         ci_hydrogen_gco2_mj = (hydrogen_ci * hydrogen_yield) / (fuel_energy_content + 1e-12)
 
         # CI_electricity = Elec_CI × Elec_Yield / Fuel_Energy_Content (gCO2e/MJ)
-        ci_electricity_gco2_mj = (electricity_ci * electricity_yield) / (fuel_energy_content + 1e-12)
+        # electricity_yield is in kWh/t, convert to kWh/kg for CI calculation (divide by 1000)
+        electricity_yield_per_kg = electricity_yield / 1000.0
+        ci_electricity_gco2_mj = (electricity_ci * electricity_yield_per_kg) / (fuel_energy_content + 1e-12)
 
         # CI_process = CI_Conversion_Process (already in gCO2/MJ)
         ci_process_gco2_mj = conversion_process_ci
@@ -466,7 +482,7 @@ class Layer4:
         electricity_cost = layer2_results["electricity_cost"]
 
         tci = layer1_results["total_capital_investment"]  # MUSD
-        plant_capacity = layer1_results["plant_capacity"]  # KTA
+        plant_capacity = layer1_results["plant_capacity"]  # tons/year (base unit)
         fuel_energy_content = layer1_results["fuel_energy_content"]  # MJ/kg
         production = layer1_results["production"]  # tons/year
 
@@ -477,7 +493,8 @@ class Layer4:
         # === CALCULATION (2): LCOP ===
         # Convert units
         tci_usd = tci * 1_000_000  # MUSD to USD
-        plant_capacity_tons = plant_capacity * 1000  # KTA to tons/year
+        # plant_capacity is already in tons/year (base unit)
+        plant_capacity_tons = plant_capacity  # already in tons/year
 
         # Calculate Capital Recovery Factor
         # CRF = r(1+r)^n / ((1+r)^n - 1)

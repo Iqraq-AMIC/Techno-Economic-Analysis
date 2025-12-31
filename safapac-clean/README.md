@@ -4,20 +4,34 @@ SAFAPAC is a full‑stack techno‑economic analysis (TEA) platform for evaluati
 
 The system consists of:
 
-- A FastAPI backend that exposes calculation and project/scenario APIs.
-- A React frontend with a TEA dashboard and project/scenario management.
-- A JSON‑file‑backed mock database for development (designed to be replaced by a real DB).
+- A **FastAPI backend** (async) with PostgreSQL database, JWT authentication, and high-performance APIs.
+- A **React frontend** with TEA dashboard and project/scenario management.
+- **Traceable calculations** with step-by-step formula breakdowns for all metrics.
+
+---
+
+## Prerequisites
+
+| Software | Version | Download Link |
+|----------|---------|---------------|
+| Python | 3.10+ | https://www.python.org/downloads/ |
+| Node.js | 18.0+ | https://nodejs.org/en/download/ |
+| PostgreSQL | 17.x | https://www.postgresql.org/download/ |
+| pgAdmin 4 | Latest | https://www.pgadmin.org/download/ (optional) |
 
 ---
 
 ## Features
 
-- **Multiple process technologies** – support for various SAF pathways.
+- **Multiple process technologies** – support for various SAF pathways (HEFA, FT-BtL, ATJ, etc.).
 - **Feedstock analysis** – yield and energy content driven.
-- **Techno‑economic analysis** – CAPEX/OPEX breakdown and LCOP.
+- **Techno‑economic analysis** – CAPEX/OPEX breakdown and LCOP with traceable calculations.
 - **Financial modeling** – NPV, IRR, payback period, and cash‑flow tables.
 - **Interactive dashboard** – TEA dashboard with inputs, breakeven chart, and KPI cards.
-- **Projects & scenarios** – per‑user projects, each with up to 3 scenarios, persisted in JSON files.
+- **Projects & scenarios** – per‑user projects, each with up to 3 scenarios.
+- **High-performance backend** – async operations, connection pooling, caching, rate limiting.
+- **Email verification** – new users must verify email before accessing the platform.
+- **JWT authentication** – with automatic token refresh to prevent session timeouts.
 
 ---
 
@@ -28,31 +42,59 @@ safapac-clean/
   backend/                     # FastAPI backend application
     app/
       __init__.py
-      main.py                  # API endpoints (auth, TEA, projects, scenarios)
-      economics.py             # Techno‑economic calculations (BiofuelEconomics)
-      financial_analysis.py    # Financial metrics and cash‑flow modeling
-      models.py                # Data models and validation (UserInputs, etc.)
-      database.py              # Process & feedstock database (BiofuelDatabase)
-      feature_calculations.py  # Detailed calculation layers
-      mock_database.py         # JSON‑backed mock database (users, projects, scenarios)
-      project_models.py        # Project/scenario API schemas
-    data/
-      users.json               # Dev “database” for users
-      projects.json            # Dev “database” for projects
-      scenarios.json           # Dev “database” for scenarios
-      scenarios.json.backup    # Backup of scenarios.json
+      main.py                  # FastAPI app entry point, middleware, startup
+      api/
+        endpoints/
+          auth.py              # Authentication (login, register, email verification)
+          master_data.py       # Process, feedstock, utility, country APIs
+          projects_endpoints.py    # Project CRUD
+          scenarios_endpoints.py   # Scenario CRUD + calculations
+      core/
+        config.py              # Environment configuration
+        database.py            # SQLAlchemy engine (sync + async), connection pooling
+        security.py            # JWT token handling, password hashing
+        seeding.py             # Database seeding logic
+        email.py               # Email verification functionality
+        pw.csv                 # User credentials for seeding
+      models/
+        master_data.py         # ORM models: Process, Feedstock, Utility, etc.
+        user_project.py        # ORM models: User, UserProject, Scenario
+        traceable_value.py     # TraceableValue, CalculationStep models
+      schemas/
+        user_schema.py         # Auth request/response schemas
+        project_schema.py      # Project schemas
+        scenario_schema.py     # Scenario schemas
+      services/
+        economics.py           # BiofuelEconomics TEA engine
+        financial_analysis.py  # NPV, IRR, payback calculations
+        feature_calculations.py # Calculation layers
+      traceable/               # Traceable calculation modules
+        layer1.py              # Core parameters (consumption, CCE, energy)
+        layer2.py              # OPEX cost calculations
+        layer3.py              # Aggregation calculations
+        layer4.py              # Final KPIs (LCOP, emissions)
+        financial.py           # Financial metrics (NPV, IRR, payback)
+      crud/
+        biofuel_crud.py        # Database query utilities
+        async_biofuel_crud.py  # Async database operations
     tests/                     # Backend test suite
+      run_tests.py             # Main test runner
+      check_setup.py           # Pre-flight verification
+      scenarios/               # Test scenario definitions
+      results/                 # Test results (timestamped JSON)
     requirements.txt           # Python dependencies
 
   frontend/                    # React frontend application
     public/                    # Static assets
     src/
       App.js                   # Root component + providers + router
-      routes.js                # Route configuration (/login, /TEA, etc.)
+      routes.js                # Route configuration (/login, /TEA, /verify-email, etc.)
       layouts/
         Default.js             # Global layout (navbar + theme toggle + footer)
       views/
-        Login.js               # Authentication page
+        LoginForm.js           # Login page
+        SignUp.js              # Registration page
+        VerifyEmail.js         # Email verification page
         AnalysisDashboard.js   # TEA dashboard (inputs + chart + KPIs)
       forms/
         BiofuelForm.js         # Main TEA input form
@@ -63,7 +105,7 @@ safapac-clean/
         project/ProjectStartupModal.js
         project/ScenarioTabs.js
       contexts/
-        AuthContext.js         # Auth state and login/logout
+        AuthContext.js         # Auth state, login/logout, token refresh
         ProjectContext.js      # Project & scenario state
         AccessContext.js       # CORE / ADVANCE / ROADSHOW access level
         ThemeContext.js        # Light/dark theme
@@ -71,136 +113,189 @@ safapac-clean/
       config/access.json       # Frontend access level configuration
     package.json               # Node dependencies
 
-  docs/                        # Additional documentation
-  00_system_inventory.md       # System inventory / architecture map
-  QUICKSTART.md                # Short setup guide
-  QUICK_START_GUIDE.md         # Detailed project/scenario usage guide
-  run_backend.py               # Convenience backend startup script
+  docs/                        # Documentation
+    handoff/                   # Handoff changelogs
+    PERFORMANCE_IMPLEMENTATION.md     # Performance optimization details
+    Calculation_Process_Flowchart.md  # Traceable calculation formulas
+    Traceable_Implementation_Plan.md  # Traceable implementation status
+    email-verification.md             # Email verification documentation
 ```
 
 ---
 
 ## Installation
 
-### Backend Setup
+### 1. Create PostgreSQL Database
 
-From `safapac-clean/`:
+The backend requires a PostgreSQL database. Tables and seed data are created automatically on startup.
+
+```sql
+-- Using pgAdmin or psql, create a new database:
+CREATE DATABASE safapac_db;
+
+-- Create a dedicated user (optional but recommended):
+CREATE USER safapac_user WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE safapac_db TO safapac_user;
+```
+
+### 2. Backend Setup
 
 ```bash
 cd backend
-python -m venv venv
-venv\Scripts\activate  # Windows
-# or: source venv/bin/activate  # macOS/Linux
 
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
+
+# Install dependencies
 pip install -r requirements.txt
+```
+
+Create a `.env` file in `backend/` directory:
+
+```env
+# Database Configuration (REQUIRED)
+DB_USER=safapac_user
+DB_PASSWORD=your_password
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=safapac_db
+
+# JWT Configuration
+SECRET_KEY=your-secret-key-change-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Email Verification (REQUIRED for registration)
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+MAIL_FROM=your-email@gmail.com
+MAIL_FROM_NAME=SAFAPAC
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_STARTTLS=True
+MAIL_SSL_TLS=False
+
+# Verification Settings
+VERIFICATION_TOKEN_EXPIRE_HOURS=24
+FRONTEND_URL=http://localhost:3000
 ```
 
 Start the backend server:
 
 ```bash
-cd app
-uvicorn main:app --reload
+cd backend
+uvicorn app.main:app --reload
 ```
 
-The API will be available at `http://127.0.0.1:8000`.
+On startup, the backend will automatically:
+1. Create all database tables (if they don't exist)
+2. Seed master data (processes, feedstocks, utilities, countries, products)
+3. Seed user accounts from `app/core/pw.csv`
 
-### Frontend Setup
+The API will be available at `http://127.0.0.1:8000`
+
+### 3. Frontend Setup
 
 In a separate terminal:
 
 ```bash
-cd safapac-clean/frontend
+cd frontend
 npm install
 npm start
 ```
 
-The frontend will be available at `http://localhost:3000`.
+The frontend will be available at `http://localhost:3000`
+
+### 4. Verify Installation
+
+- **Backend Health Check**: http://127.0.0.1:8000/health
+- **API Documentation (Swagger)**: http://127.0.0.1:8000/docs
+- **Frontend**: http://localhost:3000
 
 ---
 
 ## API Overview
 
-Base URL (development): `http://127.0.0.1:8000`
+Base URL: `http://127.0.0.1:8000/api/v1`
 
 ### Authentication
 
-- `POST /auth/login`
-  - Validates credentials against `backend/pw.csv` (usually using the “Suggested Password” value).
-  - On success, ensures the user exists in `backend/data/users.json` (via `MockDatabase`) and returns:
-    - `{ "success": true, "user": { ... }, "message": "Login successful" }`
-  - On failure returns `{ "success": false, "message": "Invalid credentials" }`.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/login` | User login, returns JWT token |
+| POST | `/auth/register` | New user registration (requires email verification) |
+| POST | `/auth/refresh` | Refresh access token |
+| GET | `/auth/verify-email` | Verify email with token |
+| POST | `/auth/resend-verification` | Resend verification email |
 
-### TEA Metadata & Calculation
+### Master Data
 
-- `GET /processes`
-  - List all process technologies.
-- `GET /feedstocks/{process}`
-  - List feedstocks for a given process.
-- `GET /feedstock/{feedstock_name}`
-  - Detailed feedstock information (yields, energy content, etc.).
-- `POST /calculate`
-  - Perform techno‑economic and financial analysis.
-  - Request body (`CalculationRequest`):
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/master-data` | Get all master data in one call |
+| GET | `/process-technologies` | List SAF process technologies |
+| GET | `/feedstocks` | List feedstock types |
+| GET | `/countries` | List supported countries |
+| GET | `/utilities` | List utilities (hydrogen, electricity) |
+| GET | `/products` | List output products |
 
-    ```json
-    {
-      "inputs": {
-        "plant": { /* capacity, load hours, CI default, density */ },
-        "feedstocks": [ /* feedstock block(s) */ ],
-        "utilities": [ /* hydrogen & electricity blocks */ ],
-        "products": [ /* product blocks */ ],
-        "economics": { /* discount rate, TCI, WC/TCI, indirect OPEX/TCI, lifetime */ }
-      },
-      "process_technology": "HEFA",
-      "feedstock": "UCO",
-      "product_key": "jet"
+### Projects (Requires Authentication)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects` | Create new project |
+| GET | `/projects` | List user's projects |
+| GET | `/projects/{project_id}` | Get project with scenarios |
+| PUT | `/projects/{project_id}` | Update project |
+| PATCH | `/projects/{project_id}` | Partial update (save draft inputs) |
+| DELETE | `/projects/{project_id}` | Delete project |
+
+### Scenarios (Requires Authentication)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{project_id}/scenarios` | Create scenario |
+| GET | `/projects/{project_id}/scenarios` | List scenarios |
+| GET | `/scenarios/{scenario_id}` | Get scenario details |
+| PUT | `/scenarios/{scenario_id}` | Update scenario |
+| DELETE | `/scenarios/{scenario_id}` | Delete scenario |
+| POST | `/scenarios/{scenario_id}/calculate` | Run TEA calculation (async) |
+| GET | `/scenarios/{scenario_id}/calculate/status` | Poll calculation status |
+
+### Calculation Response
+
+The calculation endpoint returns comprehensive results with traceable calculations:
+
+```json
+{
+  "technoEconomics": {
+    "LCOP": 1495.81,
+    "totalCapitalInvestment": 400000000,
+    "totalOpex": 710150000,
+    "totalRevenue": 1177500000,
+    "LCOP_traceable": {
+      "name": "Levelized Cost of Production",
+      "value": 1495.81,
+      "unit": "USD/t",
+      "formula": "LCOP = (TCI_annual + OPEX) / Production",
+      "inputs": { ... },
+      "calculation_steps": [ ... ]
     }
-    ```
-
-  - Response:
-
-    ```json
-    {
-      "technoEconomics": { /* LCOP, LCCA, TCI, OPEX, production, CI, etc. */ },
-      "financials": {
-        "npv": 0.0,
-        "irr": 0.0,
-        "paybackPeriod": 0.0,
-        "cashFlowTable": [ /* yearly rows */ ]
-      },
-      "resolvedInputs": {
-        "structured": { /* normalized inputs */ },
-        "flattened": { /* flattened key/value view */ }
-      }
-    }
-    ```
-
-### Projects & Scenarios
-
-These endpoints are consumed by the frontend `ProjectContext` and `projectApi.js`.
-
-- `POST /projects/create`
-  - Body: `{ "user_id": "<user_id>", "project_name": "<name>" }`.
-  - Creates a project and auto‑creates “Scenario 1”.
-- `GET /projects/list-by-user?user_id=<user_id>`
-  - Lists all projects for a user.
-- `GET /projects/{project_id}`
-  - Returns a single project.
-
-- `POST /scenarios/create`
-  - Body: `{ "project_id": "...", "scenario_name": "Scenario 2", "order"?: 2 }`.
-  - Adds a scenario to a project (maximum 3 per project).
-- `GET /scenarios/list?project_id=<project_id>`
-  - Lists all scenarios for a project.
-- `GET /scenarios/{scenario_id}`
-  - Returns a scenario including `inputs` and `outputs`.
-- `PUT /scenarios/{scenario_id}`
-  - Body: `{ "scenario_name"?: str, "inputs"?: object, "outputs"?: object }`.
-  - Merges the updates into the scenario.
-- `DELETE /scenarios/{scenario_id}`
-  - Deletes a scenario (cannot delete the last scenario in a project).
-
-As long as you keep these endpoint paths and JSON shapes stable, you can safely swap the JSON files for a real database implementation behind `MockDatabase`.
+  },
+  "financials": {
+    "npv": 3224127521,
+    "irr": 0.855,
+    "paybackPeriod": 2,
+    "npv_traceable": { ... },
+    "irr_traceable": { ... },
+    "payback_period_traceable": { ... }
+  }
+}
+```
 
 ---
 
@@ -208,17 +303,23 @@ As long as you keep these endpoint paths and JSON shapes stable, you can safely 
 
 ### Backend
 
-- **FastAPI** – web framework.
-- **Pydantic** – data validation and settings.
-- **Pandas / NumPy** – data processing and numerical calculations.
-- **Uvicorn** – ASGI server.
+- **FastAPI** – async web framework
+- **SQLAlchemy** – ORM with async support
+- **PostgreSQL** – database with asyncpg driver
+- **Pydantic** – data validation
+- **Pandas / NumPy** – numerical calculations
+- **Uvicorn** – ASGI server
+- **python-jose** – JWT authentication
+- **bcrypt** – password hashing
+- **slowapi** – rate limiting
+- **aiosmtplib** – async email sending
 
 ### Frontend
 
-- **React** – UI library.
-- **Shards React / Bootstrap** – UI components and layout.
-- **Chart.js** – visualization (breakeven chart).
-- **React Router** – routing `/login`, `/TEA`, etc.
+- **React 16** – UI library
+- **Shards React / Bootstrap** – UI components
+- **Chart.js** – visualization (breakeven chart)
+- **React Router** – routing
 
 ---
 
@@ -228,44 +329,66 @@ As long as you keep these endpoint paths and JSON shapes stable, you can safely 
 
 The backend includes a comprehensive test suite for HEFA calculation verification.
 
-**Location:** `backend/tests/`
-
 ```bash
-# Quick start
-python backend/tests/check_setup.py          # Verify setup
-python backend/tests/run_tests.py --list     # List test scenarios
-python backend/tests/run_tests.py            # Run all tests
+# Verify setup
+python backend/tests/check_setup.py
+
+# List available test scenarios
+python backend/tests/run_tests.py --list
+
+# Run all tests
+python backend/tests/run_tests.py
 
 # Run specific scenario
 python backend/tests/run_tests.py hefa_usa_500kta
 ```
 
+Test results are saved to `backend/tests/results/` with timestamps.
+
 For detailed testing documentation, see:
-- **Main Guide:** `backend/tests/README.md`
-- **Quick Start:** `backend/tests/QUICKSTART.md`
-- **Creating Scenarios:** `backend/tests/scenarios/README.md`
+- `backend/tests/README.md` – Main guide
+- `backend/tests/scenarios/README.md` – Creating test scenarios
 
 ### Frontend
 
-The project is configured for `npm test` (Jest/React Testing Library) but has minimal tests at the moment:
-
 ```bash
-cd safapac-clean/frontend
+cd frontend
 npm test
 ```
 
 ---
 
-## Development Notes
+## Performance
 
-- The frontend uses:
-  - `AuthContext` to handle login (`/auth/login`) and keep `currentUser` in local storage.
-  - `ProjectContext` to manage projects, scenarios, and TEA inputs/outputs.
-  - `AnalysisDashboard` as the main TEA view (replaces older “BlogPosts” style pages).
-- The backend:
-  - Keeps TEA engine logic in `economics.py` and `financial_analysis.py`.
-  - Uses `MockDatabase` (`mock_database.py`) to store users, projects, and scenarios in JSON files under `backend/data/`.
-  - Is ready to be migrated to a proper database by replacing `MockDatabase` with your own implementation, without changing API contracts.
+The backend is optimized for high concurrency:
 
-For a detailed system inventory (files, flows, constants), see `00_system_inventory.md`.
+| Metric | Value |
+|--------|-------|
+| Concurrent Users | 200+ |
+| Avg Response Time | 20-50ms |
+| DB Connection Pool | 30 connections |
+| DB Driver | asyncpg (async) |
+
+Key optimizations:
+- **Async database operations** with asyncpg
+- **Connection pooling** (20 permanent + 10 overflow)
+- **Background tasks** for calculations
+- **Master data caching** (1-hour TTL)
+- **Rate limiting** on sensitive endpoints
+
+See `docs/PERFORMANCE_IMPLEMENTATION.md` for full details.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/PERFORMANCE_IMPLEMENTATION.md](docs/PERFORMANCE_IMPLEMENTATION.md) | Performance optimization details |
+| [docs/Calculation_Process_Flowchart.md](docs/Calculation_Process_Flowchart.md) | Traceable calculation formulas |
+| [docs/Traceable_Implementation_Plan.md](docs/Traceable_Implementation_Plan.md) | Traceable implementation status |
+| [docs/email-verification.md](docs/email-verification.md) | Email verification setup |
+| [docs/handoff/](docs/handoff/) | Development handoff changelogs |
+| [backend/README.md](backend/README.md) | Backend-specific documentation |
+| [backend/tests/README.md](backend/tests/README.md) | Testing documentation |
 

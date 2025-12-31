@@ -8,6 +8,7 @@ import {
   Alert
 } from "shards-react";
 import { useAuth } from "../contexts/AuthContext";
+import { resendVerificationEmail } from "../api/projectApi";
 
 const LoginForm = ({ history }) => {
   const { login } = useAuth();
@@ -29,6 +30,9 @@ const LoginForm = ({ history }) => {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showVerificationNeeded, setShowVerificationNeeded] = useState(false);
+  const [resendStatus, setResendStatus] = useState("");
+  const [isResending, setIsResending] = useState(false);
 
   const handleChange = (field) => ({ target }) => {
     const { value = "" } = target || {};
@@ -41,6 +45,8 @@ const LoginForm = ({ history }) => {
   const handleSignIn = async (event) => {
     event.preventDefault();
     setError("");
+    setShowVerificationNeeded(false);
+    setResendStatus("");
     setIsSubmitting(true);
 
     console.log("🔐 Login attempt with:", credentials.username);
@@ -58,9 +64,33 @@ const LoginForm = ({ history }) => {
       }, 800);
     } else {
       console.log("❌ Login FAILED:", result.message);
+      // Check if it's an email verification error
+      if (result.message?.toLowerCase().includes("verify your email")) {
+        setShowVerificationNeeded(true);
+      }
       setError(result.message || "Unable to sign in right now.");
       setIsSubmitting(false);
     }
+  };
+
+  const handleResendVerification = async () => {
+    if (!credentials.username) {
+      setResendStatus("Please enter your email address first.");
+      return;
+    }
+
+    setIsResending(true);
+    setResendStatus("");
+
+    const result = await resendVerificationEmail(credentials.username);
+
+    if (result.success) {
+      setResendStatus(result.data.message || "Verification email sent! Check your inbox.");
+    } else {
+      setResendStatus(result.error || "Failed to send verification email.");
+    }
+
+    setIsResending(false);
   };
 
   const navigateToSignUp = () => {
@@ -157,8 +187,34 @@ const LoginForm = ({ history }) => {
 
             {/* Error Messages */}
             {error && (
-              <Alert theme="danger" style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
+              <Alert theme={showVerificationNeeded ? "warning" : "danger"} style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
                 {error}
+                {showVerificationNeeded && (
+                  <div style={{ marginTop: "0.75rem" }}>
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={isResending}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#006D7C",
+                        textDecoration: "underline",
+                        cursor: isResending ? "not-allowed" : "pointer",
+                        padding: 0,
+                        fontSize: "0.875rem",
+                        fontWeight: 600
+                      }}
+                    >
+                      {isResending ? "Sending..." : "Resend verification email"}
+                    </button>
+                  </div>
+                )}
+              </Alert>
+            )}
+            {resendStatus && (
+              <Alert theme="info" style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
+                {resendStatus}
               </Alert>
             )}
 

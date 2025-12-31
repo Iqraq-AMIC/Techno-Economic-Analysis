@@ -3,8 +3,8 @@
 **Database Type**: PostgreSQL
 **Current Environment**: Local PostgreSQL
 **Target Environment**: AWS RDS PostgreSQL
-**Schema Version**: 2.0.0
-**Last Updated**: December 1, 2025
+**Schema Version**: 2.1.0
+**Last Updated**: December 23, 2025
 
 ---
 
@@ -475,6 +475,7 @@ Stores user accounts for authentication and project ownership.
 | `email` | `String` | NOT NULL, UNIQUE | User's email (login username) |
 | `password_hash` | `String` | NOT NULL | Bcrypt hashed password |
 | `access_level` | `String` | NOT NULL | Access tier: "CORE", "ADVANCE", or "ROADSHOW" |
+| `occupation` | `String` | NULLABLE | User occupation: "student" or "researcher" |
 | `created_at` | `DateTime` | DEFAULT utcnow | Account creation timestamp |
 
 **Relationships**:
@@ -482,9 +483,9 @@ Stores user accounts for authentication and project ownership.
 
 **Sample Data**:
 ```sql
-INSERT INTO users (id, name, email, password_hash, access_level) VALUES
+INSERT INTO users (id, name, email, password_hash, access_level, occupation) VALUES
   ('550e8400-e29b-41d4-a716-446655440000', 'John Doe', 'john@example.com',
-   '$2b$12$...', 'ADVANCE');
+   '$2b$12$...', 'ADVANCE', 'researcher');
 ```
 
 **Security Notes**:
@@ -877,9 +878,15 @@ aws rds restore-db-instance-to-point-in-time \
 
 ## Schema Versioning
 
-### Current Version: 2.0.0
+### Current Version: 2.1.0
 
-**Changes from v1.x**:
+**Changes from v2.0.0** (December 23, 2025):
+1. Added `occupation` field to `users` table (nullable String)
+   - Allowed values: "student" or "researcher"
+   - Used for user registration tracking
+   - Existing users will have NULL value
+
+**Changes from v1.x** (December 1, 2025):
 1. User/Project/Scenario IDs: Integer → UUID
 2. JSONB field names: `*_json` → direct names (`user_inputs`, `techno_economics`, etc.)
 3. Added `name` field to `users` table
@@ -900,6 +907,44 @@ alembic downgrade -1
 # View migration history
 alembic history
 ```
+
+### Migration Script for v2.1.0
+
+To migrate from v2.0.0 to v2.1.0, add the `occupation` column:
+
+```sql
+-- Add occupation column to users table
+ALTER TABLE users ADD COLUMN occupation VARCHAR NULL;
+
+-- Verify the change
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'users' AND column_name = 'occupation';
+```
+
+**Alembic Migration**:
+```python
+"""add occupation field to users
+
+Revision ID: xxx
+Revises: yyy
+Create Date: 2025-12-23
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade():
+    op.add_column('users', sa.Column('occupation', sa.String(), nullable=True))
+
+def downgrade():
+    op.drop_column('users', 'occupation')
+```
+
+**Notes**:
+- Existing user records will have `occupation = NULL`
+- No data migration required
+- Backward compatible change
 
 ---
 
@@ -1025,7 +1070,7 @@ async def startup_event():
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: December 1, 2025
-**Schema Version**: 2.0.0
+**Document Version**: 1.1
+**Last Updated**: December 23, 2025
+**Schema Version**: 2.1.0
 **Maintained By**: Backend Development Team
