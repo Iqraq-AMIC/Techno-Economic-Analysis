@@ -17,7 +17,8 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAccess } from "../contexts/AccessContext";
 import { useProject } from "../contexts/ProjectContext";
 import ProjectStartupModal from "../components/project/ProjectStartupModal";
-import { calculateScenario } from "../api/projectApi"; // hydar
+import { calculateScenario } from "../api/projectApi";
+import { convertUnit, UNIT_TO_VALUE_FIELD, FIELD_TO_CONVERSION_TYPE, PRODUCT_UNIT_TO_VALUE_FIELD, PRODUCT_FIELD_TO_CONVERSION_TYPE } from "../utils/unitConversions";
 
 // Compare Scenarios Dropdown Component
 const CompareDropdown = ({ scenarios, currentScenario, comparisonScenarios, toggleComparisonScenario, clearComparison, colors }) => {
@@ -343,6 +344,10 @@ const convertBackendInputsToFrontend = (backendInputs) => {
   const elecPriceMWh = electricity.price?.value || 55;
   const elecPriceKWh = elecPriceMWh / 1000;
 
+  // Convert hydrogen price from USD/t to USD/kg
+  const hydrogenPricePerTon = hydrogen.price?.value || 5400;
+  const hydrogenPricePerKg = hydrogenPricePerTon / 1000;
+
   // Convert feedstock yield (backend stores as percent if >1, need to check)
   let feedstockYield = feedstock.yieldPercent || 121;
   if (feedstockYield > 10) feedstockYield = feedstockYield / 100; // Convert from 121 to 1.21
@@ -351,8 +356,8 @@ const convertBackendInputsToFrontend = (backendInputs) => {
   let hydrogenYield = hydrogen.yieldPercent || 4.2;
   if (hydrogenYield > 1) hydrogenYield = hydrogenYield / 100; // Convert from 4.2 to 0.042
 
-  let electricityYield = electricity.yieldPercent || 12;
-  if (electricityYield > 1) electricityYield = electricityYield / 100; // Convert from 12 to 0.12
+  let electricityYield = electricity.yieldPercent || 12000;
+  if (electricityYield > 100) electricityYield = electricityYield / 100000; // Convert from 12000 to 0.12
 
   return {
     production_capacity: capacityTYr,
@@ -363,7 +368,7 @@ const convertBackendInputsToFrontend = (backendInputs) => {
     conversion_process_ci_default: cp.ciProcessDefault || 20,
     feedstock_price: feedstock.price?.value || 930,
     feedstock_price_unit: "USD/t",
-    hydrogen_price: hydrogen.price?.value || 5.4,
+    hydrogen_price: hydrogenPricePerKg,
     hydrogen_price_unit: "USD/kg",
     electricity_rate: elecPriceKWh,
     electricity_rate_unit: "USD/kWh",
@@ -404,7 +409,7 @@ const convertBackendInputsToFrontend = (backendInputs) => {
         carbonContent: p.carbonContent || 0,
         energyContent: p.energyContent || 0,
         energyUnit: "MJ/kg",
-        density: (p.productDensity || 0) * 1000, // Convert from 0.81 to 810
+        density: (p.productDensity || 810), // Backend stores in kg/m³
         yield: productYield,
         yieldUnit: "kg/kg",
       };
@@ -664,10 +669,35 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       valueOrEvent && typeof valueOrEvent === "object" && "target" in valueOrEvent
         ? valueOrEvent.target.value
         : valueOrEvent;
-    setInputs((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+
+    setInputs((prev) => {
+      // Check if this is a unit field change that requires automatic value conversion
+      const valueField = UNIT_TO_VALUE_FIELD[key];
+
+      if (valueField && prev[valueField] !== undefined && prev[key] !== undefined) {
+        // This is a unit change - convert the value
+        const oldUnit = prev[key];
+        const newUnit = value;
+        const oldValue = prev[valueField];
+        const conversionType = FIELD_TO_CONVERSION_TYPE[valueField];
+
+        if (conversionType && oldUnit !== newUnit) {
+          const convertedValue = convertUnit(oldValue, oldUnit, newUnit, conversionType);
+
+          return {
+            ...prev,
+            [key]: value,
+            [valueField]: convertedValue,
+          };
+        }
+      }
+
+      // Regular value change (not a unit change)
+      return {
+        ...prev,
+        [key]: value,
+      };
+    });
   };
 
   const handleProductSliderChange = (index, key) => (vals) => {
@@ -684,7 +714,30 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       valueOrEvent && typeof valueOrEvent === "object" && "target" in valueOrEvent
         ? valueOrEvent.target.value
         : valueOrEvent;
+
     setInputs((prev) => {
+      // Check if this is a product unit field change that requires automatic value conversion
+      const valueField = PRODUCT_UNIT_TO_VALUE_FIELD[key];
+      const currentProduct = prev.products[index];
+
+      if (valueField && currentProduct && currentProduct[valueField] !== undefined && currentProduct[key] !== undefined) {
+        // This is a unit change - convert the value
+        const oldUnit = currentProduct[key];
+        const newUnit = value;
+        const oldValue = currentProduct[valueField];
+        const conversionType = PRODUCT_FIELD_TO_CONVERSION_TYPE[valueField];
+
+        if (conversionType && oldUnit !== newUnit) {
+          const convertedValue = convertUnit(oldValue, oldUnit, newUnit, conversionType);
+
+          const products = prev.products.map((product, idx) =>
+            idx === index ? { ...product, [key]: value, [valueField]: convertedValue } : product
+          );
+          return { ...prev, products };
+        }
+      }
+
+      // Regular value change (not a unit change)
       const products = prev.products.map((product, idx) =>
         idx === index ? { ...product, [key]: value } : product
       );
@@ -892,27 +945,82 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
     setIsCalculating(true);
     try {
       // === UNIT CONVERSIONS FOR BACKEND ===
-      
-      // 1. Capacity: Frontend = Tons/yr (e.g. 500,000). Backend expects KTA (e.g. 500)
-      const capacityKTA = (inputs.production_capacity || 0) / 1000;
+      // Convert all inputs to the units that the backend expects
 
-      // 2. TCI Ref: Frontend = USD (e.g. 400,000,000). Backend expects MUSD (e.g. 400)
+      // 1. Capacity: Convert to KTA (backend expects unitId: 3)
+      const capacityKTA = convertUnit(
+        inputs.production_capacity || 0,
+        inputs.plant_capacity_unit || "t/yr",
+        "KTA",
+        "capacity"
+      );
+
+      // 2. TCI Ref: Always in USD, convert to MUSD
       const tciRefMUSD = (inputs.tci_ref || 0) / 1_000_000;
 
-      // 3. Capacity Ref: Frontend = Tons/yr. Backend expects KTA.
-      const capacityRefKTA = (inputs.capacity_ref || 0) / 1000;
+      // 3. Capacity Ref: Convert to KTA
+      const capacityRefKTA = convertUnit(
+        inputs.capacity_ref || 0,
+        inputs.capacity_ref_unit || "t/yr",
+        "KTA",
+        "capacity"
+      );
 
-      // 4. Electricity: Frontend = USD/kWh (e.g. 0.055). Backend expects USD/MWh (e.g. 55)
-      // The backend code specifically does: price / 1000. So we must multiply by 1000 here.
-      const electricityPriceMWh = (inputs.electricity_rate || 0) * 1000;
+      // 4. Feedstock Price: Convert to USD/t (backend expects unitId: 6)
+      const feedstockPriceUSDPerTon = convertUnit(
+        inputs.feedstock_price || 0,
+        inputs.feedstock_price_unit || "USD/t",
+        "USD/t",
+        "price"
+      );
 
-      // 5. Feedstock Yield: Frontend = Ratio (e.g. 1.21). 
-      // Backend Logic: "if yield > 1.0, divide by 100". 
-      // If we send 1.21, backend makes it 0.0121 (WRONG).
-      // If we send 121, backend makes it 1.21 (CORRECT).
+      // 5. Hydrogen Price: Convert to USD/t (backend expects unitId: 6)
+      const hydrogenPricePerTon = convertUnit(
+        inputs.hydrogen_price || 0,
+        inputs.hydrogen_price_unit || "USD/kg",
+        "USD/t",
+        "price"
+      );
+
+      // 6. Electricity Rate: Convert to USD/MWh (backend expects unitId: 10)
+      const electricityPriceMWh = convertUnit(
+        inputs.electricity_rate || 0,
+        inputs.electricity_rate_unit || "USD/kWh",
+        "USD/MWh",
+        "electricity_rate"
+      );
+
+      // 7. Feedstock CI: gCO₂/kg is same as kgCO₂/t (backend expects unitId: 11)
+      const feedstockCI = inputs.feedstock_carbon_intensity || 0;
+
+      // 8. Hydrogen CI: gCO₂/kg is same as kgCO₂/t (backend expects unitId: 11)
+      const hydrogenCI = inputs.hydrogen_carbon_intensity || 0;
+
+      // 9. Electricity CI: gCO₂/kWh is same as kgCO₂/MWh (backend expects unitId: 13)
+      const electricityCI = inputs.electricity_carbon_intensity || 0;
+
+      // 10. Yields: Backend expects specific formats
+      // Feedstock Yield: Backend expects percent (121 for 1.21 ratio)
       let feedstockYieldPayload = inputs.feedstock_yield || 0;
       if (feedstockYieldPayload > 1.0 && feedstockYieldPayload < 100) {
          feedstockYieldPayload = feedstockYieldPayload * 100;
+      }
+
+      // Hydrogen Yield: Backend expects percent (4.2 for 0.042 ratio)
+      let hydrogenYieldPayload = inputs.hydrogen_yield || 0;
+      if (hydrogenYieldPayload < 1) {
+         hydrogenYieldPayload = hydrogenYieldPayload * 100;
+      }
+
+      // Electricity Yield: Convert to kWh, then scale per ton (12000 for 0.12 kWh/kg)
+      let electricityYieldPayload = convertUnit(
+        inputs.electricity_yield || 0,
+        inputs.electricity_yield_unit || "kWh/kg",
+        "kWh/kg",
+        "yield"
+      );
+      if (electricityYieldPayload < 100) {
+         electricityYieldPayload = electricityYieldPayload * 100000; // Scale to per-ton
       }
 
       const payload = {
@@ -921,8 +1029,8 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         countryId: countryId,
         conversionPlant: {
           plantCapacity: {
-            value: capacityKTA, // <--- CHANGED: Sent as KTA
-            unitId: 1
+            value: capacityKTA, // <--- CHANGED: Sent as KTA (500 for 500,000 t/yr)
+            unitId: 3 // UnitId 3 = KTA (Kilo Tons per Annum)
           },
           annualLoadHours: inputs.annual_load_hours || 8000,
           ciProcessDefault: inputs.conversion_process_ci_default || 0
@@ -938,41 +1046,67 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
         },
         feedstockData: [{
           name: selectedFeedstock,
-          price: { value: inputs.feedstock_price || 0, unitId: 2 },
+          price: { value: feedstockPriceUSDPerTon, unitId: 6 }, // UnitId 6 = USD/t
           carbonContent: inputs.feedstock_carbon_content || 0,
-          carbonIntensity: { value: inputs.feedstock_carbon_intensity || 0, unitId: 3 },
+          carbonIntensity: { value: feedstockCI, unitId: 11 }, // UnitId 11 = gCO2/kg
           energyContent: inputs.feedstock_energy_content || 0,
-          yieldPercent: feedstockYieldPayload // <--- CHANGED: Scaled to survive backend logic
+          yieldPercent: feedstockYieldPayload // Scaled to percent
         }],
         utilityData: [
           {
             name: "Hydrogen",
-            price: { value: inputs.hydrogen_price || 0, unitId: 4 },
+            price: { value: hydrogenPricePerTon, unitId: 6 }, // UnitId 6 = USD/t
             carbonContent: 0,
-            carbonIntensity: { value: inputs.hydrogen_carbon_intensity || 0, unitId: 5 },
+            carbonIntensity: { value: hydrogenCI, unitId: 11 }, // UnitId 11 = gCO2/kg
             energyContent: 0,
-            yieldPercent: inputs.hydrogen_yield || 0 // Usually < 1, so backend keeps it as is
+            yieldPercent: hydrogenYieldPayload // Scaled to percent
           },
           {
-            name: "Electricity",
-            price: { value: electricityPriceMWh, unitId: 6 }, // <--- CHANGED: Sent as USD/MWh
+            name: "electricity",
+            price: { value: electricityPriceMWh, unitId: 10 }, // UnitId 10 = USD/MWh
             carbonContent: 0,
-            carbonIntensity: { value: inputs.electricity_carbon_intensity || 0, unitId: 7 },
+            carbonIntensity: { value: electricityCI, unitId: 13 }, // UnitId 13 = gCO2/kWh
             energyContent: 0,
-            yieldPercent: inputs.electricity_yield || 0
+            yieldPercent: electricityYieldPayload // Scaled to per-ton
           }
         ],
-        productData: (inputs.products || []).map(product => ({
-          name: product.name,
-          price: { value: Number(product.price) || 0, unitId: 8 },
-          priceSensitivityToCi: Number(product.priceSensitivity) || 0,
-          carbonContent: Number(product.carbonContent) || 0,
-          energyContent: Number(product.energyContent) || 0,
-          // If yield is entered as a decimal (0.64), backend keeps it.
-          // If entered as percent (64), backend divides by 100. Both work.
-          yieldPercent: Number(product.yield) || 0, 
-          productDensity: Number(product.density) || 0
-        }))
+        productData: (inputs.products || []).map(product => {
+          // Convert product price to USD/t (backend expects unitId: 6)
+          const productPriceUSDPerTon = convertUnit(
+            Number(product.price) || 0,
+            product.priceUnit || "USD/t",
+            "USD/t",
+            "price"
+          );
+
+          // Convert product price sensitivity to USD/gCO₂
+          const productPriceSensitivity = convertUnit(
+            Number(product.priceSensitivity) || 0,
+            product.priceSensitivityUnit || "USD/gCO₂",
+            "USD/gCO₂",
+            "price_sensitivity"
+          );
+
+          // Convert product yield to decimal (backend expects percent like 64 for 64%)
+          let productYield = Number(product.yield) || 0;
+          // If yield is in kg/kg format (0.64), convert to percent (64)
+          if (productYield < 1) {
+            productYield = productYield * 100;
+          }
+
+          // Product density: Frontend stores as kg/m³ (810), backend expects t/m³ (0.81)
+          const productDensity = (Number(product.density) || 0) / 1000;
+
+          return {
+            name: product.name,
+            price: { value: productPriceUSDPerTon, unitId: 6 }, // UnitId 6 = USD/t
+            priceSensitivityToCi: productPriceSensitivity,
+            carbonContent: Number(product.carbonContent) || 0,
+            energyContent: Number(product.energyContent) || 0,
+            yieldPercent: productYield,
+            productDensity: productDensity
+          };
+        })
       };
 
       console.log("=== API Request Payload (Corrected Units) ===");
@@ -1061,86 +1195,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   // Get currency symbol for display
   const currSymbol = currencyRates[selectedCurrency]?.symbol || "$";
 
-  // ✅ KPI cards grouped by context
-  /* const kpiGroups = {
-    financial: {
-      title: "Financial Metrics",
-      color: colors.oxfordBlue,
-      stats: [
-        {
-          label: `Net Present Value (${currSymbol})`,
-          value: formatValue(apiData?.financials?.npv, 2, selectedCurrency),
-        },
-        {
-          label: "Internal Rate of Return (%)",
-          value: formatPercent(apiData?.financials?.irr, 2),
-        },
-        {
-          label: "Payback Period (years)",
-          value: apiData?.financials?.paybackPeriod ? apiData.financials.paybackPeriod.toFixed(0) : "N/A",
-        },
-      ],
-    },
-    production: {
-      title: "Production Metrics",
-      color: "#17c671",
-      stats: [
-        {
-          label: "Feedstock Consumption (tons/year)",
-          value: formatNumber(apiData?.technoEconomics?.feedstock_consumption, 2),
-        },
-        {
-          label: "Product Output (tons/year)",
-          value: formatNumber(apiData?.technoEconomics?.production, 2),
-        },
-      ],
-    },
-    cost: {
-      title: "Cost Metrics",
-      color: "#c4183c",
-      stats: [
-        {
-          label: `Total Capital Investment (${currSymbol})`,
-          value: formatValue((apiData?.technoEconomics?.total_capital_investment || 0) * 1_000_000, 2, selectedCurrency),
-        },
-        {
-          label: `Total OPEX (${currSymbol}/year)`,
-          value: formatValue(apiData?.technoEconomics?.total_opex, 2, selectedCurrency),
-        },
-        {
-          label: `Total Indirect OPEX (${currSymbol}/year)`,
-          value: formatValue(apiData?.technoEconomics?.total_indirect_opex, 2, selectedCurrency),
-        },
-        {
-          label: `Feedstock Cost (${currSymbol}/year)`,
-          value: formatValue(apiData?.technoEconomics?.feedstock_cost, 2, selectedCurrency),
-        },
-        {
-          label: `Levelized Cost of Production (${currSymbol}/ton)`,
-          value: formatValue(apiData?.technoEconomics?.LCOP, 2, selectedCurrency),
-        },
-      ],
-    },
-    environmental: {
-      title: "Environmental Metrics",
-      color: "#00b8d8",
-      stats: [
-        {
-          label: "Carbon Intensity (kgCO₂/MJ)",
-          value: formatNumber(apiData?.technoEconomics?.carbon_intensity, 2),
-        },
-        {
-          label: "Carbon Conversion Efficiency (%)",
-          value: formatNumber(apiData?.technoEconomics?.carbon_conversion_efficiency_percent, 2),
-        },
-        {
-          label: "Total CO₂ Emission (kg/year)",
-          value: formatNumber(apiData?.technoEconomics?.total_co2_emissions, 2),
-        },
-      ],
-    },
-  }; */
-
   const toFiniteNumber = (val) => (typeof val === "number" && Number.isFinite(val) ? val : null);
   const rawTotalCO2 = toFiniteNumber(apiData?.technoEconomics?.total_co2_emissions);
   const totalCO2Tonnes = rawTotalCO2 !== null ? rawTotalCO2 / 1_000_000 : null;
@@ -1227,10 +1281,13 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
       unit: "tons/yr",
     });
   }
-  // new changes
   if (hydrogenConsumption !== null) {
-    const hydrogenValue = hydrogenConsumption / 1000;
-    consumptionCards.push({ key: "hydrogen", label: "Hydrogen", value: formatNumber(hydrogenValue, 2), unit: hydrogenValue == 1 ? "ton/yr" : "tons/yr" });
+    consumptionCards.push({
+      key: "hydrogen",
+      label: "Hydrogen",
+      value: formatNumber(hydrogenConsumption, 2),
+      unit: "tons/yr",
+    });
   }
   if (electricityConsumption !== null) {
     consumptionCards.push({
@@ -1544,95 +1601,6 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
             </div>
           )}
         </div>
-
-        {/* Chart area - expands when sidebar collapses
-        <div className="d-flex flex-column" style={{ flex: 1, height: "100%", minWidth: 0, minHeight: 0, transition: "all 0.3s ease" }}>
-              <Card small className="flex-fill d-flex flex-column">
-                <CardHeader className="border-bottom d-flex justify-content-between align-items-center p-2">
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                      <h6 className="m-0" style={{ fontSize: "0.85rem", fontWeight: "600" }}>
-                        {chartView === 'breakeven' ? 'Breakeven Analysis' : 'LCOP Cost Breakdown'}
-                      </h6>
-                      {selectedAccess === 'ROADSHOW' && (
-                        <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
-                          <Button
-                            size="sm"
-                            onClick={() => setChartView('breakeven')}
-                            style={{
-                              fontSize: '0.7rem',
-                              padding: '2px 8px',
-                              backgroundColor: chartView === 'breakeven' ? colors.oxfordBlue : colors.background,
-                              color: chartView === 'breakeven' ? '#fff' : colors.text,
-                              borderColor: colors.border,
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            Breakeven
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => setChartView('lcop')}
-                            style={{
-                              fontSize: '0.7rem',
-                              padding: '2px 8px',
-                              backgroundColor: chartView === 'lcop' ? colors.oxfordBlue : colors.background,
-                              color: chartView === 'lcop' ? '#fff' : colors.text,
-                              borderColor: colors.border,
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            Cost
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                    <small style={{ fontSize: '0.7rem', fontWeight: '400', color: colors.textSecondary }}>
-                      {chartView === 'breakeven'
-                        ? 'Cumulative discounted cash flow across project lifetime; breakeven occurs where the curve first crosses zero.'
-                        : 'Breakdown of levelized cost of production by component (TCI, feedstock, utilities, indirect OPEX).'}
-                    </small>
-                  </div>
-                  <Button
-                    size="sm"
-                    className="table-icon-btn"
-                    style={{
-                      backgroundColor: colors.oxfordBlue,
-                      borderColor: colors.oxfordBlue,
-                      color: "#fff",
-                      padding: "0.25rem 0.5rem",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transition: "all 0.2s ease",
-                      position: "relative"
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#0a2454";
-                      e.currentTarget.style.borderColor = "#0a2454";
-                      e.currentTarget.style.transform = "scale(1.1)";
-                      e.currentTarget.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = colors.oxfordBlue;
-                      e.currentTarget.style.borderColor = colors.oxfordBlue;
-                      e.currentTarget.style.transform = "scale(1)";
-                      e.currentTarget.style.boxShadow = "none";
-                    }}
-                    onClick={() => setOpenTable(true)}
-                    title="Cash Flow Table"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="currentColor"
-                      style={{ display: "block" }}
-                    >
-                      <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
-                    </svg>
-                  </Button> */}
-        {/* Center Chart Panel */}
           <div className="d-flex flex-column" style={{ flex: 1, height: "100%", minWidth: 0, minHeight: 0, transition: "all 0.3s ease" }}>
             <Card small className="flex-fill d-flex flex-column">
               <CardHeader className="border-bottom d-flex justify-content-between align-items-center p-2">

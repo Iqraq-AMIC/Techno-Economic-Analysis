@@ -20,8 +20,17 @@ class LoginRequest(CamelCaseBaseModel):
 
 class LoginResponse(CamelCaseBaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserSchema
+
+class RefreshTokenRequest(CamelCaseBaseModel):
+    refresh_token: str
+
+class RefreshTokenResponse(CamelCaseBaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 class RegisterRequest(CamelCaseBaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -32,3 +41,23 @@ class RegisterRequest(CamelCaseBaseModel):
 class RegisterResponse(CamelCaseBaseModel):
     message: str
     user: UserSchema
+    requires_verification: bool = True
+
+
+# ==================== EMAIL VERIFICATION SCHEMAS ====================
+
+class VerifyEmailRequest(CamelCaseBaseModel):
+    token: str = Field(..., min_length=1)
+
+
+class VerifyEmailResponse(CamelCaseBaseModel):
+    message: str
+    verified: bool
+
+
+class ResendVerificationRequest(CamelCaseBaseModel):
+    email: EmailStr
+
+
+class ResendVerificationResponse(CamelCaseBaseModel):
+    message: str

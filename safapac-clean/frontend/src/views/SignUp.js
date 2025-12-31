@@ -7,7 +7,7 @@ import {
   FormInput,
   Alert
 } from "shards-react";
-import { useAuth } from "../contexts/AuthContext";
+import { signUp } from "../api/projectApi";
 
 const SignUp = ({ history }) => {
   const { signup } = useAuth();
@@ -37,6 +37,8 @@ const SignUp = ({ history }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
 
   const handleSignupChange = (field) => ({ target }) => {
     const { value = "" } = target || {};
@@ -71,26 +73,22 @@ const SignUp = ({ history }) => {
       return;
     }
 
-    // Call the signup function from AuthContext
-    const result = await signup({
-      name: signupData.username,
-      email: signupData.email,
-      password: signupData.password,
-      occupation: signupData.role,
-    });
+    // Call signup API
+    const result = await signUp(
+      signupData.username,
+      signupData.email,
+      signupData.password,
+      signupData.role
+    );
 
     if (result.success) {
-      // Success
-      setSuccess(`Account created successfully! Welcome, ${result.user.name}. Redirecting to sign in...`);
+      setRegisteredEmail(signupData.email);
+      setShowVerificationMessage(true);
+      setSuccess("Account created successfully! Please check your email to verify your account.");
       setSignupData({ username: "", email: "", role: "", password: "", confirmPassword: "" });
-
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        history.push("/login");
-      }, 2000);
+      setIsSubmitting(false);
     } else {
-      // Handle error
-      setError(result.message || "Registration failed. Please try again.");
+      setError(result.error || "Failed to create account. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -192,14 +190,59 @@ const SignUp = ({ history }) => {
                 {error}
               </Alert>
             )}
-            {success && (
-              <Alert theme="success" style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
-                {success}
-              </Alert>
-            )}
 
-            {/* Sign Up Form */}
-            <Form onSubmit={handleSignUp}>
+            {/* Email Verification Message */}
+            {showVerificationMessage ? (
+              <div style={{ textAlign: "center", padding: "2rem 0" }}>
+                <div style={{
+                  width: "80px",
+                  height: "80px",
+                  borderRadius: "50%",
+                  backgroundColor: "#e6f7f9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 1.5rem"
+                }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#006D7C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
+                </div>
+                <h3 style={{ color: "#1a1a1a", fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.75rem" }}>
+                  Check Your Email
+                </h3>
+                <p style={{ color: "#6b7280", fontSize: "0.9rem", marginBottom: "1rem", lineHeight: "1.5" }}>
+                  We've sent a verification link to<br />
+                  <strong style={{ color: "#006D7C" }}>{registeredEmail}</strong>
+                </p>
+                <p style={{ color: "#9ca3af", fontSize: "0.8rem", marginBottom: "1.5rem" }}>
+                  Click the link in the email to verify your account.
+                  <br />The link will expire in 24 hours.
+                </p>
+                <Button
+                  outline
+                  style={{
+                    color: "#006D7C",
+                    borderColor: "#006D7C",
+                    fontWeight: 600,
+                    padding: "0.5rem 1.5rem"
+                  }}
+                  onClick={navigateToLogin}
+                >
+                  Go to Sign In
+                </Button>
+              </div>
+            ) : (
+              <>
+                {success && (
+                  <Alert theme="success" style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
+                    {success}
+                  </Alert>
+                )}
+
+                {/* Sign Up Form */}
+                <Form onSubmit={handleSignUp}>
               <FormGroup>
                 <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.5rem", display: "block" }}>
                   Username
@@ -427,6 +470,8 @@ const SignUp = ({ history }) => {
                 </p>
               </div>
             </Form>
+              </>
+            )}
           </div>
         </div>
 

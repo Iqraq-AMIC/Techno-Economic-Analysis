@@ -20,32 +20,108 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// 3. RESPONSE INTERCEPTOR: Handle 401 Unauthorized (Token Expired)
+// Helper: Flag to prevent infinite refresh loops
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
+// 3. RESPONSE INTERCEPTOR: Handle 401 Unauthorized (Token Expired) with Auto-Refresh
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid - trigger logout
-      console.warn("Token expired or unauthorized. Logging out...");
+  async (error) => {
+    const originalRequest = error.config;
 
-      // Clear all auth data from localStorage
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("safapac-authenticated");
-      localStorage.removeItem("safapac-user");
+    // If 401 error and we haven't tried to refresh yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return apiClient(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
 
-      // Dispatch custom event for AuthContext to handle
-      window.dispatchEvent(new CustomEvent("auth:logout", {
-        detail: { reason: "token_expired" }
-      }));
+      originalRequest._retry = true;
+      isRefreshing = true;
 
-      // Redirect to login page
-      if (window.location.pathname !== "/") {
-        window.location.href = "/";
+      const refreshToken = localStorage.getItem("refresh_token");
+
+      if (!refreshToken) {
+        // No refresh token available - logout
+        console.warn("No refresh token available. Logging out...");
+        isRefreshing = false;
+        logout();
+        return Promise.reject(error);
+      }
+
+      try {
+        // Call refresh endpoint
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+          refreshToken: refreshToken
+        });
+
+        const { accessToken, refreshToken: newRefreshToken } = response.data;
+
+        // Update tokens in localStorage
+        localStorage.setItem("access_token", accessToken);
+        localStorage.setItem("refresh_token", newRefreshToken);
+
+        // Update the authorization header
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+
+        // Process queued requests
+        processQueue(null, accessToken);
+        isRefreshing = false;
+
+        // Retry the original request
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed - logout
+        processQueue(refreshError, null);
+        isRefreshing = false;
+        logout();
+        return Promise.reject(refreshError);
       }
     }
+
     return Promise.reject(error);
   }
 );
+
+// Logout helper function
+function logout() {
+  // Clear all auth data from localStorage
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  localStorage.removeItem("safapac-authenticated");
+  localStorage.removeItem("safapac-user");
+
+  // Dispatch custom event for AuthContext to handle
+  window.dispatchEvent(new CustomEvent("auth:logout", {
+    detail: { reason: "token_expired" }
+  }));
+
+  // Redirect to login page
+  if (window.location.pathname !== "/") {
+    window.location.href = "/";
+  }
+}
 
 // --- HELPER: Transform Backend Data to Frontend Shape ---
 const transformProject = (p) => ({
@@ -175,23 +251,40 @@ export const updateScenario = async (scenarioId, updates) => {
 // Explicit calculation - only called when user clicks "Calculate" button
 export const calculateScenario = async (scenarioId, inputs) => {
   try {
-    const response = await apiClient.post(`/scenarios/${scenarioId}/calculate`, inputs);
+    // 1. Start async calculation (returns 202 Accepted immediately)
+    await apiClient.post(`/scenarios/${scenarioId}/calculate`, inputs);
 
-    // Calculate returns { technoEconomics, financials, resolvedInputs }
-    const result = response.data;
+    // 2. Poll for results until calculation is complete
+    const pollStatus = async () => {
+      const statusResponse = await apiClient.get(`/scenarios/${scenarioId}/calculate/status`);
+      const { status, technoEconomics, financials, resolvedInputs, message } = statusResponse.data;
 
-    // Return data in the format that AnalysisDashboard expects:
-    // - apiData.technoEconomics for production/cost metrics
-    // - apiData.financials for NPV, IRR, payback, cashFlowTable
-    return {
-      success: true,
-      data: {
-        scenario_id: scenarioId,
-        resolvedInputs: result.resolvedInputs,
-        technoEconomics: result.technoEconomics,
-        financials: result.financials,
+      if (status === "calculated") {
+        // Calculation complete - return results
+        return {
+          success: true,
+          data: {
+            scenario_id: scenarioId,
+            resolvedInputs: resolvedInputs,
+            technoEconomics: technoEconomics,
+            financials: financials,
+          }
+        };
+      } else if (status === "failed") {
+        // Calculation failed
+        throw new Error(message || "Calculation failed");
+      } else if (status === "calculating") {
+        // Still calculating - wait 1 second and poll again
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return pollStatus();
+      } else {
+        // Unknown status
+        throw new Error(`Unexpected status: ${status}`);
       }
     };
+
+    return await pollStatus();
+
   } catch (error) {
     console.error("Error calculating scenario:", error);
     return { success: false, error: error.response?.data?.detail || error.message };
@@ -206,3 +299,93 @@ export const deleteScenario = async (scenarioId) => {
     return { success: false, error: error.response?.data?.detail || error.message };
   }
 };
+
+// ==================== AUTH API ====================
+
+export const signUp = async (name, email, password, occupation) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/register`, {
+      name,
+      email,
+      password,
+      occupation
+    });
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error("Error signing up:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+export const login = async (email, password) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+      email,
+      password
+    });
+
+    const { accessToken, refreshToken, user } = response.data;
+
+    // Store tokens
+    localStorage.setItem("access_token", accessToken);
+    localStorage.setItem("refresh_token", refreshToken);
+    localStorage.setItem("safapac-authenticated", "true");
+    localStorage.setItem("safapac-user", JSON.stringify(user));
+
+    return {
+      success: true,
+      data: { user, accessToken, refreshToken }
+    };
+  } catch (error) {
+    console.error("Error logging in:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+export const verifyEmail = async (token) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/verify-email`, {
+      token
+    });
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error("Error verifying email:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+export const resendVerificationEmail = async (email) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/resend-verification`, {
+      email
+    });
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error("Error resending verification email:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+// Export the configured apiClient for use in other components
+export { apiClient, API_BASE_URL };

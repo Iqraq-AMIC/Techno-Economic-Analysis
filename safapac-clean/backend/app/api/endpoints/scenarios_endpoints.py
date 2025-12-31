@@ -2,24 +2,31 @@
 
 import logging
 import math
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from uuid import UUID
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import get_async_db, get_db, AsyncSessionLocal
+from app.crud.async_biofuel_crud import AsyncBiofuelCRUD
 from app.crud.biofuel_crud import BiofuelCRUD
 from app.core.security import get_current_active_user
-from app.services.economics import BiofuelEconomics 
+from app.services.economics import BiofuelEconomics
+from app.traceable import TraceableIntegration
+from app.services.unit_normalizer import UnitNormalizer
 from app.schemas.scenario_schema import (
     ScenarioCreate, ScenarioResponse, ScenarioDetailResponse, ScenarioUpdate,
-    UserInputsSchema, CalculationResponse
+    UserInputsSchema, CalculationResponse, DraftSaveRequest, DraftSaveResponse,
+    CalculationStatusResponse
 )
 from app.schemas.base import CamelCaseBaseModel
-from app.models.user_project import User 
+from app.models.user_project import User
 from app.models.calculation_data import (
-    Quantity, ProductData, FeedstockData, UtilityData, 
+    Quantity, ProductData, FeedstockData, UtilityData,
     EconomicParameters, ConversionPlant, UserInputs
 )
 
@@ -27,25 +34,60 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Thread pool for CPU-intensive calculations
+calculation_executor = ThreadPoolExecutor(max_workers=4)
+
+# Create limiter instance for rate limiting
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
+
 # --- Dependency Injection ---
-def get_biofuel_crud(db: Session = Depends(get_db)) -> BiofuelCRUD:
+async def get_biofuel_crud(db: AsyncSession = Depends(get_async_db)) -> AsyncBiofuelCRUD:
+    return AsyncBiofuelCRUD(db)
+
+def get_sync_biofuel_crud(db: Session = Depends(get_db)) -> BiofuelCRUD:
+    """Sync CRUD for calculation operations that need sync DB access."""
     return BiofuelCRUD(db)
 
 # --- Helper Functions ---
 def sanitize_for_json(obj):
-    """Recursively replace NaN and Infinity with 0.0 for valid JSON serialization."""
-    if isinstance(obj, float):
+    """Recursively sanitize objects for valid JSON serialization.
+
+    Handles:
+    - NaN and Infinity floats -> 0.0
+    - numpy types -> native Python types
+    - nested dicts and lists
+    """
+    import numpy as np
+
+    # Handle numpy types first
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        val = float(obj)
+        if math.isnan(val) or math.isinf(val):
+            return 0.0
+        return val
+    elif isinstance(obj, np.ndarray):
+        return sanitize_for_json(obj.tolist())
+    # Handle native Python types
+    elif isinstance(obj, float):
         if math.isnan(obj) or math.isinf(obj):
-            return 0.0 
+            return 0.0
+        return obj
     elif isinstance(obj, dict):
         return {k: sanitize_for_json(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [sanitize_for_json(i) for i in obj]
     return obj
 
-def run_calculation_internal(db_scenario, crud: BiofuelCRUD):
+def run_calculation_sync(db_scenario, sync_crud: BiofuelCRUD):
     """
-    Helper to run calculation on a scenario object and save results.
+    Synchronous helper to run calculation on a scenario object.
+    This runs in a thread pool to avoid blocking the event loop.
     """
     user_inputs_data = db_scenario.user_inputs
 
@@ -73,7 +115,7 @@ def run_calculation_internal(db_scenario, crud: BiofuelCRUD):
     utility_data = [UtilityData.from_schema(**d) for d in user_inputs_data["utility_data"]]
     product_data = [ProductData.from_schema(**d) for d in user_inputs_data["product_data"]]
 
-    # CHANGED: Create UserInputs using IDs from the DB Scenario relationship
+    # Create UserInputs using IDs from the DB Scenario relationship
     user_inputs = UserInputs(
         process_id=db_scenario.process_id,
         feedstock_id=db_scenario.feedstock_id,
@@ -85,18 +127,72 @@ def run_calculation_internal(db_scenario, crud: BiofuelCRUD):
         product_data=product_data
     )
 
-    # Run Calculation
-    economics = BiofuelEconomics(user_inputs, crud)
-    
-    # CHANGED: Pass IDs to run()
+    # Normalize units to base units before calculation
+    normalizer = UnitNormalizer(sync_crud)
+    normalized_inputs = normalizer.normalize_user_inputs(user_inputs)
+
+    # Run Calculation with traceability
+    economics = TraceableIntegration(normalized_inputs, sync_crud)
+
+    # Pass IDs to run()
     results = economics.run(
         process_id=db_scenario.process_id,
         feedstock_id=db_scenario.feedstock_id,
         country_id=db_scenario.country_id
     )
 
-    clean_results = sanitize_for_json(results)
-    return crud.run_scenario_calculation(db_scenario.id, clean_results)
+    return sanitize_for_json(results)
+
+
+async def run_calculation_background(scenario_id: UUID, user_inputs_dict: dict):
+    """
+    Background task that runs the calculation and saves results.
+    Uses its own database session since it runs after the request completes.
+    """
+    from app.core.database import SessionLocal  # Sync session for calculation
+
+    async with AsyncSessionLocal() as async_db:
+        try:
+            # Get scenario with fresh async session
+            async_crud = AsyncBiofuelCRUD(async_db)
+            db_scenario = await async_crud.get_scenario_by_id(scenario_id)
+
+            if not db_scenario:
+                logger.error(f"Background calc: Scenario {scenario_id} not found")
+                return
+
+            # Run calculation in thread pool (CPU-intensive work)
+            with SessionLocal() as sync_db:
+                sync_crud = BiofuelCRUD(sync_db)
+                loop = asyncio.get_event_loop()
+                clean_results = await loop.run_in_executor(
+                    calculation_executor,
+                    run_calculation_sync,
+                    db_scenario,
+                    sync_crud
+                )
+
+            if clean_results:
+                # Save results and update status to "calculated"
+                await async_crud.update_scenario(scenario_id, {
+                    "techno_economics": clean_results.get('techno_economics', {}),
+                    "financial_analysis": clean_results.get('financials', {}),
+                    "status": "calculated"
+                })
+                logger.info(f"Background calc completed for scenario {scenario_id}")
+            else:
+                # Mark as failed
+                await async_crud.update_scenario(scenario_id, {"status": "failed"})
+                logger.error(f"Background calc failed for scenario {scenario_id}: No results")
+
+        except Exception as e:
+            logger.error(f"Background calc error for scenario {scenario_id}: {e}", exc_info=True)
+            # Try to mark as failed
+            try:
+                async_crud = AsyncBiofuelCRUD(async_db)
+                await async_crud.update_scenario(scenario_id, {"status": "failed"})
+            except Exception:
+                pass
 
 # ==================== SCENARIO CRUD ENDPOINTS ====================
 
@@ -106,18 +202,18 @@ class ScenarioCreateSimple(CamelCaseBaseModel):
     scenario_order: Optional[int] = None
 
 @router.post("", response_model=ScenarioResponse, status_code=status.HTTP_201_CREATED)
-def create_scenario(
+async def create_scenario(
     project_id: UUID,
     scenario_in: ScenarioCreateSimple = None,
     current_user: User = Depends(get_current_active_user),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """
     Create a new scenario for a project.
     Uses placeholder master data (like project creation does).
     """
     # Verify project access
-    db_project = crud.get_project_by_id(project_id)
+    db_project = await crud.get_project_by_id(project_id)
     if not db_project or db_project.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -126,14 +222,14 @@ def create_scenario(
     scenario_order = scenario_in.scenario_order if scenario_in else None
 
     # Check scenario limit (max 3)
-    existing_scenarios = crud.get_scenarios_by_project(project_id)
+    existing_scenarios = await crud.get_scenarios_by_project(project_id)
     if len(existing_scenarios) >= 3:
         raise HTTPException(status_code=400, detail="Maximum 3 scenarios per project")
 
     # Get placeholder IDs for required fields
-    processes = crud.get_process_technologies()
-    feedstocks = crud.get_feedstocks()
-    countries = crud.get_countries()
+    processes = await crud.get_process_technologies()
+    feedstocks = await crud.get_feedstocks()
+    countries = await crud.get_countries()
 
     if not (processes and feedstocks and countries):
         raise HTTPException(
@@ -158,32 +254,35 @@ def create_scenario(
         "scenario_order": scenario_order
     }
 
-    db_scenario = crud.create_scenario(scenario_data)
-    logger.info(f"✅ Scenario '{scenario_name}' created for project {project_id}")
+    db_scenario = await crud.create_scenario(scenario_data)
+    logger.info(f"Scenario '{scenario_name}' created for project {project_id}")
 
-    return db_scenario
+    # Fetch the scenario again with relationships loaded for the response
+    db_scenario_with_relations = await crud.get_scenario_by_id(db_scenario.id)
+
+    return db_scenario_with_relations
 
 @router.get("", response_model=List[ScenarioDetailResponse])
-def get_project_scenarios(
+async def get_project_scenarios(
     project_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Get all scenarios for a project (includes inputs and calculation results)."""
-    db_project = crud.get_project_by_id(project_id)
+    db_project = await crud.get_project_by_id(project_id)
     if not db_project or db_project.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return crud.get_scenarios_by_project(project_id)
+    return await crud.get_scenarios_by_project(project_id)
 
 @router.get("/{scenario_id}", response_model=ScenarioDetailResponse)
-def get_scenario(
+async def get_scenario(
     scenario_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Get a specific scenario with full details (inputs + results)."""
-    db_scenario = crud.get_scenario_by_id(scenario_id)
+    db_scenario = await crud.get_scenario_by_id(scenario_id)
 
     if not db_scenario or db_scenario.project.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Scenario not found")
@@ -191,77 +290,265 @@ def get_scenario(
     return db_scenario
 
 @router.put("/{scenario_id}", response_model=ScenarioResponse)
-def update_scenario(
+async def update_scenario(
     scenario_id: UUID,
     scenario_update: ScenarioUpdate,
     current_user: User = Depends(get_current_active_user),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """
     Update scenario metadata (e.g., rename scenario).
     Use the /calculate endpoint to update inputs and run math.
     """
-    db_scenario = crud.get_scenario_by_id(scenario_id)
+    db_scenario = await crud.get_scenario_by_id(scenario_id)
     if not db_scenario or db_scenario.project.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
     # Exclude unset fields so we don't accidentally overwrite data with None
-    update_data = scenario_update.dict(exclude_unset=True)
+    update_data = scenario_update.model_dump(exclude_unset=True)
 
-    updated_scenario = crud.update_scenario(scenario_id, update_data)
+    updated_scenario = await crud.update_scenario(scenario_id, update_data)
     return updated_scenario
 
 @router.delete("/{scenario_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_scenario(
+async def delete_scenario(
     scenario_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """Delete a scenario."""
-    db_scenario = crud.get_scenario_by_id(scenario_id)
+    db_scenario = await crud.get_scenario_by_id(scenario_id)
     if not db_scenario or db_scenario.project.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
-    success = crud.delete_scenario(scenario_id)
+    success = await crud.delete_scenario(scenario_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete scenario")
 
-# ==================== CALCULATION ENDPOINT ====================
+# ==================== DRAFT SAVING ENDPOINT ====================
 
-@router.post("/{scenario_id}/calculate", response_model=CalculationResponse)
-def calculate_scenario(
+@router.patch("/{scenario_id}/draft", response_model=DraftSaveResponse)
+async def save_draft(
     scenario_id: UUID,
-    inputs_in: UserInputsSchema,
+    draft_data: DraftSaveRequest,
     current_user: User = Depends(get_current_active_user),
-    crud: BiofuelCRUD = Depends(get_biofuel_crud)
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud)
 ):
     """
-    1. Receives full User Inputs (JSON).
-    2. Updates DB with new inputs.
-    3. Runs Calculation.
-    4. Saves Results.
-    5. Returns Results.
+    Save partial/incomplete scenario data as a draft.
+
+    This endpoint:
+    - Accepts partial data (all fields optional)
+    - Bypasses strict validation
+    - Does NOT run the calculation engine
+    - Simply merges the provided data with existing user_inputs
+    - Sets scenario status to "draft"
     """
-    # 1. Verify access
-    db_scenario = crud.get_scenario_by_id(scenario_id)
+    # Verify access
+    db_scenario = await crud.get_scenario_by_id(scenario_id)
     if not db_scenario or db_scenario.project.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
     try:
-        # 2. Update DB Columns directly using IDs (No more name lookup needed!)
-        crud.update_scenario(scenario_id, {
+        # Get existing user_inputs or start with empty dict
+        existing_inputs = db_scenario.user_inputs or {}
+
+        # Merge new draft data with existing inputs (preserve existing data)
+        draft_dict = draft_data.model_dump(exclude_unset=True)
+
+        # Merge at top level
+        for key, value in draft_dict.items():
+            if value is not None:
+                existing_inputs[key] = value
+
+        # Update scenario with merged inputs and draft status
+        update_data = {
+            "user_inputs": existing_inputs,
+            "status": "draft"
+        }
+
+        # Update relational columns if provided
+        if draft_data.process_id is not None:
+            update_data["process_id"] = draft_data.process_id
+        if draft_data.feedstock_id is not None:
+            update_data["feedstock_id"] = draft_data.feedstock_id
+        if draft_data.country_id is not None:
+            update_data["country_id"] = draft_data.country_id
+
+        updated_scenario = await crud.update_scenario(scenario_id, update_data)
+
+        logger.info(f"Draft saved for scenario {scenario_id}")
+
+        return DraftSaveResponse(
+            id=updated_scenario.id,
+            status=updated_scenario.status,
+            message="Draft saved successfully",
+            user_inputs=updated_scenario.user_inputs
+        )
+
+    except Exception as e:
+        logger.error(f"Draft save error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Failed to save draft: {str(e)}")
+
+# ==================== CALCULATION ENDPOINTS ====================
+
+@router.post("/{scenario_id}/calculate", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("10/minute")
+async def calculate_scenario_async(
+    scenario_id: UUID,
+    request: Request,
+    inputs_in: UserInputsSchema,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud)
+):
+    """
+    Async calculation endpoint that returns immediately (202 Accepted).
+    Rate limit: 10 calculations per minute per IP.
+
+    1. Receives full User Inputs (JSON).
+    2. Updates DB with new inputs and sets status to "calculating".
+    3. Queues calculation as a background task.
+    4. Returns immediately with status info.
+    5. Frontend polls GET /{scenario_id}/calculate/status for results.
+    """
+    # 1. Verify access
+    db_scenario = await crud.get_scenario_by_id(scenario_id)
+    if not db_scenario or db_scenario.project.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    try:
+        # 2. Update DB with inputs and set status to "calculating"
+        await crud.update_scenario(scenario_id, {
             "process_id": inputs_in.process_id,
             "feedstock_id": inputs_in.feedstock_id,
             "country_id": inputs_in.country_id,
-            "user_inputs": inputs_in.dict() # 3. Update JSON Blob
+            "user_inputs": inputs_in.model_dump(),
+            "status": "calculating"
         })
 
-        # 4. Refresh & Calculate
-        db_scenario = crud.get_scenario_by_id(scenario_id)
-        updated_scenario = run_calculation_internal(db_scenario, crud)
+        # 3. Queue background calculation
+        background_tasks.add_task(
+            run_calculation_background,
+            scenario_id,
+            inputs_in.model_dump()
+        )
+
+        logger.info(f"Calculation queued for scenario {scenario_id}")
+
+        return {
+            "status": "calculating",
+            "scenarioId": str(scenario_id),
+            "message": "Calculation started. Poll /calculate/status for results."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Calculation queue error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{scenario_id}/calculate/status", response_model=CalculationStatusResponse)
+async def get_calculation_status(
+    scenario_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud)
+):
+    """
+    Poll this endpoint to check calculation status and get results when ready.
+
+    Status values:
+    - "calculating": Calculation in progress
+    - "calculated": Calculation complete, results included
+    - "failed": Calculation failed
+    - "draft": No calculation started yet
+    """
+    db_scenario = await crud.get_scenario_by_id(scenario_id)
+    if not db_scenario or db_scenario.project.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    response = CalculationStatusResponse(
+        scenario_id=scenario_id,
+        status=db_scenario.status
+    )
+
+    if db_scenario.status == "calculated":
+        response.techno_economics = db_scenario.techno_economics
+        response.financials = db_scenario.financial_analysis
+        response.resolved_inputs = db_scenario.user_inputs
+        response.message = "Calculation complete"
+    elif db_scenario.status == "calculating":
+        response.message = "Calculation in progress"
+    elif db_scenario.status == "failed":
+        response.message = "Calculation failed. Please try again."
+    else:
+        response.message = "No calculation started"
+
+    return response
+
+
+@router.post("/{scenario_id}/calculate/sync", response_model=CalculationResponse)
+@limiter.limit("10/minute")
+async def calculate_scenario_sync(
+    scenario_id: UUID,
+    request: Request,
+    inputs_in: UserInputsSchema,
+    current_user: User = Depends(get_current_active_user),
+    crud: AsyncBiofuelCRUD = Depends(get_biofuel_crud),
+    sync_crud: BiofuelCRUD = Depends(get_sync_biofuel_crud)
+):
+    """
+    Synchronous calculation endpoint (waits for completion).
+    Rate limit: 10 calculations per minute per IP.
+    Use this for immediate results when you don't need async behavior.
+
+    1. Receives full User Inputs (JSON).
+    2. Updates DB with new inputs.
+    3. Runs Calculation (in thread pool to avoid blocking).
+    4. Saves Results.
+    5. Returns Results.
+    """
+    # 1. Verify access
+    db_scenario = await crud.get_scenario_by_id(scenario_id)
+    if not db_scenario or db_scenario.project.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    try:
+        # 2. Update DB Columns directly using IDs
+        await crud.update_scenario(scenario_id, {
+            "process_id": inputs_in.process_id,
+            "feedstock_id": inputs_in.feedstock_id,
+            "country_id": inputs_in.country_id,
+            "user_inputs": inputs_in.model_dump(),
+            "status": "calculating"
+        })
+
+        # 3. Refresh scenario data
+        db_scenario = await crud.get_scenario_by_id(scenario_id)
+
+        # 4. Run calculation in thread pool to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        clean_results = await loop.run_in_executor(
+            calculation_executor,
+            run_calculation_sync,
+            db_scenario,
+            sync_crud
+        )
+
+        if not clean_results:
+            await crud.update_scenario(scenario_id, {"status": "failed"})
+            raise HTTPException(status_code=500, detail="Calculation execution failed")
+
+        # 5. Save results to database
+        updated_scenario = await crud.run_scenario_calculation(scenario_id, clean_results)
 
         if not updated_scenario:
-            raise HTTPException(status_code=500, detail="Calculation execution failed")
+            await crud.update_scenario(scenario_id, {"status": "failed"})
+            raise HTTPException(status_code=500, detail="Failed to save calculation results")
+
+        # Update status to calculated
+        await crud.update_scenario(scenario_id, {"status": "calculated"})
 
         return CalculationResponse(
             techno_economics=updated_scenario.techno_economics,
@@ -273,4 +560,5 @@ def calculate_scenario(
         raise
     except Exception as e:
         logger.error(f"Calculation error: {e}", exc_info=True)
+        await crud.update_scenario(scenario_id, {"status": "failed"})
         raise HTTPException(status_code=400, detail=str(e))

@@ -1,6 +1,6 @@
 # app/models/user_project.py
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.schema import UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -20,7 +20,13 @@ class User(Base):
     password_hash = Column(String, nullable=False, default='placeholder')
     access_level = Column(String, nullable=False)
     occupation = Column(String, nullable=True)  # student/researcher
+    refresh_token = Column(String, nullable=True)  # Store current refresh token
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Email verification fields
+    email_verified = Column(Boolean, nullable=False, default=False)
+    verification_token = Column(String, nullable=True)
+    verification_token_expires = Column(DateTime, nullable=True)
 
     # Relationships
     projects = relationship("UserProject", back_populates="user")
@@ -57,11 +63,12 @@ class Scenario(Base):
     __tablename__ = "scenarios"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(UUID(as_uuid=True), ForeignKey("user_projects.id"), nullable=False)
-    
+
     # Scenario metadata
     scenario_name = Column(String, nullable=False)
     scenario_order = Column(Integer, nullable=False, default=0)
-    
+    status = Column(String, nullable=False, default="draft")  # "draft" or "calculated"
+
     # Core selections (Foreign Keys point to tables defined in master_data.py)
     process_id = Column(Integer, ForeignKey("process_technologies.id"), nullable=False)
     feedstock_id = Column(Integer, ForeignKey("feedstock.id"), nullable=False)
