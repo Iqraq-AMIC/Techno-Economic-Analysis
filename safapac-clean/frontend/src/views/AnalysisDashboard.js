@@ -1301,7 +1301,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           }}
         >
           {/* Toggle Button - always visible */}
-          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "36px", height: "36px" }}>
+          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "30px", height: "30px" }}>
             <button
               onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
               style={{
