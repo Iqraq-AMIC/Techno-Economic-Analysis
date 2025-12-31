@@ -406,7 +406,7 @@ const BiofuelForm = ({
       size={size}
       value={inputs[unitKey]}
       onChange={(e) => handleInputChange(unitKey)(e)}
-      style={{ fontSize: "0.7rem", minWidth: 120 }}
+      style={{ fontSize: "0.7rem", minWidth: "100%", maxWidth: "100%" }}
     >
       {(options || []).map((option) => (
         <option key={option.value} value={option.value}>
@@ -489,7 +489,7 @@ const BiofuelForm = ({
     return (
       <FormGroup className="mb-1">
         <Row form className="align-items-center">
-          <Col xs={hasUnit ? "4" : "7"}>
+          <Col xs="12" sm={hasUnit ? "12" : "7" } md={hasUnit ? "4" : "6"} lg={hasUnit ? "4" : "7"}>
             <label
               htmlFor={id}
               className="mb-0"
@@ -498,7 +498,7 @@ const BiofuelForm = ({
               {label}
             </label>
           </Col>
-          <Col xs={hasUnit ? "4" : "5"}>
+          <Col xs="12" sm={hasUnit ? "6" : "5"} md={hasUnit ? "4" : "6"} lg={hasUnit ? "4" : "5"}>
             <EditableNumberInput
               id={id}
               value={startValue}
@@ -510,7 +510,7 @@ const BiofuelForm = ({
             />
           </Col>
           {hasUnit && (
-            <Col xs="4">
+            <Col xs="12" sm="6" md="4" lg="4">
               {renderUnitSelect(unitKey, unitOptions)}
             </Col>
           )}
@@ -602,7 +602,7 @@ const BiofuelForm = ({
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price</label>
               <Row form className="align-items-center mb-1">
-                <Col xs="6">
+                <Col xs="12" sm="6" md="5" lg="6">
                   <EditableNumberInput
                     value={product.price}
                     decimals={2}
@@ -611,14 +611,14 @@ const BiofuelForm = ({
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
-                <Col xs="6">
+                <Col xs="12" sm="6" md="7" lg="6">
                   <FormSelect
                     size="sm"
                     value={product.priceUnit}
                     onChange={(e) =>
                       handleProductInputChange(index, "priceUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem", minWidth: 120 }}
+                    style={{ fontSize: "0.7rem", minWidth: "100%", maxWidth: "100%" }}
                   >
                     {PRODUCT_UNIT_OPTIONS.priceUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -677,11 +677,11 @@ const BiofuelForm = ({
             </FormGroup>
           </Col> */}
 
-          <Col sm="6" className="mb-2">
+          <Col xs="12" sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Price Sensitivity</label>
               <Row form>
-                <Col xs="6">
+                <Col xs="12" sm="6" md="5" lg="6">
                   <EditableNumberInput
                     value={product.priceSensitivity}
                     decimals={3}
@@ -690,14 +690,14 @@ const BiofuelForm = ({
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
-                <Col xs="6">
+                <Col xs="12" sm="6" md="7" lg="6">
                   <FormSelect
                     size="sm"
                     value={product.priceSensitivityUnit}
                     onChange={(e) =>
                       handleProductInputChange(index, "priceSensitivityUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem", minWidth: 90 }}
+                    style={{ fontSize: "0.7rem", minWidth: "100%", maxWidth: "100%" }}
                   >
                     {PRODUCT_UNIT_OPTIONS.priceSensitivityUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -709,7 +709,7 @@ const BiofuelForm = ({
               </Row>
             </FormGroup>
           </Col>
-          <Col sm="6" className="mb-2">
+          <Col xs="12" sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Carbon Content (fraction)</label>
               <EditableNumberInput
@@ -722,7 +722,7 @@ const BiofuelForm = ({
             </FormGroup>
           </Col>
 
-          <Col sm="6" className="mb-2">
+          <Col xs="12" sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Product Density (kg/m3)</label>
               <EditableNumberInput
@@ -736,11 +736,11 @@ const BiofuelForm = ({
           </Col>
 
           {/* Energy Content with direct input */}
-          <Col sm="6" className="mb-2">
+          <Col xs="12" sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Energy Content</label>
               <Row form>
-                <Col xs="6">
+                <Col xs="12" sm="6" md="5" lg="6">
                   <EditableNumberInput
                     value={product.energyContent}
                     decimals={2}
@@ -749,14 +749,14 @@ const BiofuelForm = ({
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
-                <Col xs="6">
+                <Col xs="12" sm="6" md="7" lg="6">
                   <FormSelect
                     size="sm"
                     value={product.energyUnit}
                     onChange={(e) =>
                       handleProductInputChange(index, "energyUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem", minWidth: 90 }}
+                    style={{ fontSize: "0.7rem", minWidth: "100%", maxWidth: "100%" }}
                   >
                     {PRODUCT_UNIT_OPTIONS.energyUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -770,11 +770,11 @@ const BiofuelForm = ({
           </Col>
 
           {/* Yield with direct input */}
-          <Col sm="6" className="mb-2">
+          <Col xs="12" sm="6" className="mb-2">
             <FormGroup className="mb-1">
               <label style={{ fontSize: "0.7rem", fontWeight: 600 }}>Yield</label>
               <Row form>
-                <Col xs="6">
+                <Col xs="12" sm="6" md="5" lg="6">
                   <EditableNumberInput
                     value={product.yield}
                     decimals={3}
@@ -783,14 +783,14 @@ const BiofuelForm = ({
                     style={{ fontSize: "0.75rem" }}
                   />
                 </Col>
-                <Col xs="6">
+                <Col xs="12" sm="6" md="7" lg="6">
                   <FormSelect
                     size="sm"
                     value={product.yieldUnit}
                     onChange={(e) =>
                       handleProductInputChange(index, "yieldUnit")(e.target.value)
                     }
-                    style={{ fontSize: "0.7rem", minWidth: 120 }}
+                    style={{ fontSize: "0.7rem", minWidth: "100%", maxWidth: "100%" }}
                   >
                     {PRODUCT_UNIT_OPTIONS.yieldUnit.map((opt) => (
                       <option key={opt.value} value={opt.value}>
