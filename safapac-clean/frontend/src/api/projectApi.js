@@ -300,5 +300,92 @@ export const deleteScenario = async (scenarioId) => {
   }
 };
 
+// ==================== AUTH API ====================
+
+export const signUp = async (name, email, password, occupation) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/register`, {
+      name,
+      email,
+      password,
+      occupation
+    });
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error("Error signing up:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+export const login = async (email, password) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+      email,
+      password
+    });
+
+    const { accessToken, refreshToken, user } = response.data;
+
+    // Store tokens
+    localStorage.setItem("access_token", accessToken);
+    localStorage.setItem("refresh_token", refreshToken);
+    localStorage.setItem("safapac-authenticated", "true");
+    localStorage.setItem("safapac-user", JSON.stringify(user));
+
+    return {
+      success: true,
+      data: { user, accessToken, refreshToken }
+    };
+  } catch (error) {
+    console.error("Error logging in:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+export const verifyEmail = async (token) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/verify-email`, {
+      token
+    });
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error("Error verifying email:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message
+    };
+  }
+};
+
+export const resendVerificationEmail = async (email) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/resend-verification`, {
+      email
+    });
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    console.error("Error resending verification email:", error);
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message
+    };
+  }
+};
+
 // Export the configured apiClient for use in other components
 export { apiClient, API_BASE_URL };

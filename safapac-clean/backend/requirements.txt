@@ -30,3 +30,4 @@ pydantic[email]
 asyncpg
 greenlet
 slowapi
+aiosmtplib

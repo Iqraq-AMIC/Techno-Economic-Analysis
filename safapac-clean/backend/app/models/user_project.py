@@ -1,6 +1,6 @@
 # app/models/user_project.py
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.schema import UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -22,6 +22,11 @@ class User(Base):
     occupation = Column(String, nullable=True)  # student/researcher
     refresh_token = Column(String, nullable=True)  # Store current refresh token
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Email verification fields
+    email_verified = Column(Boolean, nullable=False, default=False)
+    verification_token = Column(String, nullable=True)
+    verification_token_expires = Column(DateTime, nullable=True)
 
     # Relationships
     projects = relationship("UserProject", back_populates="user")
