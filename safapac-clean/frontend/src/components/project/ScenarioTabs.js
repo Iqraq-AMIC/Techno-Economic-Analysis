@@ -5,9 +5,28 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { Button, Badge } from "shards-react";
+import { Button, Modal, ModalBody, ModalHeader, ModalFooter } from "shards-react";
 import { useProject } from "../../contexts/ProjectContext";
 import { useTheme } from "../../contexts/ThemeContext";
+
+// Add CSS for spinning animation
+const spinKeyframes = `
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+`;
+
+// Inject the keyframes into the document
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = spinKeyframes;
+  document.head.appendChild(styleSheet);
+}
 
 const EditableScenarioName = ({ scenario, isActive, onRename }) => {
   const { colors } = useTheme();
@@ -143,6 +162,66 @@ const EditableScenarioName = ({ scenario, isActive, onRename }) => {
   );
 };
 
+const DeleteScenarioModal = ({ isOpen, onClose, onConfirm, scenarioName, deleting }) => {
+  const { colors } = useTheme();
+
+  return (
+    <Modal open={isOpen} centered toggle={onClose} size="sm">
+      <ModalHeader style={{ backgroundColor: "#c4183c", color: "white", borderBottom: "none" }}>
+        <i className="material-icons" style={{ verticalAlign: "middle", marginRight: "0.5rem" }}>
+          warning
+        </i>
+        Delete Scenario
+      </ModalHeader>
+      <ModalBody>
+        <div style={{ padding: "0.5rem 0" }}>
+          <p style={{ marginBottom: "1rem", color: colors.text }}>
+            Are you sure you want to delete <strong>"{scenarioName}"</strong>?
+          </p>
+          <p style={{ color: "#c4183c", fontSize: "0.9rem", marginBottom: 0 }}>
+            <i className="material-icons" style={{ fontSize: "1rem", verticalAlign: "middle", marginRight: "0.3rem" }}>
+              error_outline
+            </i>
+            This action cannot be undone.
+          </p>
+        </div>
+      </ModalBody>
+      <ModalFooter style={{ borderTop: `1px solid ${colors.border}`, padding: "0.75rem 1rem" }}>
+        <Button
+          theme="light"
+          onClick={onClose}
+          disabled={deleting}
+          style={{ marginRight: "0.5rem" }}
+        >
+          Cancel
+        </Button>
+        <Button
+          theme="danger"
+          onClick={onConfirm}
+          disabled={deleting}
+          style={{ backgroundColor: "#c4183c", borderColor: "#c4183c" }}
+        >
+          {deleting ? (
+            <>
+              <i className="material-icons" style={{ fontSize: "1rem", verticalAlign: "middle", marginRight: "0.3rem", animation: "spin 1s linear infinite" }}>
+                refresh
+              </i>
+              Deleting...
+            </>
+          ) : (
+            <>
+              <i className="material-icons" style={{ fontSize: "1rem", verticalAlign: "middle", marginRight: "0.3rem" }}>
+                delete
+              </i>
+              Delete Scenario
+            </>
+          )}
+        </Button>
+      </ModalFooter>
+    </Modal>
+  );
+};
+
 const ScenarioTabs = () => {
   const { colors } = useTheme();
   const {
@@ -158,6 +237,9 @@ const ScenarioTabs = () => {
     toggleComparisonScenario,
     clearComparison,
   } = useProject();
+
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, scenarioId: null, scenarioName: "" });
+  const [deleting, setDeleting] = useState(false);
 
   console.log("🎯 ScenarioTabs rendering - currentProject:", currentProject);
   console.log("🎯 ScenarioTabs - scenarios:", scenarios);
@@ -195,7 +277,7 @@ const ScenarioTabs = () => {
     toggleComparisonScenario(scenarioId);
   };
 
-  const handleDeleteScenario = async (e, scenarioId) => {
+  const handleDeleteScenario = (e, scenarioId, scenarioName) => {
     e.stopPropagation();
 
     // Allow deleting any scenario as long as there are multiple scenarios
@@ -204,10 +286,27 @@ const ScenarioTabs = () => {
       return;
     }
 
-    const confirmDelete = window.confirm(`Are you sure you want to delete this scenario? This action cannot be undone.`);
-    if (!confirmDelete) return;
+    setDeleteModal({
+      isOpen: true,
+      scenarioId,
+      scenarioName,
+    });
+  };
 
-    await deleteScenario(scenarioId);
+  const confirmDeleteScenario = async () => {
+    setDeleting(true);
+    const result = await deleteScenario(deleteModal.scenarioId);
+    setDeleting(false);
+
+    if (result.success) {
+      setDeleteModal({ isOpen: false, scenarioId: null, scenarioName: "" });
+    }
+  };
+
+  const closeDeleteModal = () => {
+    if (!deleting) {
+      setDeleteModal({ isOpen: false, scenarioId: null, scenarioName: "" });
+    }
   };
 
   // Safety check - if no scenarios, show loading state
@@ -316,7 +415,7 @@ const ScenarioTabs = () => {
                 {canDelete && (
                   <i
                     className="material-icons"
-                    onClick={(e) => handleDeleteScenario(e, scenario.scenario_id)}
+                    onClick={(e) => handleDeleteScenario(e, scenario.scenario_id, scenario.scenario_name)}
                     style={{
                       fontSize: "0.85rem",
                       cursor: "pointer",
@@ -379,6 +478,15 @@ const ScenarioTabs = () => {
           Maximum scenarios reached (3/3)
         </small>
       )}
+
+      {/* Delete Scenario Confirmation Modal */}
+      <DeleteScenarioModal
+        isOpen={deleteModal.isOpen}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteScenario}
+        scenarioName={deleteModal.scenarioName}
+        deleting={deleting}
+      />
     </div>
   );
 };
