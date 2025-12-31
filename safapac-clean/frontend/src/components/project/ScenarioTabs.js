@@ -257,7 +257,7 @@ const ScenarioTabs = () => {
               style={{
                 position: "relative",
                 padding: "0.5rem 0.75rem",
-                flex: 1,
+                width: "calc(33.333% - 2px)",
                 cursor: loading ? "not-allowed" : "pointer",
                 backgroundColor: isActive ? "#006D7C" : colors.cardBackground,
                 color: isActive ? "white" : colors.text,
@@ -333,36 +333,32 @@ const ScenarioTabs = () => {
           );
         })}
 
-        {/* Add Scenario Tab Button - fills empty space */}
+        {/* Add Scenario Tab Button */}
         {canAddScenario && (
           <div
             onClick={handleAddScenario}
             style={{
-              padding: "0.5rem 0.75rem",
-              flex: scenarios.length === 1 ? 2 : 1,
+              width: "32px",
+              height: "32px",
               cursor: "pointer",
-              backgroundColor: colors.cardBackground,
               color: colors.text,
-              border: `1px solid ${colors.border}`,
-              borderBottom: `1px solid ${colors.border}`,
-              borderTopLeftRadius: "8px",
-              borderTopRightRadius: "8px",
-              fontSize: "0.85rem",
+              fontSize: "1.2rem",
               transition: "all 0.2s ease",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               marginBottom: "2px",
+              opacity: 0.7,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = colors.hoverBackground;
+              e.currentTarget.style.opacity = "1";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = colors.cardBackground;
+              e.currentTarget.style.opacity = "0.7";
             }}
             title="Add new scenario"
           >
-            <i className="material-icons" style={{ fontSize: "1rem" }}>
+            <i className="material-icons" style={{ fontSize: "1.2rem" }}>
               add
             </i>
           </div>
