@@ -10,8 +10,6 @@ import {
 import { signUp } from "../api/projectApi";
 
 const SignUp = ({ history }) => {
-  const { signup } = useAuth();
-
   // Force light mode on signup page
   useEffect(() => {
     const originalTheme = document.documentElement.getAttribute('data-theme');
