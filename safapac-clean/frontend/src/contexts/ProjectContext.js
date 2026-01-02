@@ -154,7 +154,12 @@ export const ProjectProvider = ({ children }) => {
 
     setLoading(true);
     try {
-      const newOrder = scenarios.length + 1;
+      // Find the next available order number (1, 2, or 3)
+      const existingOrders = scenarios.map(s => s.scenario_order || 0);
+      let newOrder = 1;
+      while (existingOrders.includes(newOrder) && newOrder <= 3) {
+        newOrder++;
+      }
       const scenarioName = `Scenario ${newOrder}`;
 
       const result = await apiCreateScenario(

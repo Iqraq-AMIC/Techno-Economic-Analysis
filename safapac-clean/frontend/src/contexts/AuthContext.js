@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { registerUser } from "../api/authApi";
 
 const AuthContext = createContext();
 
@@ -189,8 +190,31 @@ export const AuthProvider = ({ children }) => {
     refreshTokenOnMount();
   }, [handleLogout]);
 
-  // ... (Keep signup/forgotPassword mocks or implement similarly if needed) ...
-  const signup = async () => ({ success: true });
+  // Signup function using authApi
+  const signup = async (userData) => {
+    try {
+      console.log("🚀 Sending Signup Request");
+
+      // 1. Call the registration API
+      const response = await registerUser(userData);
+
+      // 2. User is created but NOT logged in yet
+      // They should go to login page to sign in
+      return {
+        success: true,
+        message: "Registration successful! Please sign in.",
+        user: response.user
+      };
+
+    } catch (error) {
+      console.error("❌ Signup Error:", error);
+      return {
+        success: false,
+        message: error.message || "Registration failed. Please try again."
+      };
+    }
+  };
+
   const forgotPassword = async () => ({ success: true });
   const resetPassword = async () => ({ success: true });
 

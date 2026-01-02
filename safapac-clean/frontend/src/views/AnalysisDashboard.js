@@ -20,6 +20,192 @@ import ProjectStartupModal from "../components/project/ProjectStartupModal";
 import { calculateScenario } from "../api/projectApi";
 import { convertUnit, UNIT_TO_VALUE_FIELD, FIELD_TO_CONVERSION_TYPE, PRODUCT_UNIT_TO_VALUE_FIELD, PRODUCT_FIELD_TO_CONVERSION_TYPE } from "../utils/unitConversions";
 
+// Compare Scenarios Dropdown Component
+const CompareDropdown = ({ scenarios, currentScenario, comparisonScenarios, toggleComparisonScenario, clearComparison, colors }) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const dropdownRef = React.useRef(null);
+
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const selectedCount = comparisonScenarios.length;
+
+  return (
+    <div ref={dropdownRef} style={{ position: "relative" }}>
+      <Button
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          backgroundColor: selectedCount > 0 ? "#006D7C" : colors.oxfordBlue,
+          borderColor: selectedCount > 0 ? "#006D7C" : colors.oxfordBlue,
+          color: "#fff",
+          padding: "0.25rem 0.75rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          fontSize: "0.8rem",
+          transition: "all 0.2s ease",
+        }}
+        title="Compare Scenarios"
+      >
+        <i className="material-icons" style={{ fontSize: "1rem" }}>
+          compare_arrows
+        </i>
+        Compare
+        {selectedCount > 0 && (
+          <span style={{
+            backgroundColor: "rgba(255,255,255,0.3)",
+            borderRadius: "10px",
+            padding: "0 0.4rem",
+            fontSize: "0.7rem",
+            fontWeight: 600,
+          }}>
+            {selectedCount}
+          </span>
+        )}
+      </Button>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div
+          style={{
+            position: "absolute",
+            top: "100%",
+            right: 0,
+            marginTop: "0.25rem",
+            backgroundColor: colors.cardBackground,
+            border: `1px solid ${colors.border}`,
+            borderRadius: "6px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 1000,
+            minWidth: "240px",
+            maxWidth: "280px",
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            padding: "0.75rem",
+            borderBottom: `1px solid ${colors.border}`,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}>
+            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.text }}>
+              Select Scenarios to Compare
+            </span>
+            {selectedCount > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearComparison();
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#c4183c",
+                  cursor: "pointer",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  padding: 0,
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Scenario List */}
+          <div style={{ padding: "0.5rem" }}>
+            {scenarios.map((scenario) => {
+              const isSelected = comparisonScenarios.includes(scenario.scenario_id);
+              const isCurrent = currentScenario?.scenario_id === scenario.scenario_id;
+
+              return (
+                <div
+                  key={scenario.scenario_id}
+                  onClick={() => toggleComparisonScenario(scenario.scenario_id)}
+                  style={{
+                    padding: "0.5rem 0.75rem",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    backgroundColor: isSelected ? "rgba(0, 109, 124, 0.1)" : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    marginBottom: "0.25rem",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = colors.hoverBackground;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                    }
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {}}
+                    style={{
+                      width: "16px",
+                      height: "16px",
+                      cursor: "pointer",
+                      accentColor: "#006D7C",
+                    }}
+                  />
+                  <span style={{
+                    fontSize: "0.8rem",
+                    color: colors.text,
+                    fontWeight: isCurrent ? 600 : 400,
+                  }}>
+                    {scenario.scenario_name}
+                  </span>
+                  {isCurrent && (
+                    <i className="material-icons" style={{ fontSize: "0.9rem", color: "#006D7C", marginLeft: "auto" }}>
+                      check_circle
+                    </i>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          {selectedCount > 0 && (
+            <div style={{
+              padding: "0.5rem 0.75rem",
+              borderTop: `1px solid ${colors.border}`,
+              fontSize: "0.75rem",
+              color: colors.textSecondary,
+              textAlign: "center",
+            }}>
+              {selectedCount} scenario{selectedCount !== 1 ? 's' : ''} selected
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ✅ Mock data for fallback
 const mockCashFlowTable = [
   { year: 0, cashInflow: 0, cashOutflow: 1000000, netCashFlow: -1000000, presentValue: -1000000 },
@@ -234,7 +420,7 @@ const convertBackendInputsToFrontend = (backendInputs) => {
 const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
   const { colors } = useTheme();
   const { selectedAccess } = useAccess();
-  const { currentProject, currentScenario, scenarios, comparisonScenarios, updateScenarioOutputs } = useProject();
+  const { currentProject, currentScenario, scenarios, comparisonScenarios, updateScenarioOutputs, toggleComparisonScenario, clearComparison } = useProject();
 
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -1358,7 +1544,7 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
           }}
         >
           {/* Toggle Button - always visible */}
-          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "36px", height: "36px" }}>
+          <div style={{ position: "absolute", right: isLeftPanelCollapsed ? "7px" : "12px", top: "10px", zIndex: 10, width: "30px", height: "30px" }}>
             <button
               onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
               style={{
@@ -1458,17 +1644,30 @@ const AnalysisDashboard = ({ selectedCurrency = "USD" }) => {
                   </div>
                 </div>
 
-                {chartView === 'breakeven' && (
-                  <Button
-                    size="sm" className="table-icon-btn"
-                    style={{ backgroundColor: colors.oxfordBlue, borderColor: colors.oxfordBlue, color: "#fff", padding: "0.25rem 0.5rem", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease", position: "relative" }}
-                    onClick={() => setOpenTable(true)} title="Cash Flow Table"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ display: "block" }}>
-                      <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
-                    </svg>
-                  </Button>
-                )}          
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  {/* Cash Flow Table Button - only for breakeven view */}
+                  {chartView === 'breakeven' && (
+                    <Button
+                      size="sm" className="table-icon-btn"
+                      style={{ backgroundColor: colors.oxfordBlue, borderColor: colors.oxfordBlue, color: "#fff", padding: "0.3rem 0.75rem", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease", position: "relative" }}
+                      onClick={() => setOpenTable(true)} title="Cash Flow Table"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ display: "block" }}>
+                        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
+                      </svg>
+                    </Button>
+                  )}
+
+                  {/* Compare Scenarios Dropdown - available for both chart views */}
+                  <CompareDropdown
+                    scenarios={scenarios}
+                    currentScenario={currentScenario}
+                    comparisonScenarios={comparisonScenarios}
+                    toggleComparisonScenario={toggleComparisonScenario}
+                    clearComparison={clearComparison}
+                    colors={colors}
+                  />
+                </div>
                 </CardHeader>
                 <CardBody className="flex-fill" style={{ padding: "10px", minHeight: 0, flex: 1 }}>
                   {chartView === 'breakeven' ? (

@@ -203,26 +203,31 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
             },
             ticks: {
               fontColor: colors.text,
-              padding: 10,  // Space between tick marks and labels
-              autoSkip: false,  // Don't auto-skip any ticks
+              padding: 10,
+              autoSkip: false,
+              stepSize: 5,  // Force 5-year intervals
               callback: function(value, index, ticks) {
-                // Only show labels at 5-year intervals
-                return Number.isInteger(Number(value)) && Number(value) % 5 === 0 ? value : '';
-                // return value;
+                // Only show labels at 5-year intervals (0, 5, 10, 15, 20...)
+                const numValue = Number(value);
+                // Check if it's an integer and divisible by 5
+                if (Number.isInteger(numValue) && numValue % 5 === 0) {
+                  return numValue;
+                }
+                // Return null to hide the tick completely
+                return null;
               },
-              stepSize: 5, // Force 5-year intervals
-              max: Math.max(...allLabels), // Set max to the highest year
-              min: Math.min(...allLabels), // Set min to the lowest year
-              maxRotation: 0, // Keep labels horizontal
+              min: 0,
+              max: Math.max(...allLabels),
+              maxRotation: 0,
               minRotation: 0
             },
             gridLines: {
               display: true,  // Must be true to show borders
               drawBorder: true,
               drawOnChartArea: false,  // Don't draw grid lines in chart area
-              drawTicks: false,  // Show tick marks
-              // tickMarkLength: 10,  // Length of tick marks in pixels
-              zeroLineColor: colors.border,  // Same color as labels
+              drawTicks: true,  // Show tick marks
+              tickMarkLength: 10,  // Length of tick marks in pixels
+              zeroLineColor: colors.border,
               color: colors.border,
               lineWidth: 2,  // Thickness of axis line
               zeroLineWidth: 2  // Thickness of zero line
@@ -238,19 +243,41 @@ const BreakevenBarChart = ({ data, comparisonData = [] }) => {
               fontColor: colors.text,
               padding: 10,  // Space between tick marks and labels
               beginAtZero: false,
-              maxTicksLimit: 8,  // Limit number of ticks to prevent overlapping
+              // Calculate consistent step size based on data range
+              stepSize: (() => {
+                const minVal = Math.min(...allPVValues);
+                const maxVal = Math.max(...allPVValues);
+                const range = maxVal - minVal;
+
+                // Determine appropriate interval (either 5M or 10M)
+                // If range is small (< 50M), use 5M intervals
+                // If range is large (>= 50M), use 10M intervals
+                if (range < 50000000) {
+                  return 5000000;  // 5M intervals
+                } else {
+                  return 10000000;  // 10M intervals
+                }
+              })(),
               // Set min/max based on all data values for proper scaling with padding
               min: (() => {
                 const minVal = Math.min(...allPVValues);
+                const maxVal = Math.max(...allPVValues);
+                const range = maxVal - minVal;
+                const interval = range < 50000000 ? 5000000 : 10000000;
+
                 const paddedMin = minVal < 0 ? minVal * 1.1 : minVal * 0.9;
-                // Round down to nearest 5M to get clean intervals
-                return Math.floor(paddedMin / 5000000) * 5000000;
+                // Round down to nearest interval
+                return Math.floor(paddedMin / interval) * interval;
               })(),
               max: (() => {
+                const minVal = Math.min(...allPVValues);
                 const maxVal = Math.max(...allPVValues);
+                const range = maxVal - minVal;
+                const interval = range < 50000000 ? 5000000 : 10000000;
+
                 const paddedMax = maxVal > 0 ? maxVal * 1.1 : maxVal * 0.9;
-                // Round up to nearest 5M to get clean intervals
-                return Math.ceil(paddedMax / 5000000) * 5000000;
+                // Round up to nearest interval
+                return Math.ceil(paddedMax / interval) * interval;
               })(),
               callback: (val) => {
                 if (val === null || val === undefined || isNaN(val)) return "-";

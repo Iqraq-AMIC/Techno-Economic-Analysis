@@ -5,9 +5,28 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { Button, Badge } from "shards-react";
+import { Button, Modal, ModalBody, ModalHeader, ModalFooter } from "shards-react";
 import { useProject } from "../../contexts/ProjectContext";
 import { useTheme } from "../../contexts/ThemeContext";
+
+// Add CSS for spinning animation
+const spinKeyframes = `
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+`;
+
+// Inject the keyframes into the document
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = spinKeyframes;
+  document.head.appendChild(styleSheet);
+}
 
 const EditableScenarioName = ({ scenario, isActive, onRename }) => {
   const { colors } = useTheme();
@@ -143,6 +162,66 @@ const EditableScenarioName = ({ scenario, isActive, onRename }) => {
   );
 };
 
+const DeleteScenarioModal = ({ isOpen, onClose, onConfirm, scenarioName, deleting }) => {
+  const { colors } = useTheme();
+
+  return (
+    <Modal open={isOpen} centered toggle={onClose} size="sm">
+      <ModalHeader style={{ backgroundColor: "#c4183c", color: "white", borderBottom: "none" }}>
+        <i className="material-icons" style={{ verticalAlign: "middle", marginRight: "0.5rem" }}>
+          warning
+        </i>
+        Delete Scenario
+      </ModalHeader>
+      <ModalBody>
+        <div style={{ padding: "0.5rem 0" }}>
+          <p style={{ marginBottom: "1rem", color: colors.text }}>
+            Are you sure you want to delete <strong>"{scenarioName}"</strong>?
+          </p>
+          <p style={{ color: "#c4183c", fontSize: "0.9rem", marginBottom: 0 }}>
+            <i className="material-icons" style={{ fontSize: "1rem", verticalAlign: "middle", marginRight: "0.3rem" }}>
+              error_outline
+            </i>
+            This action cannot be undone.
+          </p>
+        </div>
+      </ModalBody>
+      <ModalFooter style={{ borderTop: `1px solid ${colors.border}`, padding: "0.75rem 1rem" }}>
+        <Button
+          theme="light"
+          onClick={onClose}
+          disabled={deleting}
+          style={{ marginRight: "0.5rem" }}
+        >
+          Cancel
+        </Button>
+        <Button
+          theme="danger"
+          onClick={onConfirm}
+          disabled={deleting}
+          style={{ backgroundColor: "#c4183c", borderColor: "#c4183c" }}
+        >
+          {deleting ? (
+            <>
+              <i className="material-icons" style={{ fontSize: "1rem", verticalAlign: "middle", marginRight: "0.3rem", animation: "spin 1s linear infinite" }}>
+                refresh
+              </i>
+              Deleting...
+            </>
+          ) : (
+            <>
+              <i className="material-icons" style={{ fontSize: "1rem", verticalAlign: "middle", marginRight: "0.3rem" }}>
+                delete
+              </i>
+              Delete Scenario
+            </>
+          )}
+        </Button>
+      </ModalFooter>
+    </Modal>
+  );
+};
+
 const ScenarioTabs = () => {
   const { colors } = useTheme();
   const {
@@ -158,6 +237,9 @@ const ScenarioTabs = () => {
     toggleComparisonScenario,
     clearComparison,
   } = useProject();
+
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, scenarioId: null, scenarioName: "" });
+  const [deleting, setDeleting] = useState(false);
 
   console.log("🎯 ScenarioTabs rendering - currentProject:", currentProject);
   console.log("🎯 ScenarioTabs - scenarios:", scenarios);
@@ -195,21 +277,36 @@ const ScenarioTabs = () => {
     toggleComparisonScenario(scenarioId);
   };
 
-  const handleDeleteScenario = async (e, scenarioId, scenarioIndex) => {
+  const handleDeleteScenario = (e, scenarioId, scenarioName) => {
     e.stopPropagation();
 
-    // Only allow deleting Scenario 2 (index 1) or Scenario 3 (index 2)
-    if (scenarioIndex === 0) return;
-
+    // Allow deleting any scenario as long as there are multiple scenarios
     if (scenarios.length <= 1) {
       alert("Cannot delete the only scenario");
       return;
     }
 
-    const confirmDelete = window.confirm(`Are you sure you want to delete this scenario? This action cannot be undone.`);
-    if (!confirmDelete) return;
+    setDeleteModal({
+      isOpen: true,
+      scenarioId,
+      scenarioName,
+    });
+  };
 
-    await deleteScenario(scenarioId);
+  const confirmDeleteScenario = async () => {
+    setDeleting(true);
+    const result = await deleteScenario(deleteModal.scenarioId);
+    setDeleting(false);
+
+    if (result.success) {
+      setDeleteModal({ isOpen: false, scenarioId: null, scenarioName: "" });
+    }
+  };
+
+  const closeDeleteModal = () => {
+    if (!deleting) {
+      setDeleteModal({ isOpen: false, scenarioId: null, scenarioName: "" });
+    }
   };
 
   // Safety check - if no scenarios, show loading state
@@ -228,42 +325,20 @@ const ScenarioTabs = () => {
         padding: "0.5rem 0.75rem",
         borderBottom: `1px solid ${colors.border}`,
         backgroundColor: colors.background,
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem",
       }}
     >
-      {/* Header */}
+      {/* Chrome-like Horizontal Tabs */}
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "0.5rem",
+          alignItems: "flex-end",
+          gap: "2px",
+          paddingBottom: "2px",
         }}
       >
-        <h6
-          style={{
-            margin: 0,
-            fontSize: "0.8rem",
-            fontWeight: 600,
-            color: colors.text,
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-          }}
-        >
-          Scenarios
-        </h6>
-        <Badge
-          theme="secondary"
-          style={{
-            fontSize: "0.7rem",
-            padding: "0.2rem 0.4rem",
-          }}
-        >
-          {scenarios.length}/3
-        </Badge>
-      </div>
-
-      {/* Scenario Tabs */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
         {scenarios.map((scenario, index) => {
           // Safety check - skip scenarios without valid ID
           if (!scenario || !scenario.scenario_id) {
@@ -272,30 +347,49 @@ const ScenarioTabs = () => {
           }
           const isActive = currentScenario?.scenario_id === scenario.scenario_id;
           const isCompared = comparisonScenarios.includes(scenario.scenario_id);
-          const canDelete = index > 0; // Can delete Scenario 2 and 3 (index 1 and 2)
+          const canDelete = scenarios.length > 1; // Can delete any scenario if there are multiple scenarios
 
           return (
             <div
               key={scenario.scenario_id}
               onClick={() => handleTabClick(scenario.scenario_id)}
               style={{
+                position: "relative",
                 padding: "0.5rem 0.75rem",
-                borderRadius: "4px",
+                width: "calc(33.333% - 2px)",
                 cursor: loading ? "not-allowed" : "pointer",
                 backgroundColor: isActive ? "#006D7C" : colors.cardBackground,
                 color: isActive ? "white" : colors.text,
-                border: isActive ? "none" : `1px solid ${colors.border}`,
+                border: `1px solid ${isActive ? "#006D7C" : colors.border}`,
+                borderBottom: isActive ? "none" : `1px solid ${colors.border}`,
+                borderTopLeftRadius: "8px",
+                borderTopRightRadius: "8px",
                 fontWeight: isActive ? 600 : 400,
-                fontSize: "0.85rem",
+                fontSize: "0.75rem",
                 transition: "all 0.2s ease",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
+                gap: "0.5rem",
                 opacity: loading && !isActive ? 0.6 : 1,
+                boxShadow: isActive ? "0 -2px 4px rgba(0,0,0,0.1)" : "none",
+                zIndex: isActive ? 2 : 1,
+                marginBottom: isActive ? "0" : "2px",
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = colors.hoverBackground;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = colors.cardBackground;
+                }
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <input
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flex: 1, minWidth: 0 }}>
+                {/* Checkbox removed - comparison now in dropdown */}
+                {/* <input
                   type="checkbox"
                   checked={isCompared}
                   onChange={(e) => handleCompareToggle(e, scenario.scenario_id)}
@@ -305,91 +399,72 @@ const ScenarioTabs = () => {
                     height: "14px",
                     cursor: "pointer",
                     accentColor: "#006D7C",
+                    flexShrink: 0,
                   }}
                   title="Select for comparison"
-                />
-                <EditableScenarioName
-                  scenario={scenario}
-                  isActive={isActive}
-                  onRename={renameScenario}
-                />
+                /> */}
+                <div style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <EditableScenarioName
+                    scenario={scenario}
+                    isActive={isActive}
+                    onRename={renameScenario}
+                  />
+                </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.2rem", flexShrink: 0 }}>
                 {canDelete && (
                   <i
                     className="material-icons"
-                    onClick={(e) => handleDeleteScenario(e, scenario.scenario_id, index)}
+                    onClick={(e) => handleDeleteScenario(e, scenario.scenario_id, scenario.scenario_name)}
                     style={{
-                      fontSize: "0.9rem",
+                      fontSize: "0.85rem",
                       cursor: "pointer",
                       opacity: 0.7,
                       color: isActive ? "white" : "#c4183c",
                     }}
                     title="Delete scenario"
                   >
-                    delete
-                  </i>
-                )}
-                {isActive && (
-                  <i
-                    className="material-icons"
-                    style={{ fontSize: "0.95rem" }}
-                  >
-                    check_circle
+                    close
                   </i>
                 )}
               </div>
             </div>
           );
         })}
+
+        {/* Add Scenario Tab Button */}
+        {canAddScenario && (
+          <div
+            onClick={handleAddScenario}
+            style={{
+              width: "32px",
+              height: "32px",
+              cursor: "pointer",
+              color: colors.text,
+              fontSize: "1.2rem",
+              transition: "all 0.2s ease",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: "2px",
+              opacity: 0.7,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = "1";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = "0.7";
+            }}
+            title="Add new scenario"
+          >
+            <i className="material-icons" style={{ fontSize: "1.2rem" }}>
+              add
+            </i>
+          </div>
+        )}
       </div>
 
-      {/* Comparison Controls */}
-      {isComparisonMode && (
-        <div style={{ marginTop: "0.5rem", padding: "0.4rem 0.5rem", backgroundColor: colors.hoverBackground, borderRadius: "4px", border: `1px solid ${colors.border}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <small style={{ color: colors.textSecondary, fontWeight: 600, fontSize: "0.75rem" }}>
-              Comparing {comparisonScenarios.length} scenario{comparisonScenarios.length !== 1 ? "s" : ""}
-            </small>
-            <Button
-              size="sm"
-              theme="danger"
-              outline
-              onClick={clearComparison}
-              style={{ fontSize: "0.7rem", padding: "0.2rem 0.4rem" }}
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Add Scenario Button */}
-      <Button
-        size="sm"
-        block
-        outline={!canAddScenario}
-        theme={canAddScenario ? "success" : "secondary"}
-        disabled={!canAddScenario}
-        onClick={handleAddScenario}
-        style={{
-          marginTop: "0.5rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "0.4rem",
-          fontWeight: 500,
-          fontSize: "0.8rem",
-          padding: "0.4rem 0.5rem",
-          cursor: canAddScenario ? "pointer" : "not-allowed",
-          opacity: canAddScenario ? 1 : 0.5,
-        }}
-      >
-        <i className="material-icons" style={{ fontSize: "1rem" }}>
-          add_circle_outline
-        </i>
-        {loading ? "Adding..." : "Add Scenario"}
-      </Button>
+      {/* Comparison Controls - Moved to AnalysisDashboard */}
 
       {scenarios.length >= 3 && (
         <small
@@ -397,13 +472,21 @@ const ScenarioTabs = () => {
             display: "block",
             textAlign: "center",
             color: "#999",
-            marginTop: "0.4rem",
             fontSize: "0.7rem",
           }}
         >
-          Maximum scenarios reached
+          Maximum scenarios reached (3/3)
         </small>
       )}
+
+      {/* Delete Scenario Confirmation Modal */}
+      <DeleteScenarioModal
+        isOpen={deleteModal.isOpen}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteScenario}
+        scenarioName={deleteModal.scenarioName}
+        deleting={deleting}
+      />
     </div>
   );
 };
